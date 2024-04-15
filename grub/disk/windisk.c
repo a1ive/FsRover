@@ -20,30 +20,9 @@
 #include <wchar.h>
 #include <windows.h>
 #include <intsafe.h>
+#include <setupapi.h>
 
-static int
-get_reg_dword(HKEY key, LPCWSTR subkey, LPCWSTR name, DWORD* value)
-{
-	HKEY hkey;
-	DWORD type;
-	DWORD size;
-	DWORD data = 0;
-	if (RegOpenKeyExW(key, subkey, 0, KEY_QUERY_VALUE, &hkey) != ERROR_SUCCESS)
-		return 1;
-	size = sizeof(data);
-	RegQueryValueExW(hkey, name, NULL, &type, (LPBYTE)&data, &size);
-	*value = data;
-	RegCloseKey(hkey);
-	return 0;
-}
-
-static DWORD
-get_drive_count(void)
-{
-	DWORD count = 0;
-	get_reg_dword(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", L"Count", &count);
-	return count;
-}
+#pragma comment (lib, "setupapi.lib")
 
 static BOOL
 get_drive_id(const char* name, DWORD* drive)
@@ -52,8 +31,6 @@ get_drive_id(const char* name, DWORD* drive)
 	if (!name || name[0] != 'h' || name[1] != 'd' || !grub_isdigit(name[2]))
 		goto fail;
 	d = grub_strtoul(name + 2, NULL, 10);
-	if (d > get_drive_count())
-		goto fail;
 	*drive = d;
 	return TRUE;
 fail:
@@ -105,21 +82,51 @@ hd_call_hook(grub_disk_dev_iterate_hook_t hook, void* hook_data, DWORD drive)
 	return hook(name, hook_data);
 }
 
+typedef struct
+{
+	DWORD  cbSize;
+	WCHAR  DevicePath[512];
+} MY_DEVIF_DETAIL_DATA;
+
 static int
 windisk_iterate(grub_disk_dev_iterate_hook_t hook, void* hook_data, grub_disk_pull_t pull)
 {
-	DWORD drive;
-
 	switch (pull)
 	{
 	case GRUB_DISK_PULL_NONE:
 	{
-		DWORD count = get_drive_count();
-		for (drive = 0; drive < count; drive++)
+		DWORD index = 0;
+		SP_DEVICE_INTERFACE_DATA sdid = { .cbSize = sizeof(SP_DEVICE_INTERFACE_DATA) };
+		MY_DEVIF_DETAIL_DATA mddd = { .cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W) };
+		SP_DEVINFO_DATA sdd = { .cbSize = sizeof(SP_DEVINFO_DATA) };
+		GUID guid = GUID_DEVINTERFACE_DISK;
+		HDEVINFO dev_info = SetupDiGetClassDevsW(&guid, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+		if (dev_info == INVALID_HANDLE_VALUE)
+			return 0;
+		for (index = 0; SetupDiEnumDeviceInterfaces(dev_info, NULL, &guid, index, &sdid); index++)
 		{
-			if (hd_call_hook(hook, hook_data, drive))
-				return 1;
+			if (SetupDiGetDeviceInterfaceDetailW(dev_info, &sdid, (PSP_DEVICE_INTERFACE_DETAIL_DATA_W)&mddd,
+				sizeof(MY_DEVIF_DETAIL_DATA), NULL, &sdd))
+			{
+				BOOL rc = FALSE;
+				DWORD bufsz;
+				STORAGE_DEVICE_NUMBER sdn = { 0 };
+				HANDLE disk = CreateFileW(mddd.DevicePath,
+					GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				if (disk == INVALID_HANDLE_VALUE || disk == NULL)
+					continue;
+				rc = DeviceIoControl(disk, IOCTL_STORAGE_GET_DEVICE_NUMBER,
+					NULL, 0, &sdn, (DWORD)(sizeof(STORAGE_DEVICE_NUMBER)),
+					&bufsz, NULL);
+				CloseHandle(disk);
+				if (rc == FALSE)
+					continue;
+				if (hd_call_hook(hook, hook_data, sdn.DeviceNumber))
+					return 1;
+			}
 		}
+		SetupDiDestroyDeviceInfoList(dev_info);
 		return 0;
 	}
 	case GRUB_DISK_PULL_REMOVABLE:
