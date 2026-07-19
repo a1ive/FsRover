@@ -196,6 +196,8 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\.github\workflows\msbuild.yml" />
+    <None Include="..\README.md" />
     <None Include="packages.config" />
     <None Include="FsRover.manifest" />
   </ItemGroup>

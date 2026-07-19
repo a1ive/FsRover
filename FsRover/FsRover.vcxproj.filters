@@ -8,6 +8,9 @@
     <Filter Include="SRC">
       <UniqueIdentifier>{361d17e3-ad44-46ad-8395-94b3507f3b57}</UniqueIdentifier>
     </Filter>
+    <Filter Include="GitHub">
+      <UniqueIdentifier>{973d52d6-79a9-42da-aac3-3e29f82fb722}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp">
@@ -88,5 +91,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="FsRover.manifest" />
+    <None Include="..\README.md">
+      <Filter>GitHub</Filter>
+    </None>
+    <None Include="..\.github\workflows\msbuild.yml">
+      <Filter>GitHub</Filter>
+    </None>
   </ItemGroup>
 </Project>

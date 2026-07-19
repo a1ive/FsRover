@@ -1,7 +1,7 @@
 <br />
 <div align="center">
   <img src="FsRover/FsRover.ico" width="64" height="64" alt="Rover icon">
-  <h3 align="center">Rover</h3>
+  <h3 align="center">FsRover</h3>
   <img src="https://img.shields.io/github/license/a1ive/FsRover" alt="License">
   <img src="https://img.shields.io/github/actions/workflow/status/a1ive/FsRover/msbuild.yml" alt="Build status">
 </div>
@@ -16,6 +16,12 @@ FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRU
 - Open nested and compressed disk images as virtual disks.
 - Inspect files with built-in properties, hashes, text, image, and hex views.
 - Unlock LUKS1, LUKS2, BitLocker, and GELI volumes.
+
+## Download
+
+- [Latest Release](https://github.com/a1ive/FsRover/releases/latest)
+- [Nightly Builds](https://github.com/a1ive/FsRover/actions/workflows/msbuild.yml)
+- [Direct Link (x64)](https://nightly.link/a1ive/FsRover/workflows/msbuild/master/Rover-x64.zip) [Direct Link (x86)](https://nightly.link/a1ive/FsRover/workflows/msbuild/master/Rover-x86.zip)
 
 ## Supported Filesystems
 
