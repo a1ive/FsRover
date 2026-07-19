@@ -405,3 +405,4 @@ FodyWeavers.xsd
 !FsRover/dokan/prebuilt/x64/
 !FsRover/dokan/prebuilt/x86/
 !FsRover/dokan/prebuilt/ARM64/
+!grub/include/grub/arm64/
