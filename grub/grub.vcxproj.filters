@@ -1,0 +1,888 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="grub-core">
+      <UniqueIdentifier>{09251beb-acc5-44a2-a3d2-cba3d569f0d9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\disk">
+      <UniqueIdentifier>{97719413-df96-4d37-aa67-31677b1ed049}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\fs">
+      <UniqueIdentifier>{235efc22-85e9-4470-97ee-e847eff61d90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\fs\zfs">
+      <UniqueIdentifier>{48a12e2b-c802-49e1-a9a8-9c31d4235809}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\io">
+      <UniqueIdentifier>{fe8bfb87-b254-427a-853f-9fc39b6cc05d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\kern">
+      <UniqueIdentifier>{51aeee51-ff57-4c95-97be-c7ed109c392a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib">
+      <UniqueIdentifier>{1019bf61-adb4-4688-8332-03e02071f9aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\libgcrypt">
+      <UniqueIdentifier>{65c0d10c-dde3-466c-8623-28d2fd63550e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\minilzo">
+      <UniqueIdentifier>{602426fc-ff4b-41a2-a3d1-339dc16cdbd2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\xzembed">
+      <UniqueIdentifier>{21026aa3-a69e-40e5-b66a-bd1b6e04c288}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\zstd">
+      <UniqueIdentifier>{a4788355-afc6-44ed-be52-f4f4717ba4db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\partmap">
+      <UniqueIdentifier>{dd7907e4-b07b-41c5-afa7-0fa3eebb1563}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\lz4">
+      <UniqueIdentifier>{11e86a16-0794-4d72-8d22-e8cb4cd62fef}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\lzfse">
+      <UniqueIdentifier>{3f2a9c81-6b4e-4c47-9d1a-5e0c2fbb7a21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\miniz">
+      <UniqueIdentifier>{72c6a3a8-afd0-4832-9953-983dbf037534}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\wimboot">
+      <UniqueIdentifier>{700c15b7-d883-446d-8e14-92ef6d281c90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{c1fc50b1-adf7-48d2-9fc1-303636ffb0d1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub">
+      <UniqueIdentifier>{ca82988b-d868-4182-9ee4-6fd36f9b1e5b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\arm64">
+      <UniqueIdentifier>{8fc367c2-1c1b-4d8b-887b-d8249bf3f0a7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\cpu">
+      <UniqueIdentifier>{1b4ce108-a246-4a5e-9c8f-487e71702cec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\gcry">
+      <UniqueIdentifier>{982760a6-71a4-4745-86c2-162c8324fe9a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\gcrypt">
+      <UniqueIdentifier>{08713be0-40be-4eb6-bd0f-e0f0b2ea9d14}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\i386">
+      <UniqueIdentifier>{45883271-75f5-478e-b9d7-7cabe8ded826}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\lib">
+      <UniqueIdentifier>{caf5c123-12b1-49cf-8f8a-745c4a07bc63}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\net">
+      <UniqueIdentifier>{a344bd68-413f-465e-be6b-61eaeeb75ada}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\x86_64">
+      <UniqueIdentifier>{0afce2cc-679d-4628-a7a9-30d81e9f09e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\grub\zfs">
+      <UniqueIdentifier>{d150f0bf-c73e-4ae0-98d4-c63d5f1bffd1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rover">
+      <UniqueIdentifier>{cd0e5b29-1f49-41c3-95d4-c27ba5dc6a50}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\bzip2">
+      <UniqueIdentifier>{7f2f3a1e-6c58-4b9d-9a0e-2d5c8b41f6a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\vbox">
+      <UniqueIdentifier>{b3d90c47-5a12-4e86-bd7f-90e34ac1527b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\libzbitmap">
+      <UniqueIdentifier>{6f72c2fc-5971-4714-ab7c-f5e0925930e7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\json">
+      <UniqueIdentifier>{a9f7a383-4c62-4364-90ba-d53d05f82c12}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="rover\init.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\misc.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\mm.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\rover.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\time.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\device.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\disk.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\env.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\err.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\file.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\fs.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\list.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\misc.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\kern\partition.c">
+      <Filter>grub-core\kern</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\diskfilter.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\dmraid_nvidia.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\ldm.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\loopdisk.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\lvm.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\mdraid_linux.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\mdraid_linux_be.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\mdraid1x_linux.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\raid5_recover.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\raid6_recover.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\windisk.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\acorn.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\amiga.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\apple.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\bsdlabel.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\dfly.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\dvh.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\gpt.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\msdos.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\plan.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\sun.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\partmap\sunpc.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\affs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\afs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\apfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\archelp.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\bfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\btrfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\cpio.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\cpio_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\erofs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\exfat.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ext2.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\f2fs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\fat.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\fshelp.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\hfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\hfsplus.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\hfspluscomp.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\iso9660.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\jfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix2.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix2_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix3.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix3_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\minix_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\newc.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ntfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ntfscomp.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\odc.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\cramfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\jffs2.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\refs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ubifs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\reiserfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\romfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\sfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\squash4.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\tar.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\udf.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ufs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ufs2.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\ufs_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\xfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs.c">
+      <Filter>grub-core\fs\zfs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs_fletcher.c">
+      <Filter>grub-core\fs\zfs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs_lz4.c">
+      <Filter>grub-core\fs\zfs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs_lzjb.c">
+      <Filter>grub-core\fs\zfs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs_sha256.c">
+      <Filter>grub-core\fs\zfs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\dmg.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\gzio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\isz.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\lzopio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\qcow.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vdi.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vhd.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vhdx.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vmdk.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\xzio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\zstdio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\adler32.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\bzip2\bzlib.c">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\bzip2\crctable.c">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\bzip2\decompress.c">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\bzip2\huffman.c">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\bzip2\randtable.c">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\vbox\vbox.c">
+      <Filter>grub-core\lib\vbox</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\vbox\vdparent.c">
+      <Filter>grub-core\lib\vbox</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\crc.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\crc64.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\crypto.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\datetime.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\minilzo\minilzo.c">
+      <Filter>grub-core\lib\minilzo</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_bcj.c">
+      <Filter>grub-core\lib\xzembed</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_lzma2.c">
+      <Filter>grub-core\lib\xzembed</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_stream.c">
+      <Filter>grub-core\lib\xzembed</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\debug.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\entropy_common.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\error_private.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\fse_decompress.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\huf_decompress.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\module.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\xxhash.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\zstd_common.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\zstd_decompress.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_crc.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_md5.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha1.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha256.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\fbfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\lynxfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\qnx4.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\qnx6.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\wim.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zip.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\lz4io.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\lz4\lz4.c">
+      <Filter>grub-core\lib\lz4</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_decode.c">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_decode_base.c">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_fse.c">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\lzfse\lzvn_decode_base.c">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\miniz\miniz.c">
+      <Filter>grub-core\lib\miniz</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\wimboot\huffman.c">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\wimboot\lzx.c">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\wimboot\xca.c">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClCompile>
+    <ClInclude Include="rover\config.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\rover.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\acorn_filecore.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\archelp.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\arm64\types.h">
+      <Filter>include\grub\arm64</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\bsdlabel.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\btrfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\bufio.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\charset.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\command.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\compiler.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\cpu\time.h">
+      <Filter>include\grub\cpu</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\cpu\types.h">
+      <Filter>include\grub\cpu</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\crypto.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\datetime.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\decompressor.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\deflate.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\device.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\disk.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\diskfilter.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\dl.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\elf.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\env.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\env_private.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\err.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\exfat.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\fat.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\fbfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\file.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\fs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\fshelp.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\gcry\types.h">
+      <Filter>include\grub\gcry</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\gcrypt\gpg-error.h">
+      <Filter>include\grub\gcrypt</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\gpt_partition.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\hfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\hfsplus.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\i18n.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\i386\types.h">
+      <Filter>include\grub\i386</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\crc.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\LzFind.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\LzHash.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\LzmaDec.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\LzmaEnc.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lib\LzmaTypes.h">
+      <Filter>include\grub\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\list.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lockdown.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\lvm.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\menu.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\misc.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\mm.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\msdos_partition.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\net.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\net\netbuff.h">
+      <Filter>include\grub\net</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\ntfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\offsets.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\partition.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\procfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\safemath.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\symbol.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\term.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\time.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\types.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\udf.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\unicode.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\x86_64\types.h">
+      <Filter>include\grub\x86_64</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\dmu.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\dmu_objset.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\dnode.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\dsl_dataset.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\dsl_dir.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\sa_impl.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\spa.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\uberblock_impl.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\vdev_impl.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zap_impl.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zap_leaf.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zfs.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zfs_acl.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zfs_znode.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zil.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zio.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\zfs\zio_checksum.h">
+      <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\bzip2\bz_version.h">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\bzip2\bzlib.h">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h">
+      <Filter>grub-core\lib\bzip2</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lz4\lz4.h">
+      <Filter>grub-core\lib\lz4</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\miniz\miniz.h">
+      <Filter>grub-core\lib\miniz</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\vbox\vbox.h">
+      <Filter>grub-core\lib\vbox</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lzfse\lzfse.h">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_compat.h">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_fse.h">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_internal.h">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\lzfse\lzvn_decode_base.h">
+      <Filter>grub-core\lib\lzfse</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\wimboot\huffman.h">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\wimboot\lzx.h">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\wimboot\xca.h">
+      <Filter>grub-core\lib\wimboot</Filter>
+    </ClInclude>
+    <ClCompile Include="grub-core\lib\libzbitmap\libzbitmap.c">
+      <Filter>grub-core\lib\libzbitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\luks2.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\luks.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\AFSplitter.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\cryptodisk.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\argon2.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\base64.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\pbkdf2.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\proc.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\json\json.c">
+      <Filter>grub-core\lib\json</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha512.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_rijndael.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_kdf.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_blake2.c">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\bitlocker.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\geli.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\redoxfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="grub-core\lib\libzbitmap\libzbitmap.h">
+      <Filter>grub-core\lib\libzbitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\base64.h">
+      <Filter>grub-core\lib</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\cryptodisk.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\json\json.h">
+      <Filter>grub-core\lib\json</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\json\jsmn.h">
+      <Filter>grub-core\lib\json</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\libgcrypt\gcry_wrap.h">
+      <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\redoxfs.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

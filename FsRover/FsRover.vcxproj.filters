@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="RC">
+      <UniqueIdentifier>{c0587241-c60b-47c8-a019-c4bc0a8fc848}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="SRC">
+      <UniqueIdentifier>{361d17e3-ad44-46ad-8395-94b3507f3b57}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="backend.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="cryptodlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="dokanfs.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="helpdlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="hexview.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="imageview.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="propsdlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="stb_impl.c">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="textview.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="backend.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\dokan.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\fileinfo.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\public.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="dokanfs.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="gui.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>RC</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_image.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="strconv.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="version.h">
+      <Filter>RC</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="FsRover.rc">
+      <Filter>RC</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="FsRover.ico">
+      <Filter>RC</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+</Project>

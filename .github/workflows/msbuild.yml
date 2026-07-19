@@ -1,0 +1,169 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: MSBuild
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags:
+      - "*"
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  SOLUTION_FILE_PATH: Rover.slnx
+
+jobs:
+  build:
+    name: Build ${{ matrix.architecture }}
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            platform: x64
+            output_directory: x64
+          - architecture: x86
+            platform: x86
+            output_directory: Win32
+          - architecture: ARM64
+            platform: ARM64
+            output_directory: ARM64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          foreach ($packageConfig in @(
+            'FsRover\packages.config',
+            'filetype\packages.config',
+            'grub\packages.config'
+          )) {
+            nuget restore $packageConfig -PackagesDirectory packages -NonInteractive
+            if ($LASTEXITCODE -ne 0) {
+              throw "NuGet restore failed for $packageConfig with exit code $LASTEXITCODE."
+            }
+          }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild /m /p:Configuration=Release /p:Platform=${{ matrix.platform }} $env:SOLUTION_FILE_PATH
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSBuild failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          $artifactDirectory = Join-Path $env:RUNNER_TEMP "Rover-${{ matrix.architecture }}"
+          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+          Copy-Item -LiteralPath "build\${{ matrix.output_directory }}\FsRover.exe" -Destination $artifactDirectory
+          Copy-Item -LiteralPath LICENSE -Destination $artifactDirectory
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Rover-${{ matrix.architecture }}
+          path: ${{ runner.temp }}\Rover-${{ matrix.architecture }}
+          if-no-files-found: error
+
+  release:
+    name: Create release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: Rover-*
+          path: release-input
+
+      - name: Create release packages and changelog
+        shell: pwsh
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          $releaseDirectory = Join-Path $env:RUNNER_TEMP 'release'
+          New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
+          $safeTagName = $env:TAG_NAME -replace '[^A-Za-z0-9._-]', '-'
+
+          $assetPaths = New-Object System.Collections.Generic.List[string]
+          foreach ($architecture in @('x64', 'x86', 'ARM64')) {
+            $sourceDirectory = Join-Path 'release-input' "Rover-$architecture"
+            $programPath = Join-Path $sourceDirectory 'FsRover.exe'
+            $licensePath = Join-Path $sourceDirectory 'LICENSE'
+            if (-not (Test-Path -LiteralPath $programPath) -or
+                -not (Test-Path -LiteralPath $licensePath)) {
+              throw "Incomplete release input for $architecture."
+            }
+
+            $assetPath = Join-Path $releaseDirectory "Rover-$safeTagName-$architecture.zip"
+            Compress-Archive -Path (Join-Path $sourceDirectory '*') -DestinationPath $assetPath -Force
+            $assetPaths.Add($assetPath)
+          }
+
+          $previousTag = git describe --abbrev=0 --tags "$($env:TAG_NAME)^" 2>$null
+          if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
+            $logRange = "$previousTag..$($env:TAG_NAME)"
+            $heading = "## Changes since $previousTag"
+          } else {
+            $logRange = $env:TAG_NAME
+            $heading = '## Changes'
+          }
+
+          $changelog = git log --pretty=format:'* %s (%h) by %an' $logRange
+          if ([string]::IsNullOrWhiteSpace($changelog)) {
+            $changelog = "* Automated build from commit $env:GITHUB_SHA."
+          }
+
+          $releaseNotes = New-Object System.Collections.Generic.List[string]
+          $releaseNotes.Add($heading)
+          $releaseNotes.Add('')
+          $releaseNotes.AddRange([string[]]($changelog -split "`n"))
+          $releaseNotes.Add('')
+          $releaseNotes.Add('## SHA-256')
+          $releaseNotes.Add('')
+          foreach ($assetPath in $assetPaths) {
+            $assetName = Split-Path -Leaf $assetPath
+            $hash = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $releaseNotes.Add("* ``$assetName``: ``$hash``")
+          }
+          $releaseNotes | Set-Content -LiteralPath release-notes.md -Encoding utf8
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          $assetPaths = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\release" -Filter '*.zip' |
+            Sort-Object Name |
+            Select-Object -ExpandProperty FullName
+          if ($assetPaths.Count -ne 3) {
+            throw "Expected 3 release assets, found $($assetPaths.Count)."
+          }
+          gh release create $env:TAG_NAME @assetPaths `
+            --title $env:TAG_NAME `
+            --notes-file release-notes.md

@@ -1,0 +1,498 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.props" Condition="Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.props')" />
+  <Import Project="..\packages\VC-LTL.5.3.1\build\native\VC-LTL.props" Condition="Exists('..\packages\VC-LTL.5.3.1\build\native\VC-LTL.props')" />
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{430bee0d-4066-42b9-bbc8-5fff43a75ad3}</ProjectGuid>
+    <RootNamespace>grub</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <SupportLTL>ucrt</SupportLTL>
+    <WindowsTargetPlatformMinVersion>6.1.7600.0</WindowsTargetPlatformMinVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <SupportLTL>ucrt</SupportLTL>
+    <WindowsTargetPlatformMinVersion>6.1.7600.0</WindowsTargetPlatformMinVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <SupportLTL>ucrt</SupportLTL>
+    <WindowsTargetPlatformMinVersion>6.1.7600.0</WindowsTargetPlatformMinVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <OutDir>$(SolutionDir)build\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\$(Platform)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)build\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\$(Platform)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)build\$(Platform)\</OutDir>
+    <IntDir>$(SolutionDir)build\$(Platform)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)rover;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>config.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <UseFullPaths>false</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)rover;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>config.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <UseFullPaths>false</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;$(ProjectDir)rover;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>config.h</ForcedIncludeFiles>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
+      <UseFullPaths>false</UseFullPaths>
+    </ClCompile>
+    <Link>
+      <SubSystem>
+      </SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="rover\init.c" />
+    <ClCompile Include="rover\misc.c" />
+    <ClCompile Include="rover\mm.c" />
+    <ClCompile Include="rover\rover.c" />
+    <ClCompile Include="rover\time.c" />
+    <ClCompile Include="grub-core\kern\device.c" />
+    <ClCompile Include="grub-core\kern\disk.c" />
+    <ClCompile Include="grub-core\kern\env.c" />
+    <ClCompile Include="grub-core\kern\err.c" />
+    <ClCompile Include="grub-core\kern\file.c" />
+    <ClCompile Include="grub-core\kern\fs.c" />
+    <ClCompile Include="grub-core\kern\list.c" />
+    <ClCompile Include="grub-core\kern\misc.c" />
+    <ClCompile Include="grub-core\kern\partition.c" />
+    <ClCompile Include="grub-core\disk\diskfilter.c" />
+    <ClCompile Include="grub-core\disk\dmraid_nvidia.c" />
+    <ClCompile Include="grub-core\disk\ldm.c" />
+    <ClCompile Include="grub-core\disk\loopdisk.c" />
+    <ClCompile Include="grub-core\disk\lvm.c" />
+    <ClCompile Include="grub-core\disk\mdraid_linux.c" />
+    <ClCompile Include="grub-core\disk\mdraid_linux_be.c" />
+    <ClCompile Include="grub-core\disk\mdraid1x_linux.c" />
+    <ClCompile Include="grub-core\disk\raid5_recover.c" />
+    <ClCompile Include="grub-core\disk\raid6_recover.c" />
+    <ClCompile Include="grub-core\disk\windisk.c" />
+    <ClCompile Include="grub-core\partmap\acorn.c" />
+    <ClCompile Include="grub-core\partmap\amiga.c" />
+    <ClCompile Include="grub-core\partmap\apple.c" />
+    <ClCompile Include="grub-core\partmap\bsdlabel.c" />
+    <ClCompile Include="grub-core\partmap\dfly.c" />
+    <ClCompile Include="grub-core\partmap\dvh.c" />
+    <ClCompile Include="grub-core\partmap\gpt.c" />
+    <ClCompile Include="grub-core\partmap\msdos.c" />
+    <ClCompile Include="grub-core\partmap\plan.c" />
+    <ClCompile Include="grub-core\partmap\sun.c" />
+    <ClCompile Include="grub-core\partmap\sunpc.c" />
+    <ClCompile Include="grub-core\fs\affs.c" />
+    <ClCompile Include="grub-core\fs\afs.c" />
+    <ClCompile Include="grub-core\fs\apfs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\libzbitmap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\archelp.c" />
+    <ClCompile Include="grub-core\fs\bfs.c" />
+    <ClCompile Include="grub-core\fs\btrfs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\cpio.c" />
+    <ClCompile Include="grub-core\fs\cpio_be.c" />
+    <ClCompile Include="grub-core\fs\cramfs.c" />
+    <ClCompile Include="grub-core\fs\erofs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\exfat.c" />
+    <ClCompile Include="grub-core\fs\ext2.c" />
+    <ClCompile Include="grub-core\fs\f2fs.c" />
+    <ClCompile Include="grub-core\fs\fat.c" />
+    <ClCompile Include="grub-core\fs\fbfs.c" />
+    <ClCompile Include="grub-core\fs\fshelp.c" />
+    <ClCompile Include="grub-core\fs\hfs.c" />
+    <ClCompile Include="grub-core\fs\hfsplus.c" />
+    <ClCompile Include="grub-core\fs\hfspluscomp.c" />
+    <ClCompile Include="grub-core\fs\iso9660.c" />
+    <ClCompile Include="grub-core\fs\jffs2.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\jfs.c" />
+    <ClCompile Include="grub-core\fs\lynxfs.c" />
+    <ClCompile Include="grub-core\fs\minix.c" />
+    <ClCompile Include="grub-core\fs\minix2.c" />
+    <ClCompile Include="grub-core\fs\minix2_be.c" />
+    <ClCompile Include="grub-core\fs\minix3.c" />
+    <ClCompile Include="grub-core\fs\minix3_be.c" />
+    <ClCompile Include="grub-core\fs\minix_be.c" />
+    <ClCompile Include="grub-core\fs\newc.c" />
+    <ClCompile Include="grub-core\fs\ntfs.c" />
+    <ClCompile Include="grub-core\fs\ntfscomp.c" />
+    <ClCompile Include="grub-core\fs\odc.c" />
+    <ClCompile Include="grub-core\fs\qnx4.c" />
+    <ClCompile Include="grub-core\fs\qnx6.c" />
+    <ClCompile Include="grub-core\fs\redoxfs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\refs.c" />
+    <ClCompile Include="grub-core\fs\reiserfs.c" />
+    <ClCompile Include="grub-core\fs\romfs.c" />
+    <ClCompile Include="grub-core\fs\sfs.c" />
+    <ClCompile Include="grub-core\fs\squash4.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\xzembed;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\tar.c" />
+    <ClCompile Include="grub-core\fs\ubifs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\udf.c" />
+    <ClCompile Include="grub-core\fs\ufs.c" />
+    <ClCompile Include="grub-core\fs\ufs2.c" />
+    <ClCompile Include="grub-core\fs\ufs_be.c" />
+    <ClCompile Include="grub-core\fs\wim.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\wimboot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\xfs.c" />
+    <ClCompile Include="grub-core\fs\zip.c">
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\zfs\zfs_fletcher.c" />
+    <ClCompile Include="grub-core\fs\zfs\zfs_lz4.c" />
+    <ClCompile Include="grub-core\fs\zfs\zfs_lzjb.c" />
+    <ClCompile Include="grub-core\fs\zfs\zfs_sha256.c" />
+    <ClCompile Include="grub-core\io\dmg.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\gzio.c" />
+    <ClCompile Include="grub-core\io\isz.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\lz4io.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\lzopio.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\qcow.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vdi.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vhd.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vhdx.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\vmdk.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\xzio.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\zstdio.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\adler32.c" />
+    <ClCompile Include="grub-core\lib\bzip2\bzlib.c" />
+    <ClCompile Include="grub-core\lib\bzip2\crctable.c" />
+    <ClCompile Include="grub-core\lib\bzip2\decompress.c" />
+    <ClCompile Include="grub-core\lib\bzip2\huffman.c" />
+    <ClCompile Include="grub-core\lib\bzip2\randtable.c" />
+    <ClCompile Include="grub-core\lib\crc.c" />
+    <ClCompile Include="grub-core\lib\crc64.c" />
+    <ClCompile Include="grub-core\lib\crypto.c" />
+    <ClCompile Include="grub-core\lib\pbkdf2.c" />
+    <ClCompile Include="grub-core\lib\argon2.c" />
+    <ClCompile Include="grub-core\lib\base64.c" />
+    <ClCompile Include="grub-core\lib\json\json.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_rijndael.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha512.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_blake2.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_kdf.c" />
+    <ClCompile Include="grub-core\disk\cryptodisk.c" />
+    <ClCompile Include="grub-core\disk\luks.c" />
+    <ClCompile Include="grub-core\disk\luks2.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\json;$(ProjectDir)grub-core\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\AFSplitter.c" />
+    <ClCompile Include="grub-core\disk\bitlocker.c" />
+    <ClCompile Include="grub-core\disk\geli.c" />
+    <ClCompile Include="grub-core\fs\proc.c" />
+    <ClCompile Include="grub-core\lib\datetime.c" />
+    <ClCompile Include="grub-core\lib\libzbitmap\libzbitmap.c" />
+    <ClCompile Include="grub-core\lib\lz4\lz4.c" />
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_decode.c" />
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_decode_base.c" />
+    <ClCompile Include="grub-core\lib\lzfse\lzfse_fse.c" />
+    <ClCompile Include="grub-core\lib\lzfse\lzvn_decode_base.c" />
+    <ClCompile Include="grub-core\lib\miniz\miniz.c">
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\minilzo\minilzo.c" />
+    <ClCompile Include="grub-core\lib\vbox\vbox.c" />
+    <ClCompile Include="grub-core\lib\vbox\vdparent.c" />
+    <ClCompile Include="grub-core\lib\wimboot\huffman.c" />
+    <ClCompile Include="grub-core\lib\wimboot\lzx.c" />
+    <ClCompile Include="grub-core\lib\wimboot\xca.c" />
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_bcj.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_lzma2.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\xzembed\xz_dec_stream.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\debug.c" />
+    <ClCompile Include="grub-core\lib\zstd\entropy_common.c" />
+    <ClCompile Include="grub-core\lib\zstd\error_private.c" />
+    <ClCompile Include="grub-core\lib\zstd\fse_decompress.c" />
+    <ClCompile Include="grub-core\lib\zstd\huf_decompress.c" />
+    <ClCompile Include="grub-core\lib\zstd\module.c" />
+    <ClCompile Include="grub-core\lib\zstd\xxhash.c" />
+    <ClCompile Include="grub-core\lib\zstd\zstd_common.c" />
+    <ClCompile Include="grub-core\lib\zstd\zstd_decompress.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_crc.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_md5.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha1.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha256.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="rover\config.h" />
+    <ClInclude Include="rover\rover.h" />
+    <ClInclude Include="include\grub\cryptodisk.h" />
+    <ClInclude Include="grub-core\lib\base64.h" />
+    <ClInclude Include="grub-core\lib\json\json.h" />
+    <ClInclude Include="grub-core\lib\json\jsmn.h" />
+    <ClInclude Include="grub-core\lib\libgcrypt\gcry_wrap.h" />
+    <ClInclude Include="include\grub\redoxfs.h" />
+    <ClInclude Include="include\grub\acorn_filecore.h" />
+    <ClInclude Include="include\grub\archelp.h" />
+    <ClInclude Include="include\grub\arm64\types.h" />
+    <ClInclude Include="include\grub\bsdlabel.h" />
+    <ClInclude Include="include\grub\btrfs.h" />
+    <ClInclude Include="include\grub\bufio.h" />
+    <ClInclude Include="include\grub\charset.h" />
+    <ClInclude Include="include\grub\command.h" />
+    <ClInclude Include="include\grub\compiler.h" />
+    <ClInclude Include="include\grub\cpu\time.h" />
+    <ClInclude Include="include\grub\cpu\types.h" />
+    <ClInclude Include="include\grub\crypto.h" />
+    <ClInclude Include="include\grub\datetime.h" />
+    <ClInclude Include="include\grub\decompressor.h" />
+    <ClInclude Include="include\grub\deflate.h" />
+    <ClInclude Include="include\grub\device.h" />
+    <ClInclude Include="include\grub\disk.h" />
+    <ClInclude Include="include\grub\diskfilter.h" />
+    <ClInclude Include="include\grub\dl.h" />
+    <ClInclude Include="include\grub\elf.h" />
+    <ClInclude Include="include\grub\env.h" />
+    <ClInclude Include="include\grub\env_private.h" />
+    <ClInclude Include="include\grub\err.h" />
+    <ClInclude Include="include\grub\exfat.h" />
+    <ClInclude Include="include\grub\fat.h" />
+    <ClInclude Include="include\grub\fbfs.h" />
+    <ClInclude Include="include\grub\file.h" />
+    <ClInclude Include="include\grub\fs.h" />
+    <ClInclude Include="include\grub\fshelp.h" />
+    <ClInclude Include="include\grub\gcry\types.h" />
+    <ClInclude Include="include\grub\gcrypt\gpg-error.h" />
+    <ClInclude Include="include\grub\gpt_partition.h" />
+    <ClInclude Include="include\grub\hfs.h" />
+    <ClInclude Include="include\grub\hfsplus.h" />
+    <ClInclude Include="include\grub\i18n.h" />
+    <ClInclude Include="include\grub\i386\types.h" />
+    <ClInclude Include="include\grub\lib\crc.h" />
+    <ClInclude Include="include\grub\lib\LzFind.h" />
+    <ClInclude Include="include\grub\lib\LzHash.h" />
+    <ClInclude Include="include\grub\lib\LzmaDec.h" />
+    <ClInclude Include="include\grub\lib\LzmaEnc.h" />
+    <ClInclude Include="include\grub\lib\LzmaTypes.h" />
+    <ClInclude Include="include\grub\list.h" />
+    <ClInclude Include="include\grub\lockdown.h" />
+    <ClInclude Include="include\grub\lvm.h" />
+    <ClInclude Include="include\grub\menu.h" />
+    <ClInclude Include="include\grub\misc.h" />
+    <ClInclude Include="include\grub\mm.h" />
+    <ClInclude Include="include\grub\msdos_partition.h" />
+    <ClInclude Include="include\grub\net.h" />
+    <ClInclude Include="include\grub\net\netbuff.h" />
+    <ClInclude Include="include\grub\ntfs.h" />
+    <ClInclude Include="include\grub\offsets.h" />
+    <ClInclude Include="include\grub\partition.h" />
+    <ClInclude Include="include\grub\procfs.h" />
+    <ClInclude Include="include\grub\safemath.h" />
+    <ClInclude Include="include\grub\symbol.h" />
+    <ClInclude Include="include\grub\term.h" />
+    <ClInclude Include="include\grub\time.h" />
+    <ClInclude Include="include\grub\types.h" />
+    <ClInclude Include="include\grub\udf.h" />
+    <ClInclude Include="include\grub\unicode.h" />
+    <ClInclude Include="include\grub\x86_64\types.h" />
+    <ClInclude Include="include\grub\zfs\dmu.h" />
+    <ClInclude Include="include\grub\zfs\dmu_objset.h" />
+    <ClInclude Include="include\grub\zfs\dnode.h" />
+    <ClInclude Include="include\grub\zfs\dsl_dataset.h" />
+    <ClInclude Include="include\grub\zfs\dsl_dir.h" />
+    <ClInclude Include="include\grub\zfs\sa_impl.h" />
+    <ClInclude Include="include\grub\zfs\spa.h" />
+    <ClInclude Include="include\grub\zfs\uberblock_impl.h" />
+    <ClInclude Include="include\grub\zfs\vdev_impl.h" />
+    <ClInclude Include="include\grub\zfs\zap_impl.h" />
+    <ClInclude Include="include\grub\zfs\zap_leaf.h" />
+    <ClInclude Include="include\grub\zfs\zfs.h" />
+    <ClInclude Include="include\grub\zfs\zfs_acl.h" />
+    <ClInclude Include="include\grub\zfs\zfs_znode.h" />
+    <ClInclude Include="include\grub\zfs\zil.h" />
+    <ClInclude Include="include\grub\zfs\zio.h" />
+    <ClInclude Include="include\grub\zfs\zio_checksum.h" />
+    <ClInclude Include="grub-core\lib\bzip2\bz_version.h" />
+    <ClInclude Include="grub-core\lib\bzip2\bzlib.h" />
+    <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h" />
+    <ClInclude Include="grub-core\lib\lz4\lz4.h" />
+    <ClInclude Include="grub-core\lib\miniz\miniz.h" />
+    <ClInclude Include="grub-core\lib\vbox\vbox.h" />
+    <ClInclude Include="grub-core\lib\libzbitmap\libzbitmap.h" />
+    <ClInclude Include="grub-core\lib\lzfse\lzfse.h" />
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_compat.h" />
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_fse.h" />
+    <ClInclude Include="grub-core\lib\lzfse\lzfse_internal.h" />
+    <ClInclude Include="grub-core\lib\lzfse\lzvn_decode_base.h" />
+    <ClInclude Include="grub-core\lib\wimboot\huffman.h" />
+    <ClInclude Include="grub-core\lib\wimboot\lzx.h" />
+    <ClInclude Include="grub-core\lib\wimboot\xca.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets" Condition="Exists('..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets')" />
+    <Import Project="..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets" Condition="Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\VC-LTL.5.3.1\build\native\VC-LTL.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\VC-LTL.5.3.1\build\native\VC-LTL.props'))" />
+    <Error Condition="!Exists('..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets'))" />
+    <Error Condition="!Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.props'))" />
+    <Error Condition="!Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets'))" />
+  </Target>
+</Project>

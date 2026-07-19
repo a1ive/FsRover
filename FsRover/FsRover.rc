@@ -1,0 +1,706 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma code_page(65001)
+
+#include <winresrc.h>
+
+#include "resource.h"
+#include "version.h"
+#include "../filetype/resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// Language-neutral
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
+// Pixel-art app icon: Mars rover driving on a hard-disk platter
+// (16/32 hand-drawn masters, 48/64/128/256 nearest-neighbor scaled).
+IDI_APP ICON "FsRover.ico"
+
+// Compiled magic.mgc (zstd -19); inflated at runtime by filetype.lib
+// with the zstd decoder from grub.lib.  See filetype\magic\.
+IDR_FILETYPE_MAGIC_ZST RCDATA "../filetype/magic/magic.zst"
+
+// Bundled Dokan runtime for the build architecture: user-mode library
+// (dokan2.dll), kernel driver (dokan2.sys) and its security catalog
+// (dokan2.cat).  Dokan > Install Dokan writes these to the system and
+// registers the catalog when no Dokan driver is present.  The catalog is
+// required because dokan2.sys is catalog-signed, not embedded-signed, so
+// the kernel refuses to load it on a machine that never had Dokan.  Only
+// the matching architecture is bundled (WoW64 is out of scope); the arch
+// macro comes from the vcxproj ResourceCompile preprocessor definitions.
+#if defined(ROVER_ARCH_X64)
+IDR_DOKAN_DLL RCDATA "dokan/prebuilt/x64/dokan2.dll"
+IDR_DOKAN_SYS RCDATA "dokan/prebuilt/x64/dokan2.sys"
+IDR_DOKAN_CAT RCDATA "dokan/prebuilt/x64/dokan2.cat"
+#elif defined(ROVER_ARCH_ARM64)
+IDR_DOKAN_DLL RCDATA "dokan/prebuilt/ARM64/dokan2.dll"
+IDR_DOKAN_SYS RCDATA "dokan/prebuilt/ARM64/dokan2.sys"
+IDR_DOKAN_CAT RCDATA "dokan/prebuilt/ARM64/dokan2.cat"
+#elif defined(ROVER_ARCH_X86)
+IDR_DOKAN_DLL RCDATA "dokan/prebuilt/x86/dokan2.dll"
+IDR_DOKAN_SYS RCDATA "dokan/prebuilt/x86/dokan2.sys"
+IDR_DOKAN_CAT RCDATA "dokan/prebuilt/x86/dokan2.cat"
+#endif
+
+// Hex viewer: a 64-bit offset bar above one virtual list view.  All
+// translatable text is replaced from the string table at runtime, so a
+// single language-neutral template serves every UI language.
+IDD_HEX DIALOGEX 0, 0, 400, 240
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "Hex view"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_HEX_OFFSET_LABEL, 4, 5, 42, 10
+	EDITTEXT	IDC_HEX_OFFSET_EDIT, 48, 2, 110, 14, ES_AUTOHSCROLL
+	DEFPUSHBUTTON	"Go", IDC_HEX_GO, 161, 2, 34, 14
+	PUSHBUTTON	"<", IDC_HEX_PREV, 198, 2, 24, 14
+	PUSHBUTTON	">", IDC_HEX_NEXT, 225, 2, 24, 14
+	CONTROL	"", IDC_HEX_LIST, "SysListView32", LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | WS_TABSTOP, 0, 20, 400, 220, WS_EX_CLIENTEDGE
+END
+
+// Text viewer: encoding/wrap/line-number/font bar above a read-only
+// RichEdit (Msftedit.dll is loaded before the dialog is created).  All
+// translatable text is replaced from the string table at runtime, so a
+// single language-neutral template serves every UI language.
+IDD_TEXT DIALOGEX 0, 0, 480, 300
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "Text view"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_TEXT_ENC_LABEL, 4, 5, 44, 10
+	COMBOBOX	IDC_TEXT_ENCODING, 50, 3, 70, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"", IDC_TEXT_WRAP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 124, 4, 60, 12
+	CONTROL		"", IDC_TEXT_LINENUM, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 188, 4, 60, 12
+	PUSHBUTTON	"", IDC_TEXT_FONT, 252, 2, 40, 14
+	LTEXT		"", IDC_TEXT_INFO, 296, 5, 180, 10, SS_ENDELLIPSIS
+	CONTROL		"", IDC_TEXT_EDIT, "RICHEDIT50W", ES_MULTILINE | ES_READONLY | ES_NOHIDESEL | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP, 0, 20, 480, 280, WS_EX_CLIENTEDGE
+END
+
+// Image viewer: no controls, the whole client area is rendered with
+// Direct2D (d2d1.dll is loaded at runtime).  All text lives in the
+// caption, so a single language-neutral template serves every UI
+// language.
+IDD_IMAGE DIALOGEX 0, 0, 480, 300
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "Image view"
+FONT 9, "Segoe UI"
+BEGIN
+END
+
+// About box: app icon, version/copyright, third-party credits.  The
+// caption and credits label come from the string table at runtime; the
+// copyright and the credits list are ASCII and language-neutral.
+IDD_ABOUT DIALOGEX 0, 0, 280, 190
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About"
+FONT 9, "Segoe UI"
+BEGIN
+	CONTROL		"", IDC_ABOUT_ICON, "Static", SS_ICON, 12, 12, 21, 20
+	LTEXT		"", IDC_ABOUT_NAME, 44, 12, 229, 10
+	LTEXT		ROVER_COPYRIGHT, IDC_STATIC, 44, 24, 229, 10
+	LTEXT		"Licensed under the GNU General Public License v3.", IDC_STATIC, 44, 36, 229, 10
+	LTEXT		"", IDC_ABOUT_CREDITS_LABEL, 12, 54, 261, 10
+	EDITTEXT	IDC_ABOUT_CREDITS, 12, 66, 261, 98, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+	DEFPUSHBUTTON	"OK", IDOK, 223, 169, 50, 14
+END
+
+// Supported features: per-category name lists, filled at runtime from
+// the grub registration lists (backend_get_support).
+IDD_SUPPORT DIALOGEX 0, 0, 320, 250
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Supported features"
+FONT 9, "Segoe UI"
+BEGIN
+	EDITTEXT	IDC_SUPPORT_TEXT, 7, 7, 306, 214, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+	DEFPUSHBUTTON	"OK", IDOK, 263, 229, 50, 14
+END
+
+// Dokan mount options: drive-letter picker plus an open-in-Explorer
+// switch.  All translatable text is replaced from the string table at
+// runtime, so a single language-neutral template serves every UI
+// language.
+IDD_DOKANMOUNT DIALOGEX 0, 0, 220, 91
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Mount to drive letter"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_DOKAN_INFO, 7, 7, 206, 10
+	LTEXT		"", IDC_DOKAN_LETTER_LABEL, 7, 25, 60, 8
+	COMBOBOX	IDC_DOKAN_LETTER, 70, 23, 50, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"", IDC_DOKAN_EXPLORER, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 43, 206, 10
+	DEFPUSHBUTTON	"OK", IDOK, 108, 70, 50, 14
+	PUSHBUTTON	"Cancel", IDCANCEL, 163, 70, 50, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION ROVER_VERSION
+PRODUCTVERSION ROVER_VERSION
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS VS_FF_DEBUG
+#else
+FILEFLAGS 0x0L
+#endif
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0x0L
+BEGIN
+	BLOCK "StringFileInfo"
+	BEGIN
+		BLOCK "000004B0"
+		BEGIN
+			VALUE "CompanyName", ROVER_COMPANY "\0"
+			VALUE "FileDescription", ROVER_FILEDESC "\0"
+			VALUE "FileVersion", ROVER_VERSION_STR "\0"
+			VALUE "InternalName", ROVER_INTERNALNAME "\0"
+			VALUE "LegalCopyright", ROVER_COPYRIGHT "\0"
+			VALUE "OriginalFilename", ROVER_ORIGINALNAME "\0"
+			VALUE "ProductName", ROVER_PRODUCT "\0"
+			VALUE "ProductVersion", ROVER_VERSION_STR "\0"
+		END
+	END
+	BLOCK "VarFileInfo"
+	BEGIN
+		VALUE "Translation", 0x0000, 1200
+	END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States)
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"Refresh"
+	IDS_BTN_EXTRACT		"Extract"
+	IDS_BTN_UP		"Up"
+	IDS_BTN_CANCEL		"Cancel"
+	IDS_COL_NAME		"Name"
+	IDS_COL_SIZE		"Size"
+	IDS_COL_MODIFIED	"Modified"
+	IDS_MENU_EXTRACT	"Extract"
+	IDS_MENU_MOUNT		"Mount as disk"
+	IDS_MENU_UNMOUNT	"Unmount"
+	IDS_STATUS_STARTING	"Starting backend..."
+	IDS_STATUS_LISTING	"Listing..."
+	IDS_STATUS_ENUM		"Enumerating disks..."
+	IDS_STATUS_EXTRACTING	"Extracting..."
+	IDS_STATUS_CANCELLING	"Cancelling..."
+	IDS_STATUS_NOTHING	"Nothing to extract"
+	IDS_STATUS_MOUNTING	"Mounting..."
+	IDS_STATUS_UNMOUNTING	"Unmounting..."
+	IDS_FMT_DEVICES		"%d device(s)"
+	IDS_FMT_ITEMS		"%d item(s)"
+	IDS_FMT_EXTRACT_DONE	"Extracted %llu file(s), %s"
+	IDS_FMT_EXTRACT_PROG	"Extracting (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"Mounted as %s"
+	IDS_FMT_UNMOUNTED	"Unmounted %s"
+	IDS_PICK_FOLDER		"Select destination folder"
+	IDS_MENU_DOKAN_MOUNT	"Mount to drive letter"
+	IDS_MENU_DOKAN_UNMOUNT	"Unmount drive letter"
+	IDS_FMT_DOKAN_MOUNTED	"Mounted %s to %s"
+	IDS_FMT_TRAY_UNMOUNT	"Unmount %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"Dokan drives are still mounted. Unmount them all and exit?"
+	IDS_TRAY_OPEN		"Open FsRover"
+	IDS_TRAY_EXIT		"Exit"
+	IDS_MENU_PROPS		"Properties"
+	IDS_PROPS_CALCULATING	"Calculating..."
+	IDS_PROPS_COMPLETE	"Complete."
+	IDS_PROPS_SELECT_ONE	"Select at least one hash algorithm."
+	IDS_MENU_HEX		"View hex"
+	IDS_HEX_TITLE		"Hex view"
+	IDS_HEX_OFFSET		"Offset(h)"
+	IDS_HEX_TEXT		"Text"
+	IDS_SIZE_SYMLINK	"SYMLINK"
+	IDS_FMT_CRYPTO_TITLE	"Unlock %s"
+	IDS_CRYPTO_BADKEY	"Could not unlock the volume. Check the passphrase or key file and try again."
+	IDS_CRYPTO_KEYFILE	"Select key file"
+	IDS_MENU_COPY_NAME	"Copy file name"
+	IDS_MENU_COPY_PATH	"Copy path"
+	IDS_HEX_GO		"Go"
+	IDS_MENU_MOUNT_DECOMP	"Mount as disk (decompress)"
+	IDS_MENU_TEXT		"View text"
+	IDS_TEXT_TITLE		"Text view"
+	IDS_TEXT_ENCODING	"Encoding:"
+	IDS_TEXT_WRAP		"Word wrap"
+	IDS_TEXT_LINENUM	"Line numbers"
+	IDS_TEXT_FONT		"Font"
+	IDS_TEXT_AUTO		"Auto"
+	IDS_TEXT_LOADING	"Loading..."
+	IDS_FMT_TEXT_INFO	"%s, %d line(s)"
+	IDS_FMT_TEXT_TRUNC	" (first %s of %s)"
+	IDS_ASK_TEXT_BIG	"This file is large (%s); opening it may take a while. Open anyway?"
+	IDS_ASK_TEXT_BIN	"This file looks like a binary file. Open anyway?"
+	IDS_MENU_IMAGE		"View image"
+	IDS_IMAGE_TITLE		"Image view"
+	IDS_IMAGE_BAD		"Cannot decode this image."
+	IDS_IMAGE_TOOBIG	"This image file is too large to open."
+	IDS_IMAGE_NO_D2D	"Direct2D is not available on this system."
+	IDS_MENU_FILE		"&File"
+	IDS_MENU_SELECTION	"&Selection"
+	IDS_MENU_DOKAN		"&Dokan"
+	IDS_MENU_HELP		"&Help"
+	IDS_MENU_SEL_ALL	"Select &All"
+	IDS_MENU_SEL_INVERT	"&Invert Selection"
+	IDS_DOKAN_NONE		"No mounted drive letters"
+	IDS_DOKAN_UNAVAILABLE	"Dokan driver is not installed"
+	IDS_MENU_SUPPORT	"Supported &Features"
+	IDS_MENU_ABOUT		"&About FsRover"
+	IDS_ABOUT_CREDITS	"Built with these open-source projects:"
+	IDS_SUPPORT_FS		"Filesystems"
+	IDS_SUPPORT_PARTMAP	"Partition maps"
+	IDS_SUPPORT_DISKFILTER	"Disk filters"
+	IDS_SUPPORT_IOFILTER	"I/O filters"
+	IDS_DOKAN_INSTALL	"Install Dokan"
+	IDS_DOKAN_INSTALLING	"Installing Dokan..."
+	IDS_DOKAN_INSTALL_OK	"Dokan was installed successfully."
+	IDS_FMT_DOKAN_INSTALL_FAIL	"Could not install Dokan: %s"
+	IDS_DOKAN_LETTER	"Drive letter:"
+	IDS_DOKAN_OPEN_EXPLORER	"Open in Explorer after mounting"
+END
+
+// Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Unlock Encrypted Volume"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"Passphrase:", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"Use a key file instead", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"Browse", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"Cancel", IDCANCEL, 183, 100, 50, 14
+END
+
+// File properties: libmagic description on top, hash calculator below
+// (layout borrowed from FileXRay's property page).
+IDD_PROPS DIALOGEX 0, 0, 227, 196
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Properties"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"File", IDC_STATIC, 7, 7, 213, 43
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+
+	GROUPBOX	"Hash", IDC_STATIC, 7, 55, 213, 134
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 72, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 72, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 72, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 86, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 86, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 86, 62, 10
+	PUSHBUTTON	"Calculate", IDC_PROPS_CALC, 17, 102, 60, 14
+	PUSHBUTTON	"Copy", IDC_PROPS_COPY, 154, 102, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 122, 197, 10
+	LTEXT		"Ready.", IDC_PROPS_STATUS, 17, 136, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 148, 197, 34, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Chinese (Simplified)
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"刷新"
+	IDS_BTN_EXTRACT		"提取"
+	IDS_BTN_UP		"向上"
+	IDS_BTN_CANCEL		"取消"
+	IDS_COL_NAME		"名称"
+	IDS_COL_SIZE		"大小"
+	IDS_COL_MODIFIED	"修改时间"
+	IDS_MENU_EXTRACT	"提取"
+	IDS_MENU_MOUNT		"挂载为磁盘"
+	IDS_MENU_UNMOUNT	"卸载"
+	IDS_STATUS_STARTING	"正在启动后端..."
+	IDS_STATUS_LISTING	"正在列出..."
+	IDS_STATUS_ENUM		"正在枚举磁盘..."
+	IDS_STATUS_EXTRACTING	"正在提取..."
+	IDS_STATUS_CANCELLING	"正在取消..."
+	IDS_STATUS_NOTHING	"没有可提取的内容"
+	IDS_STATUS_MOUNTING	"正在挂载..."
+	IDS_STATUS_UNMOUNTING	"正在卸载..."
+	IDS_FMT_DEVICES		"%d 个设备"
+	IDS_FMT_ITEMS		"%d 个项目"
+	IDS_FMT_EXTRACT_DONE	"已提取 %llu 个文件，%s"
+	IDS_FMT_EXTRACT_PROG	"正在提取 (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"已挂载为 %s"
+	IDS_FMT_UNMOUNTED	"已卸载 %s"
+	IDS_PICK_FOLDER		"选择目标文件夹"
+	IDS_MENU_DOKAN_MOUNT	"挂载为盘符"
+	IDS_MENU_DOKAN_UNMOUNT	"卸载盘符"
+	IDS_FMT_DOKAN_MOUNTED	"已将 %s 挂载到 %s"
+	IDS_FMT_TRAY_UNMOUNT	"卸载 %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"仍有通过 Dokan 挂载的磁盘。全部卸载并退出？"
+	IDS_TRAY_OPEN		"打开 FsRover"
+	IDS_TRAY_EXIT		"退出"
+	IDS_MENU_PROPS		"属性"
+	IDS_PROPS_CALCULATING	"正在计算..."
+	IDS_PROPS_COMPLETE	"完成。"
+	IDS_PROPS_SELECT_ONE	"请选择至少一种哈希算法。"
+	IDS_MENU_HEX		"查看十六进制"
+	IDS_HEX_TITLE		"十六进制浏览"
+	IDS_HEX_OFFSET		"Offset(h)"
+	IDS_HEX_TEXT		"对应文本"
+	IDS_SIZE_SYMLINK	"符号链接"
+	IDS_FMT_CRYPTO_TITLE	"解锁 %s"
+	IDS_CRYPTO_BADKEY	"无法解锁该卷。请检查密码或密钥文件后重试。"
+	IDS_CRYPTO_KEYFILE	"选择密钥文件"
+	IDS_MENU_COPY_NAME	"复制文件名"
+	IDS_MENU_COPY_PATH	"复制路径"
+	IDS_HEX_GO		"转到"
+	IDS_MENU_MOUNT_DECOMP	"挂载为磁盘(透明解压)"
+	IDS_MENU_TEXT		"查看文本"
+	IDS_TEXT_TITLE		"文本查看"
+	IDS_TEXT_ENCODING	"编码："
+	IDS_TEXT_WRAP		"自动换行"
+	IDS_TEXT_LINENUM	"行号"
+	IDS_TEXT_FONT		"字体"
+	IDS_TEXT_AUTO		"自动"
+	IDS_TEXT_LOADING	"正在加载..."
+	IDS_FMT_TEXT_INFO	"%s，%d 行"
+	IDS_FMT_TEXT_TRUNC	"（仅显示前 %s，共 %s）"
+	IDS_ASK_TEXT_BIG	"文件较大（%s），打开可能需要较长时间。仍要打开？"
+	IDS_ASK_TEXT_BIN	"该文件看起来是二进制文件。仍要打开？"
+	IDS_MENU_IMAGE		"查看图片"
+	IDS_IMAGE_TITLE		"图片查看"
+	IDS_IMAGE_BAD		"无法解码该图片。"
+	IDS_IMAGE_TOOBIG	"图片文件过大，无法打开。"
+	IDS_IMAGE_NO_D2D	"此系统不支持 Direct2D。"
+	IDS_MENU_FILE		"文件(&F)"
+	IDS_MENU_SELECTION	"选择(&S)"
+	IDS_MENU_DOKAN		"&Dokan"
+	IDS_MENU_HELP		"帮助(&H)"
+	IDS_MENU_SEL_ALL	"全选(&A)"
+	IDS_MENU_SEL_INVERT	"反选(&I)"
+	IDS_DOKAN_NONE		"没有已挂载的盘符"
+	IDS_DOKAN_UNAVAILABLE	"未安装 Dokan 驱动"
+	IDS_MENU_SUPPORT	"支持的功能(&F)"
+	IDS_MENU_ABOUT		"关于 FsRover(&A)"
+	IDS_ABOUT_CREDITS	"基于以下开源项目构建："
+	IDS_SUPPORT_FS		"文件系统"
+	IDS_SUPPORT_PARTMAP	"分区表"
+	IDS_SUPPORT_DISKFILTER	"磁盘过滤器"
+	IDS_SUPPORT_IOFILTER	"I/O 过滤器"
+	IDS_DOKAN_INSTALL	"安装 Dokan"
+	IDS_DOKAN_INSTALLING	"正在安装 Dokan..."
+	IDS_DOKAN_INSTALL_OK	"Dokan 安装成功。"
+	IDS_FMT_DOKAN_INSTALL_FAIL	"无法安装 Dokan：%s"
+	IDS_DOKAN_LETTER	"盘符："
+	IDS_DOKAN_OPEN_EXPLORER	"挂载后在资源管理器中打开"
+END
+
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "解锁加密卷"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"密码：", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"改用密钥文件", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"浏览", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"确定", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"取消", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_PROPS DIALOGEX 0, 0, 227, 196
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "属性"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"文件", IDC_STATIC, 7, 7, 213, 43
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+
+	GROUPBOX	"哈希", IDC_STATIC, 7, 55, 213, 134
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 72, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 72, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 72, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 86, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 86, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 86, 62, 10
+	PUSHBUTTON	"计算", IDC_PROPS_CALC, 17, 102, 60, 14
+	PUSHBUTTON	"复制", IDC_PROPS_COPY, 154, 102, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 122, 197, 10
+	LTEXT		"就绪。", IDC_PROPS_STATUS, 17, 136, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 148, 197, 34, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Chinese (Traditional)
+
+LANGUAGE LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"重新整理"
+	IDS_BTN_EXTRACT		"擷取"
+	IDS_BTN_UP		"上層"
+	IDS_BTN_CANCEL		"取消"
+	IDS_COL_NAME		"名稱"
+	IDS_COL_SIZE		"大小"
+	IDS_COL_MODIFIED	"修改日期"
+	IDS_MENU_EXTRACT	"擷取"
+	IDS_MENU_MOUNT		"掛載為磁碟"
+	IDS_MENU_UNMOUNT	"卸載"
+	IDS_STATUS_STARTING	"正在啟動後端..."
+	IDS_STATUS_LISTING	"正在列出..."
+	IDS_STATUS_ENUM		"正在列舉磁碟..."
+	IDS_STATUS_EXTRACTING	"正在擷取..."
+	IDS_STATUS_CANCELLING	"正在取消..."
+	IDS_STATUS_NOTHING	"沒有可擷取的內容"
+	IDS_STATUS_MOUNTING	"正在掛載..."
+	IDS_STATUS_UNMOUNTING	"正在卸載..."
+	IDS_FMT_DEVICES		"%d 個裝置"
+	IDS_FMT_ITEMS		"%d 個項目"
+	IDS_FMT_EXTRACT_DONE	"已擷取 %llu 個檔案，%s"
+	IDS_FMT_EXTRACT_PROG	"正在擷取 (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"已掛載為 %s"
+	IDS_FMT_UNMOUNTED	"已卸載 %s"
+	IDS_PICK_FOLDER		"選擇目的地資料夾"
+	IDS_MENU_DOKAN_MOUNT	"掛載為磁碟機代號"
+	IDS_MENU_DOKAN_UNMOUNT	"卸載磁碟機代號"
+	IDS_FMT_DOKAN_MOUNTED	"已將 %s 掛載到 %s"
+	IDS_FMT_TRAY_UNMOUNT	"卸載 %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"仍有透過 Dokan 掛載的磁碟。全部卸載並結束？"
+	IDS_TRAY_OPEN		"開啟 FsRover"
+	IDS_TRAY_EXIT		"結束"
+	IDS_MENU_PROPS		"內容"
+	IDS_PROPS_CALCULATING	"計算中..."
+	IDS_PROPS_COMPLETE	"完成。"
+	IDS_PROPS_SELECT_ONE	"請至少選取一種雜湊演算法。"
+	IDS_MENU_HEX		"檢視十六進位"
+	IDS_HEX_TITLE		"十六進位檢視"
+	IDS_HEX_OFFSET		"Offset(h)"
+	IDS_HEX_TEXT		"對應文字"
+	IDS_SIZE_SYMLINK	"符號連結"
+	IDS_FMT_CRYPTO_TITLE	"解鎖 %s"
+	IDS_CRYPTO_BADKEY	"無法解鎖此磁碟區。請檢查密碼或金鑰檔案後重試。"
+	IDS_CRYPTO_KEYFILE	"選擇金鑰檔案"
+	IDS_MENU_COPY_NAME	"複製檔案名稱"
+	IDS_MENU_COPY_PATH	"複製路徑"
+	IDS_HEX_GO		"前往"
+	IDS_MENU_MOUNT_DECOMP	"掛載為磁碟(透明解壓縮)"
+	IDS_MENU_TEXT		"檢視文字"
+	IDS_TEXT_TITLE		"文字檢視"
+	IDS_TEXT_ENCODING	"編碼："
+	IDS_TEXT_WRAP		"自動換行"
+	IDS_TEXT_LINENUM	"行號"
+	IDS_TEXT_FONT		"字型"
+	IDS_TEXT_AUTO		"自動"
+	IDS_TEXT_LOADING	"正在載入..."
+	IDS_FMT_TEXT_INFO	"%s，%d 行"
+	IDS_FMT_TEXT_TRUNC	"（僅顯示前 %s，共 %s）"
+	IDS_ASK_TEXT_BIG	"檔案較大（%s），開啟可能需要較長時間。仍要開啟？"
+	IDS_ASK_TEXT_BIN	"該檔案看起來是二進位檔案。仍要開啟？"
+	IDS_MENU_IMAGE		"檢視圖片"
+	IDS_IMAGE_TITLE		"圖片檢視"
+	IDS_IMAGE_BAD		"無法解碼此圖片。"
+	IDS_IMAGE_TOOBIG	"圖片檔案過大，無法開啟。"
+	IDS_IMAGE_NO_D2D	"此系統不支援 Direct2D。"
+	IDS_MENU_FILE		"檔案(&F)"
+	IDS_MENU_SELECTION	"選取(&S)"
+	IDS_MENU_DOKAN		"&Dokan"
+	IDS_MENU_HELP		"說明(&H)"
+	IDS_MENU_SEL_ALL	"全選(&A)"
+	IDS_MENU_SEL_INVERT	"反向選取(&I)"
+	IDS_DOKAN_NONE		"沒有已掛載的磁碟機代號"
+	IDS_DOKAN_UNAVAILABLE	"未安裝 Dokan 驅動程式"
+	IDS_MENU_SUPPORT	"支援的功能(&F)"
+	IDS_MENU_ABOUT		"關於 FsRover(&A)"
+	IDS_ABOUT_CREDITS	"基於以下開源專案建置："
+	IDS_SUPPORT_FS		"檔案系統"
+	IDS_SUPPORT_PARTMAP	"磁碟分割表"
+	IDS_SUPPORT_DISKFILTER	"磁碟過濾器"
+	IDS_SUPPORT_IOFILTER	"I/O 過濾器"
+	IDS_DOKAN_INSTALL	"安裝 Dokan"
+	IDS_DOKAN_INSTALLING	"正在安裝 Dokan..."
+	IDS_DOKAN_INSTALL_OK	"Dokan 安裝成功。"
+	IDS_FMT_DOKAN_INSTALL_FAIL	"無法安裝 Dokan：%s"
+	IDS_DOKAN_LETTER	"磁碟機代號："
+	IDS_DOKAN_OPEN_EXPLORER	"掛載後在檔案總管中開啟"
+END
+
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "解鎖加密磁碟區"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"密碼：", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"改用金鑰檔案", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"瀏覽", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"確定", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"取消", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_PROPS DIALOGEX 0, 0, 227, 196
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "內容"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"檔案", IDC_STATIC, 7, 7, 213, 43
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+
+	GROUPBOX	"雜湊", IDC_STATIC, 7, 55, 213, 134
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 72, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 72, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 72, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 86, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 86, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 86, 62, 10
+	PUSHBUTTON	"計算", IDC_PROPS_CALC, 17, 102, 60, 14
+	PUSHBUTTON	"複製", IDC_PROPS_COPY, 154, 102, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 122, 197, 10
+	LTEXT		"就緒。", IDC_PROPS_STATUS, 17, 136, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 148, 197, 34, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Japanese
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"更新"
+	IDS_BTN_EXTRACT		"展開"
+	IDS_BTN_UP		"上へ"
+	IDS_BTN_CANCEL		"キャンセル"
+	IDS_COL_NAME		"名前"
+	IDS_COL_SIZE		"サイズ"
+	IDS_COL_MODIFIED	"更新日時"
+	IDS_MENU_EXTRACT	"展開"
+	IDS_MENU_MOUNT		"ディスクとしてマウント"
+	IDS_MENU_UNMOUNT	"マウント解除"
+	IDS_STATUS_STARTING	"バックエンドを起動しています..."
+	IDS_STATUS_LISTING	"一覧を取得しています..."
+	IDS_STATUS_ENUM		"ディスクを列挙しています..."
+	IDS_STATUS_EXTRACTING	"展開しています..."
+	IDS_STATUS_CANCELLING	"キャンセルしています..."
+	IDS_STATUS_NOTHING	"展開する項目がありません"
+	IDS_STATUS_MOUNTING	"マウントしています..."
+	IDS_STATUS_UNMOUNTING	"マウントを解除しています..."
+	IDS_FMT_DEVICES		"%d 台のデバイス"
+	IDS_FMT_ITEMS		"%d 個の項目"
+	IDS_FMT_EXTRACT_DONE	"%llu 個のファイルを展開しました (%s)"
+	IDS_FMT_EXTRACT_PROG	"展開中 (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"%s としてマウントしました"
+	IDS_FMT_UNMOUNTED	"%s のマウントを解除しました"
+	IDS_PICK_FOLDER		"展開先のフォルダーを選択"
+	IDS_MENU_DOKAN_MOUNT	"ドライブ文字にマウント"
+	IDS_MENU_DOKAN_UNMOUNT	"ドライブ文字をマウント解除"
+	IDS_FMT_DOKAN_MOUNTED	"%s を %s にマウントしました"
+	IDS_FMT_TRAY_UNMOUNT	"%s をマウント解除 (%s)"
+	IDS_ASK_UNMOUNT_ALL	"Dokan でマウント中のドライブがあります。すべてマウント解除して終了しますか?"
+	IDS_TRAY_OPEN		"FsRover を開く"
+	IDS_TRAY_EXIT		"終了"
+	IDS_MENU_PROPS		"プロパティ"
+	IDS_PROPS_CALCULATING	"計算中..."
+	IDS_PROPS_COMPLETE	"完了しました。"
+	IDS_PROPS_SELECT_ONE	"少なくとも 1 つのハッシュ アルゴリズムを選択してください。"
+	IDS_MENU_HEX		"16進数で表示"
+	IDS_HEX_TITLE		"16進数表示"
+	IDS_HEX_OFFSET		"Offset(h)"
+	IDS_HEX_TEXT		"テキスト"
+	IDS_SIZE_SYMLINK	"シンボリックリンク"
+	IDS_FMT_CRYPTO_TITLE	"%s のロック解除"
+	IDS_CRYPTO_BADKEY	"ボリュームのロックを解除できませんでした。パスフレーズまたはキーファイルを確認してください。"
+	IDS_CRYPTO_KEYFILE	"キーファイルを選択"
+	IDS_MENU_COPY_NAME	"ファイル名をコピー"
+	IDS_MENU_COPY_PATH	"パスをコピー"
+	IDS_HEX_GO		"移動"
+	IDS_MENU_MOUNT_DECOMP	"ディスクとしてマウント (透過解凍)"
+	IDS_MENU_TEXT		"テキストを表示"
+	IDS_TEXT_TITLE		"テキスト表示"
+	IDS_TEXT_ENCODING	"エンコード："
+	IDS_TEXT_WRAP		"折り返し"
+	IDS_TEXT_LINENUM	"行番号"
+	IDS_TEXT_FONT		"フォント"
+	IDS_TEXT_AUTO		"自動"
+	IDS_TEXT_LOADING	"読み込み中..."
+	IDS_FMT_TEXT_INFO	"%s、%d 行"
+	IDS_FMT_TEXT_TRUNC	"（先頭 %s / 全体 %s のみ表示）"
+	IDS_ASK_TEXT_BIG	"ファイルが大きいため (%s)、開くのに時間がかかることがあります。開きますか?"
+	IDS_ASK_TEXT_BIN	"このファイルはバイナリ ファイルのようです。開きますか?"
+	IDS_MENU_IMAGE		"画像を表示"
+	IDS_IMAGE_TITLE		"画像表示"
+	IDS_IMAGE_BAD		"この画像をデコードできません。"
+	IDS_IMAGE_TOOBIG	"画像ファイルが大きすぎるため開けません。"
+	IDS_IMAGE_NO_D2D	"このシステムでは Direct2D を利用できません。"
+	IDS_MENU_FILE		"ファイル(&F)"
+	IDS_MENU_SELECTION	"選択(&S)"
+	IDS_MENU_DOKAN		"&Dokan"
+	IDS_MENU_HELP		"ヘルプ(&H)"
+	IDS_MENU_SEL_ALL	"すべて選択(&A)"
+	IDS_MENU_SEL_INVERT	"選択の切り替え(&I)"
+	IDS_DOKAN_NONE		"マウント中のドライブはありません"
+	IDS_DOKAN_UNAVAILABLE	"Dokan ドライバーがインストールされていません"
+	IDS_MENU_SUPPORT	"サポートされている機能(&F)"
+	IDS_MENU_ABOUT		"FsRover について(&A)"
+	IDS_ABOUT_CREDITS	"使用しているオープンソース プロジェクト："
+	IDS_SUPPORT_FS		"ファイルシステム"
+	IDS_SUPPORT_PARTMAP	"パーティションマップ"
+	IDS_SUPPORT_DISKFILTER	"ディスクフィルター"
+	IDS_SUPPORT_IOFILTER	"I/O フィルター"
+	IDS_DOKAN_INSTALL	"Dokan をインストール"
+	IDS_DOKAN_INSTALLING	"Dokan をインストールしています..."
+	IDS_DOKAN_INSTALL_OK	"Dokan をインストールしました。"
+	IDS_FMT_DOKAN_INSTALL_FAIL	"Dokan をインストールできませんでした: %s"
+	IDS_DOKAN_LETTER	"ドライブ文字："
+	IDS_DOKAN_OPEN_EXPLORER	"マウント後にエクスプローラーで開く"
+END
+
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "暗号化ボリュームのロック解除"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"パスフレーズ：", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"キーファイルを使用", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"参照", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_PROPS DIALOGEX 0, 0, 227, 196
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "プロパティ"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"ファイル", IDC_STATIC, 7, 7, 213, 43
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+
+	GROUPBOX	"ハッシュ", IDC_STATIC, 7, 55, 213, 134
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 72, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 72, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 72, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 86, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 86, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 86, 62, 10
+	PUSHBUTTON	"計算", IDC_PROPS_CALC, 17, 102, 60, 14
+	PUSHBUTTON	"コピー", IDC_PROPS_COPY, 154, 102, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 122, 197, 10
+	LTEXT		"準備完了。", IDC_PROPS_STATUS, 17, 136, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 148, 197, 34, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END

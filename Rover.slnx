@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Release" />
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="FsRover/FsRover.vcxproj" Id="05d7bee5-9336-4d00-b242-330023967c60" />
+  <Project Path="filetype/filetype.vcxproj" Id="e1dde022-9296-44d6-bb36-b83b6ee3d362" />
+  <Project Path="grub/grub.vcxproj" Id="430bee0d-4066-42b9-bbc8-5fff43a75ad3" />
+</Solution>
