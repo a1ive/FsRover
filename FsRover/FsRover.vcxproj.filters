@@ -11,6 +11,9 @@
     <Filter Include="GitHub">
       <UniqueIdentifier>{973d52d6-79a9-42da-aac3-3e29f82fb722}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SRC\dokan">
+      <UniqueIdentifier>{23a3fe4b-0770-4676-8dd6-b967cec20ebb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp">
@@ -51,15 +54,6 @@
     <ClInclude Include="backend.h">
       <Filter>SRC</Filter>
     </ClInclude>
-    <ClInclude Include="dokan\dokan.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
-    <ClInclude Include="dokan\fileinfo.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
-    <ClInclude Include="dokan\public.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
     <ClInclude Include="dokanfs.h">
       <Filter>SRC</Filter>
     </ClInclude>
@@ -77,6 +71,15 @@
     </ClInclude>
     <ClInclude Include="version.h">
       <Filter>RC</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\dokan.h">
+      <Filter>SRC\dokan</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\fileinfo.h">
+      <Filter>SRC\dokan</Filter>
+    </ClInclude>
+    <ClInclude Include="dokan\public.h">
+      <Filter>SRC\dokan</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -20,7 +20,7 @@
  * Dokan drive-letter mounts of grub devices.  dokan2.dll is loaded
  * dynamically: when the library or its driver is absent everything
  * degrades to dokanfs_available() == false and the GUI offers Install
- * Dokan instead.  The runtime (dll + driver + catalog) is embedded in
+ * Dokan instead.  The runtime (dll + driver) is embedded in
  * our resources for the build architecture; dokanfs_install() writes it
  * to the system and starts the driver (the process runs elevated).  All
  * functions are GUI-thread only; the filesystem callbacks marshal their
@@ -53,8 +53,8 @@ bool dokanfs_init (HWND notify);
 /* True when the library and driver are usable.  */
 bool dokanfs_available (void);
 
-/* Install the app-embedded Dokan runtime (library + kernel driver +
-   its security catalog) to the system, start the driver service and
+/* Install the app-embedded Dokan runtime (library + kernel driver) to
+   the system, start the driver service and
    re-probe.  On success dokanfs_available() becomes true and true is
    returned; otherwise false with *ERROR set.  The process already runs
    elevated (RequireAdministrator), so no re-launch is needed.  */

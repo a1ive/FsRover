@@ -22,25 +22,20 @@ IDI_APP ICON "FsRover.ico"
 IDR_FILETYPE_MAGIC_ZST RCDATA "../filetype/magic/magic.zst"
 
 // Bundled Dokan runtime for the build architecture: user-mode library
-// (dokan2.dll), kernel driver (dokan2.sys) and its security catalog
-// (dokan2.cat).  Dokan > Install Dokan writes these to the system and
-// registers the catalog when no Dokan driver is present.  The catalog is
-// required because dokan2.sys is catalog-signed, not embedded-signed, so
-// the kernel refuses to load it on a machine that never had Dokan.  Only
-// the matching architecture is bundled (WoW64 is out of scope); the arch
-// macro comes from the vcxproj ResourceCompile preprocessor definitions.
+// (dokan2.dll) and Microsoft-signed kernel driver (dokan2.sys).  Dokan >
+// Install Dokan writes both to the system, creates the Dokan2 service and
+// starts it.  Only the matching architecture is bundled (WoW64 is out of
+// scope); the arch macro comes from the vcxproj ResourceCompile
+// preprocessor definitions.
 #if defined(ROVER_ARCH_X64)
 IDR_DOKAN_DLL RCDATA "dokan/prebuilt/x64/dokan2.dll"
 IDR_DOKAN_SYS RCDATA "dokan/prebuilt/x64/dokan2.sys"
-IDR_DOKAN_CAT RCDATA "dokan/prebuilt/x64/dokan2.cat"
 #elif defined(ROVER_ARCH_ARM64)
 IDR_DOKAN_DLL RCDATA "dokan/prebuilt/ARM64/dokan2.dll"
 IDR_DOKAN_SYS RCDATA "dokan/prebuilt/ARM64/dokan2.sys"
-IDR_DOKAN_CAT RCDATA "dokan/prebuilt/ARM64/dokan2.cat"
 #elif defined(ROVER_ARCH_X86)
 IDR_DOKAN_DLL RCDATA "dokan/prebuilt/x86/dokan2.dll"
 IDR_DOKAN_SYS RCDATA "dokan/prebuilt/x86/dokan2.sys"
-IDR_DOKAN_CAT RCDATA "dokan/prebuilt/x86/dokan2.cat"
 #endif
 
 // Hex viewer: a 64-bit offset bar above one virtual list view.  All

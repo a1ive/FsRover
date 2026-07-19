@@ -26,13 +26,12 @@
 
 #define IDI_APP			1
 
-/* Embedded Dokan runtime for the build architecture: user-mode library,
-   kernel driver and its security catalog.
+/* Embedded Dokan runtime for the build architecture: user-mode library
+   and kernel driver.
    Only the matching architecture is bundled.
    See FsRover.rc and dokanfs.cpp.  */
 #define IDR_DOKAN_DLL		210
 #define IDR_DOKAN_SYS		211
-#define IDR_DOKAN_CAT		212
 
 #define IDC_STATIC		-1
 

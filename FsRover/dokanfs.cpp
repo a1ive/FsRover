@@ -27,8 +27,6 @@
 #undef WIN32_NO_STATUS
 #include <ntstatus.h>
 #include <winsvc.h>
-#include <wintrust.h>
-#include <mscat.h>
 
 #include <stdio.h>
 #include <wchar.h>
@@ -45,10 +43,8 @@
 #include "resource.h"
 #include "strconv.h"
 
-/* Service control (Dokan2 driver service) and driver-catalog
-   registration (dokan2.cat) for the in-app Install Dokan feature.  */
+/* Service control for the in-app Install Dokan feature.  */
 #pragma comment (lib, "advapi32.lib")
-#pragma comment (lib, "wintrust.lib")
 
 namespace
 {
@@ -465,37 +461,6 @@ write_resource (int id, const wchar_t *path, std::wstring *error)
 	return true;
 }
 
-/* Register dokan2.cat in the driver catalog store so the catalog-signed
-   dokan2.sys passes kernel signature enforcement.  Without this the
-   driver would fail to load on a machine that never had Dokan.  */
-bool
-register_catalog (const wchar_t *cat_path, std::wstring *error)
-{
-	/* DRIVER_ACTION_VERIFY -- the driver catalog subsystem, spelled
-	   out to avoid pulling <softpub.h>.  */
-	static const GUID driver_verify =
-		{ 0xf750e6c3, 0x38ee, 0x11d1,
-		  { 0x85, 0xe5, 0x00, 0xc0, 0x4f, 0xc2, 0x95, 0xee } };
-	HCATADMIN admin = nullptr;
-	HCATINFO info;
-
-	if (!CryptCATAdminAcquireContext (&admin, &driver_verify, 0))
-	{
-		*error = L"cannot open the driver catalog store";
-		return false;
-	}
-	info = CryptCATAdminAddCatalog (admin, (PWSTR) cat_path, (PWSTR) L"dokan2.cat", 0);
-	if (info)
-		CryptCATAdminReleaseCatalogContext (admin, info, 0);
-	CryptCATAdminReleaseContext (admin, 0);
-	if (!info)
-	{
-		*error = L"cannot register the Dokan driver catalog";
-		return false;
-	}
-	return true;
-}
-
 /* Create (or reuse) the Dokan2 file-system driver service pointing at
    SYS_PATH and start it.  */
 bool
@@ -567,25 +532,12 @@ dokanfs_install (std::wstring *error)
 	std::wstring dll_path = base + L"\\dokan2.dll";
 	std::wstring sys_path = base + L"\\drivers\\dokan2.sys";
 
-	wchar_t tmpdir[MAX_PATH];
-	n = GetTempPathW (MAX_PATH, tmpdir);
-	if (n == 0 || n >= MAX_PATH)
-	{
-		*error = L"cannot locate the temporary directory";
-		return false;
-	}
-	std::wstring cat_path = std::wstring (tmpdir) + L"dokan2.cat";
-
-	/* Driver + catalog first, then the library; the catalog must be
-	   registered before the service starts (which triggers the kernel
-	   signature check).  The catalog file is only needed during
-	   registration, so it goes to a scratch path and is removed after.  */
+	/* The official Dokan release driver carries an embedded Microsoft
+	   kernel signature, so install it like dokanctl: copy the runtime,
+	   create the file-system service and start it.  */
 	bool ok = write_resource (IDR_DOKAN_SYS, sys_path.c_str (), error)
 		&& write_resource (IDR_DOKAN_DLL, dll_path.c_str (), error)
-		&& write_resource (IDR_DOKAN_CAT, cat_path.c_str (), error)
-		&& register_catalog (cat_path.c_str (), error)
 		&& install_service (sys_path.c_str (), error);
-	DeleteFileW (cat_path.c_str ());
 	if (!ok)
 		return false;
 
