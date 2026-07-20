@@ -128,6 +128,21 @@ BEGIN
 	PUSHBUTTON	"Cancel", IDCANCEL, 163, 70, 50, 14
 END
 
+// Disk/partition properties: a single read-only edit filled at runtime with
+// "field: value" lines (device, filesystem, UUID, label, size, start LBA,
+// sector size, and the backing file or member devices).  Every string is
+// replaced from the string table at runtime, so a single language-neutral
+// template serves every UI language.
+IDD_DISKPROPS DIALOGEX 0, 0, 260, 200
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Properties"
+FONT 9, "Segoe UI"
+BEGIN
+	EDITTEXT	IDC_DISKPROPS_TEXT, 7, 7, 246, 165, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP
+	PUSHBUTTON	"Copy", IDC_DISKPROPS_COPY, 143, 179, 50, 14
+	DEFPUSHBUTTON	"OK", IDOK, 203, 179, 50, 14
+END
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION ROVER_VERSION
 PRODUCTVERSION ROVER_VERSION
@@ -255,6 +270,17 @@ BEGIN
 	IDS_FMT_DOKAN_INSTALL_FAIL	"Could not install Dokan: %s"
 	IDS_DOKAN_LETTER	"Drive letter:"
 	IDS_DOKAN_OPEN_EXPLORER	"Open in Explorer after mounting"
+	IDS_DP_DEVICE		"Device"
+	IDS_DP_FS		"Filesystem"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"Volume label"
+	IDS_DP_SIZE		"Size"
+	IDS_DP_LBA		"Start LBA"
+	IDS_DP_SECTOR		"Sector size"
+	IDS_DP_PARENT_FILE	"Backing file"
+	IDS_DP_PARENTS		"Member devices"
+	IDS_DP_UNKNOWN		"Unrecognized"
+	IDS_DP_COPY		"Copy"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -392,6 +418,17 @@ BEGIN
 	IDS_FMT_DOKAN_INSTALL_FAIL	"无法安装 Dokan：%s"
 	IDS_DOKAN_LETTER	"盘符："
 	IDS_DOKAN_OPEN_EXPLORER	"挂载后在资源管理器中打开"
+	IDS_DP_DEVICE		"设备"
+	IDS_DP_FS		"文件系统"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"卷标"
+	IDS_DP_SIZE		"大小"
+	IDS_DP_LBA		"起始 LBA"
+	IDS_DP_SECTOR		"扇区大小"
+	IDS_DP_PARENT_FILE	"源文件"
+	IDS_DP_PARENTS		"成员设备"
+	IDS_DP_UNKNOWN		"未识别"
+	IDS_DP_COPY		"复制"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -526,6 +563,17 @@ BEGIN
 	IDS_FMT_DOKAN_INSTALL_FAIL	"無法安裝 Dokan：%s"
 	IDS_DOKAN_LETTER	"磁碟機代號："
 	IDS_DOKAN_OPEN_EXPLORER	"掛載後在檔案總管中開啟"
+	IDS_DP_DEVICE		"裝置"
+	IDS_DP_FS		"檔案系統"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"磁碟區標籤"
+	IDS_DP_SIZE		"大小"
+	IDS_DP_LBA		"起始 LBA"
+	IDS_DP_SECTOR		"磁區大小"
+	IDS_DP_PARENT_FILE	"來源檔案"
+	IDS_DP_PARENTS		"成員裝置"
+	IDS_DP_UNKNOWN		"未識別"
+	IDS_DP_COPY		"複製"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -660,6 +708,17 @@ BEGIN
 	IDS_FMT_DOKAN_INSTALL_FAIL	"Dokan をインストールできませんでした: %s"
 	IDS_DOKAN_LETTER	"ドライブ文字："
 	IDS_DOKAN_OPEN_EXPLORER	"マウント後にエクスプローラーで開く"
+	IDS_DP_DEVICE		"デバイス"
+	IDS_DP_FS		"ファイルシステム"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"ボリュームラベル"
+	IDS_DP_SIZE		"サイズ"
+	IDS_DP_LBA		"開始 LBA"
+	IDS_DP_SECTOR		"セクターサイズ"
+	IDS_DP_PARENT_FILE	"元ファイル"
+	IDS_DP_PARENTS		"メンバーデバイス"
+	IDS_DP_UNKNOWN		"認識されていません"
+	IDS_DP_COPY		"コピー"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

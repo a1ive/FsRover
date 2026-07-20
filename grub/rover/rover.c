@@ -248,6 +248,57 @@ struct enum_ctx
 	void *data;
 };
 
+/*
+ * Member devices of a diskfilter volume (LVM/LDM/mdraid/dmraid): its
+ * physical volumes, one grub device name per line.  disk->data is the
+ * logical volume; each PV points at the disk it lives on (or, when that
+ * disk is missing, carries only its own recorded name).  Returns a
+ * grub_malloc'd string the caller frees, or NULL if there is nothing to
+ * report.
+ */
+static char *
+rover_diskfilter_parents (grub_disk_t disk)
+{
+	struct grub_diskfilter_lv *lv = disk->data;
+	struct grub_diskfilter_pv *pv;
+	grub_size_t total = 0;
+	char *out;
+	char *p;
+
+	if (!lv || !lv->vg)
+		return NULL;
+
+	for (pv = lv->vg->pvs; pv; pv = pv->next)
+	{
+		const char *n = pv->disk ? pv->disk->name : pv->name;
+		if (n)
+			total += grub_strlen (n) + 1;	/* separator or NUL */
+	}
+	if (!total)
+		return NULL;
+
+	out = grub_malloc (total);
+	if (!out)
+		return NULL;
+
+	p = out;
+	for (pv = lv->vg->pvs; pv; pv = pv->next)
+	{
+		const char *n = pv->disk ? pv->disk->name : pv->name;
+		grub_size_t len;
+
+		if (!n)
+			continue;
+		if (p != out)
+			*p++ = '\n';
+		len = grub_strlen (n);
+		grub_memcpy (p, n, len);
+		p += len;
+	}
+	*p = '\0';
+	return out;
+}
+
 static int
 enum_disk_shim (const char *name, void *data)
 {
@@ -257,6 +308,8 @@ enum_disk_shim (const char *name, void *data)
 	grub_fs_t fs;
 	grub_uint64_t sectors;
 	char *label = NULL;
+	char *uuid = NULL;
+	char *parents = NULL;
 	char crypto_uuid[GRUB_CRYPTODISK_MAX_UUID_LENGTH + 1];
 	int ret;
 
@@ -277,6 +330,13 @@ enum_disk_shim (const char *name, void *data)
 		sectors = grub_disk_native_sectors (dev->disk);
 		if (sectors != GRUB_DISK_SIZE_UNKNOWN)
 			info.size = sectors << GRUB_DISK_SECTOR_BITS;
+		info.sector_size = 1U << dev->disk->log_sector_size;
+		/* Partition start, in the disk's own sector units (the value in
+		   the partition table); grub_partition_get_start() is normalised
+		   to 512-byte sectors.  */
+		if (dev->disk->partition)
+			info.start_lba = grub_disk_to_native_sector (dev->disk,
+				grub_partition_get_start (dev->disk->partition));
 		switch (dev->disk->dev->id)
 		{
 		case GRUB_DISK_DEVICE_HOSTDISK_ID:
@@ -284,9 +344,12 @@ enum_disk_shim (const char *name, void *data)
 			break;
 		case GRUB_DISK_DEVICE_LOOPBACK_ID:
 			info.dev_id = ROVER_DEV_LOOPBACK;
+			info.parent_file = rover_loopback_get_file (name);
 			break;
 		case GRUB_DISK_DEVICE_DISKFILTER_ID:
 			info.dev_id = ROVER_DEV_DISKFILTER;
+			parents = rover_diskfilter_parents (dev->disk);
+			info.parents = parents;
 			break;
 		case GRUB_DISK_DEVICE_CRYPTODISK_ID:
 			info.dev_id = ROVER_DEV_CRYPTODISK;
@@ -305,6 +368,8 @@ enum_disk_shim (const char *name, void *data)
 		info.fs = fs->name;
 		if (fs->fs_label && (fs->fs_label) (dev, &label) == GRUB_ERR_NONE)
 			info.label = label;
+		if (fs->fs_uuid && (fs->fs_uuid) (dev, &uuid) == GRUB_ERR_NONE)
+			info.fs_uuid = uuid;
 	}
 	else if (dev->disk != NULL && grub_cryptodisk_get_by_source_disk (dev->disk) == NULL)
 	{
@@ -327,6 +392,8 @@ enum_disk_shim (const char *name, void *data)
 	ret = ctx->cb (&info, ctx->data);
 
 	grub_free (label);
+	grub_free (uuid);
+	grub_free (parents);
 	grub_device_close (dev);
 	grub_errno = GRUB_ERR_NONE;
 	return ret;

@@ -121,6 +121,17 @@ rover_loopback_del (const char *devname)
 	return GRUB_ERR_NONE;
 }
 
+const char *
+rover_loopback_get_file (const char *devname)
+{
+	struct loopdisk *dev;
+
+	for (dev = loopdisk_list; dev; dev = dev->next)
+		if (grub_strcmp (dev->devname, devname) == 0)
+			return dev->file ? dev->file->name : NULL;
+	return NULL;
+}
+
 static int
 loopdisk_iterate (grub_disk_dev_iterate_hook_t hook, void *hook_data, grub_disk_pull_t pull)
 {

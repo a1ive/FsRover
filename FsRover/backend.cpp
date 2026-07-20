@@ -129,6 +129,11 @@ enum_disk_hook (const struct rover_disk_info *info, void *data)
 	d.size = info->size;
 	d.fs = info->fs ? info->fs : "";
 	d.label = info->label ? info->label : "";
+	d.fs_uuid = info->fs_uuid ? info->fs_uuid : "";
+	d.start_lba = info->start_lba;
+	d.sector_size = info->sector_size;
+	d.parent_file = info->parent_file ? info->parent_file : "";
+	d.parents = info->parents ? info->parents : "";
 	d.encrypted = info->encrypted != 0;
 	d.crypto_type = info->crypto_type ? info->crypto_type : "";
 	d.crypto_uuid = info->crypto_uuid ? info->crypto_uuid : "";

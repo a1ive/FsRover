@@ -64,8 +64,10 @@ std::string join_path (const std::string &dir, const std::string &name);
 void clipboard_set_text (HWND owner, const std::wstring &text);
 
 /* propsdlg.cpp */
-extern HWND g_props;	/* modal properties dialog, null when closed */
+extern HWND g_props;	/* modal file properties dialog, null when closed */
+extern HWND g_diskprops;	/* modal disk properties dialog, null when closed */
 void show_props (const std::string &path);
+void show_disk_props (const backend_diskent &d);
 void props_on_type (backend_result *res);
 void props_on_hash (backend_result *res);
 bool props_on_progress (backend_progress *p);

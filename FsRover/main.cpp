@@ -769,12 +769,17 @@ on_tree_rclick (void)
 		AppendMenuW (menu, MF_STRING | busy, IDM_UNMOUNT, res_str (IDS_MENU_UNMOUNT).c_str ());
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_hex ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
+	/* Properties reads only the cached diskent, so it stays available
+	   during an extraction (unlike the backend-touching items above).  */
+	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
 	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
 	DestroyMenu (menu);
 	if (cmd == IDM_DOKAN_MOUNT && can_dokan)
 		do_dokan_mount (d);
 	else if (cmd == IDM_HEX && can_hex)
 		show_hex ("(" + d.name + ")0+", widen ("(" + d.name + ")"), d.size);
+	else if (cmd == IDM_PROPS)
+		show_disk_props (d);
 	else if (cmd == IDM_DOKAN_UNMOUNT && dm)
 		do_dokan_unmount (dm);
 	else if (cmd == IDM_UNMOUNT && is_loop)
@@ -1437,7 +1442,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		/* The tray Exit can arrive while a modal dialog holds
 		   the main window disabled; destroying the owner under
 		   a modal loop is not survivable.  */
-		if (g_props || g_hex || g_text || g_img || g_crypto
+		if (g_props || g_diskprops || g_hex || g_text || g_img || g_crypto
 		    || g_about || g_support)
 			return 0;
 		if (dokanfs_count () > 0)

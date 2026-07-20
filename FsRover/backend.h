@@ -112,6 +112,11 @@ struct backend_diskent
 	UINT64 size;	/* bytes, BACKEND_SIZE_UNKNOWN if unknown */
 	std::string fs;	/* empty if unrecognized */
 	std::string label;	/* empty if none */
+	std::string fs_uuid;	/* filesystem UUID, empty if none */
+	UINT64 start_lba = 0;	/* partition start in sector_size units, 0 if whole disk */
+	UINT sector_size = 0;	/* logical sector size in bytes, 0 if unknown */
+	std::string parent_file;	/* loopback backing file (grub path), else empty */
+	std::string parents;	/* diskfilter member devices, one per line, else empty */
 	bool encrypted = false;	/* locked LUKS/LUKS2 or BitLocker container */
 	std::string crypto_type;	/* "luks", "luks2" or "bitlocker" */
 	std::string crypto_uuid;	/* container UUID when encrypted */

@@ -75,6 +75,20 @@ struct rover_disk_info
 	unsigned long long size;	/* bytes, ROVER_SIZE_UNKNOWN if unknown */
 	const char *fs;	/* filesystem name, NULL if unrecognized */
 	const char *label;	/* filesystem label, NULL if none */
+	const char *fs_uuid;	/* filesystem UUID, NULL if none */
+	/* Geometry.  start_lba is the partition's first sector on its parent
+	   disk in sector_size units (0 for whole disks and synthetic devices);
+	   sector_size is the disk's logical sector size in bytes (0 if the
+	   device has no backing disk).  start_lba * sector_size is the byte
+	   offset of the partition.  */
+	unsigned long long start_lba;
+	unsigned int sector_size;
+	/* Parentage, both valid only during the callback and both NULL unless
+	   the device is of the matching class: parent_file is a loopback's
+	   backing file (grub path); parents is a diskfilter volume's member
+	   devices, one per line ('\n'-separated).  */
+	const char *parent_file;
+	const char *parents;
 	/* A locked LUKS/LUKS2 or BitLocker container (no readable fs until
 	   unlocked).  crypto_type is "luks", "luks2" or "bitlocker";
 	   crypto_uuid is its UUID.
@@ -176,6 +190,11 @@ int rover_enum_support (int category, rover_support_hook cb, void *data);
  */
 int rover_loopback_add (const char *devname, const char *path, int decompress);
 int rover_loopback_del (const char *devname);
+
+/* Backing file (grub path) of loopback device DEVNAME, or NULL if there is
+   no such device.  The returned string is owned by the loopback and stays
+   valid until the device is deleted.  */
+const char *rover_loopback_get_file (const char *devname);
 
 /*
  * Unlock the LUKS/LUKS2 volume on grub device DEVICE ("hd0,gpt2") using

@@ -59,6 +59,9 @@
 /* Dokan mount options: drive-letter picker + open-in-Explorer switch.  */
 #define IDD_DOKANMOUNT		108
 
+/* Disk/partition properties: one read-only edit filled at runtime.  */
+#define IDD_DISKPROPS		109
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303
@@ -92,6 +95,9 @@
 #define IDC_DOKAN_LETTER_LABEL	1602
 #define IDC_DOKAN_LETTER	1603
 #define IDC_DOKAN_EXPLORER	1604
+
+#define IDC_DISKPROPS_TEXT	1701
+#define IDC_DISKPROPS_COPY	1702
 
 #define IDC_PROPS_TYPE		1001
 #define IDC_PROPS_MD5		1002
@@ -193,5 +199,16 @@
 #define IDS_FMT_DOKAN_INSTALL_FAIL	85
 #define IDS_DOKAN_LETTER	86
 #define IDS_DOKAN_OPEN_EXPLORER	87
+#define IDS_DP_DEVICE		88
+#define IDS_DP_FS		89
+#define IDS_DP_UUID		90
+#define IDS_DP_LABEL		91
+#define IDS_DP_SIZE		92
+#define IDS_DP_LBA		93
+#define IDS_DP_SECTOR		94
+#define IDS_DP_PARENT_FILE	95
+#define IDS_DP_PARENTS		96
+#define IDS_DP_UNKNOWN		97
+#define IDS_DP_COPY		98
 
 #endif /* ! FSROVER_RESOURCE_H */

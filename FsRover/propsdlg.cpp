@@ -30,7 +30,8 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_props;	/* modal properties dialog, null when closed */
+HWND g_props;	/* modal file properties dialog, null when closed */
+HWND g_diskprops;	/* modal disk properties dialog, null when closed */
 
 namespace
 {
@@ -39,6 +40,10 @@ UINT g_seq_props;	/* pending seq per task; older results */
 UINT g_seq_hash;	/* are stale and dropped */
 bool g_hashing;	/* hash task posted from the properties dialog */
 std::string g_props_path;	/* file the dialog is about, UTF-8 */
+
+/* Snapshot for the disk properties dialog (see show_disk_props).  */
+std::string g_dp_name;	/* device name, for the caption */
+std::wstring g_dp_text;	/* preformatted "field: value" body */
 
 void
 props_enable_hash_controls (HWND dlg, BOOL enabled)
@@ -145,6 +150,123 @@ props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 	return FALSE;
 }
 
+/* Disk / partition properties: everything is already in the diskent from
+   the last enumeration, so the dialog is a plain formatter -- no backend
+   task, hence safe to open even while an extraction runs.  */
+
+std::wstring
+group_digits (UINT64 v)
+{
+	std::wstring s = std::to_wstring (v);
+
+	for (int i = (int) s.size () - 3; i > 0; i -= 3)
+		s.insert ((size_t) i, L",");
+	return s;
+}
+
+void
+append_field (std::wstring &out, UINT label, const std::wstring &value)
+{
+	out += res_str (label);
+	out += L": ";
+	out += value;
+	out += L"\r\n";
+}
+
+std::wstring
+disk_props_text (const backend_diskent &d)
+{
+	std::wstring out;
+
+	append_field (out, IDS_DP_DEVICE, widen (d.name));
+
+	/* Filesystem: its name, the crypto container type when locked, or a
+	   placeholder when nothing recognised the volume.  */
+	std::wstring fs;
+	if (!d.fs.empty ())
+		fs = widen (d.fs);
+	else if (d.encrypted)
+		fs = widen (d.crypto_type);
+	else
+		fs = res_str (IDS_DP_UNKNOWN);
+	append_field (out, IDS_DP_FS, fs);
+
+	/* UUID: the filesystem's, or the crypto container's when locked.  */
+	std::wstring uuid;
+	if (!d.fs_uuid.empty ())
+		uuid = widen (d.fs_uuid);
+	else if (d.encrypted && !d.crypto_uuid.empty ())
+		uuid = widen (d.crypto_uuid);
+	if (!uuid.empty ())
+		append_field (out, IDS_DP_UUID, uuid);
+
+	if (!d.label.empty ())
+		append_field (out, IDS_DP_LABEL, widen (d.label));
+
+	if (d.size != BACKEND_SIZE_UNKNOWN)
+		append_field (out, IDS_DP_SIZE,
+			format_size (d.size) + L" (" + group_digits (d.size) + L" B)");
+
+	/* Start LBA is only meaningful for an actual partition.  */
+	if (d.is_partition)
+		append_field (out, IDS_DP_LBA, group_digits (d.start_lba));
+
+	if (d.sector_size)
+		append_field (out, IDS_DP_SECTOR, std::to_wstring (d.sector_size) + L" B");
+
+	if (!d.parent_file.empty ())
+		append_field (out, IDS_DP_PARENT_FILE, widen (d.parent_file));
+
+	/* Diskfilter members arrive one grub device name per line; list each
+	   under its own indented row.  */
+	if (!d.parents.empty ())
+	{
+		out += res_str (IDS_DP_PARENTS);
+		out += L":\r\n";
+		for (size_t pos = 0; pos < d.parents.size (); )
+		{
+			size_t nl = d.parents.find ('\n', pos);
+			if (nl == std::string::npos)
+				nl = d.parents.size ();
+			out += L"    " + widen (d.parents.substr (pos, nl - pos)) + L"\r\n";
+			pos = nl + 1;
+		}
+	}
+
+	return out;
+}
+
+INT_PTR CALLBACK
+disk_props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		g_diskprops = dlg;
+		SetWindowTextW (dlg, (widen (g_dp_name) + L" - " + res_str (IDS_MENU_PROPS)).c_str ());
+		SetDlgItemTextW (dlg, IDC_DISKPROPS_COPY, res_str (IDS_DP_COPY).c_str ());
+		SetDlgItemTextW (dlg, IDC_DISKPROPS_TEXT, g_dp_text.c_str ());
+		/* Focus the OK button, not the edit: giving the edit focus would
+		   select all its text.  Returning FALSE keeps this focus.  */
+		SetFocus (GetDlgItem (dlg, IDOK));
+		return FALSE;
+	case WM_COMMAND:
+		switch (LOWORD (wp))
+		{
+		case IDC_DISKPROPS_COPY:
+			clipboard_set_text (dlg, g_dp_text);
+			return TRUE;
+		case IDOK:
+		case IDCANCEL:
+			g_diskprops = nullptr;
+			EndDialog (dlg, 0);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
 } // namespace
 
 void
@@ -156,6 +278,20 @@ show_props (const std::string &path)
 			 MAKEINTRESOURCEW (IDD_PROPS), g_main,
 			 props_dlg_proc, 0);
 	g_props = nullptr;
+}
+
+/* Disk / partition properties (tree right-click).  The diskent is a
+   snapshot: a disk refresh arriving during the modal loop reallocates
+   g_disks, so the caller passes a copy, formatted up front here.  */
+void
+show_disk_props (const backend_diskent &d)
+{
+	g_dp_name = d.name;
+	g_dp_text = disk_props_text (d);
+	DialogBoxParamW (GetModuleHandleW (nullptr),
+			 MAKEINTRESOURCEW (IDD_DISKPROPS), g_main,
+			 disk_props_dlg_proc, 0);
+	g_diskprops = nullptr;
 }
 
 /* Task results for the dialog; stale or orphaned ones are dropped.  */
