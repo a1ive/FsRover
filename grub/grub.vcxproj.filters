@@ -97,6 +97,12 @@
     <Filter Include="grub-core\lib\json">
       <UniqueIdentifier>{a9f7a383-4c62-4364-90ba-d53d05f82c12}</UniqueIdentifier>
     </Filter>
+    <Filter Include="grub-core\lib\7z">
+      <UniqueIdentifier>{25728b88-9d12-46ff-a8e1-5e95d721b9a8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\rar">
+      <UniqueIdentifier>{fc1a1375-78fb-423d-963e-65b933e849a3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rover\init.c">
@@ -858,6 +864,30 @@
     <ClCompile Include="grub-core\fs\redoxfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Ppmd7.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Ppmd7aDec.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar_core.c">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar1.c">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar2.c">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar3.c">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar5.c">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\rar.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -883,6 +913,30 @@
     </ClInclude>
     <ClInclude Include="include\grub\redoxfs.h">
       <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\7zTypes.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Compiler.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\CpuArch.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Ppmd.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Ppmd7.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Precomp.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\unrar\rar_core.h">
+      <Filter>grub-core\lib\rar</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\unrar\unrar.h">
+      <Filter>grub-core\lib\rar</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

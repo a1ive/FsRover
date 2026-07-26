@@ -236,6 +236,9 @@
     <ClCompile Include="grub-core\fs\odc.c" />
     <ClCompile Include="grub-core\fs\qnx4.c" />
     <ClCompile Include="grub-core\fs\qnx6.c" />
+    <ClCompile Include="grub-core\fs\rar.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\unrar;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\redoxfs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -342,6 +345,19 @@
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="grub-core\lib\minilzo\minilzo.c" />
+    <ClCompile Include="grub-core\lib\unrar\rar_core.c" />
+    <ClCompile Include="grub-core\lib\unrar\rar1.c" />
+    <ClCompile Include="grub-core\lib\unrar\rar2.c" />
+    <ClCompile Include="grub-core\lib\unrar\rar3.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\unrar\rar5.c" />
+    <ClCompile Include="grub-core\lib\7z\Ppmd7.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Ppmd7aDec.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\vbox\vbox.c" />
     <ClCompile Include="grub-core\lib\vbox\vdparent.c" />
     <ClCompile Include="grub-core\lib\wimboot\huffman.c" />
@@ -477,6 +493,14 @@
     <ClInclude Include="grub-core\lib\wimboot\huffman.h" />
     <ClInclude Include="grub-core\lib\wimboot\lzx.h" />
     <ClInclude Include="grub-core\lib\wimboot\xca.h" />
+    <ClInclude Include="grub-core\lib\unrar\unrar.h" />
+    <ClInclude Include="grub-core\lib\unrar\rar_core.h" />
+    <ClInclude Include="grub-core\lib\7z\7zTypes.h" />
+    <ClInclude Include="grub-core\lib\7z\Compiler.h" />
+    <ClInclude Include="grub-core\lib\7z\CpuArch.h" />
+    <ClInclude Include="grub-core\lib\7z\Ppmd.h" />
+    <ClInclude Include="grub-core\lib\7z\Ppmd7.h" />
+    <ClInclude Include="grub-core\lib\7z\Precomp.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

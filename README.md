@@ -49,6 +49,7 @@ APFS and ZFS native encryption are not supported.
 - [wimboot](https://ipxe.org/wimboot)
 - [file](https://www.darwinsys.com/file/)
 - [stb_image](https://github.com/nothings/stb)
+- [7-Zip](https://www.7-zip.org/)
 - [VC-LTL and YY-Thunks](https://github.com/Chuyu-Team)
 
 FsRover is licensed under [GPL-3.0-or-later](LICENSE).

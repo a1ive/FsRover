@@ -105,6 +105,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (odc)	\
 	mod (qnx4)	\
 	mod (qnx6)	\
+	mod (rar)	\
 	mod (redoxfs)	\
 	mod (refs)	\
 	mod (reiserfs)	\

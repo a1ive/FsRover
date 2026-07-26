@@ -58,7 +58,8 @@ const wchar_t k_credits[] =
 	L"bzip2 - <https://www.sourceware.org/bzip2>\r\n"
 	L"lzfse - <https://github.com/lzfse/lzfse>\r\n"
 	L"wimboot - <https://ipxe.org/wimboot>\r\n"
-	L"VirtualBox - <https://www.virtualbox.org/>\r\n";
+	L"VirtualBox - <https://www.virtualbox.org/>\r\n"
+	L"7-Zip - <https://www.7-zip.org/>\r\n";
 
 /* Menu label -> window caption: drop the mnemonic.  CJK labels carry
    it as a "(&A)" suffix, which goes away whole; otherwise only the
