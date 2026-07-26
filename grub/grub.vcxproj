@@ -245,6 +245,10 @@
     <ClCompile Include="grub-core\fs\refs.c" />
     <ClCompile Include="grub-core\fs\reiserfs.c" />
     <ClCompile Include="grub-core\fs\romfs.c" />
+    <ClCompile Include="grub-core\fs\sevenzip.c">
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\bzip2;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\sfs.c" />
     <ClCompile Include="grub-core\fs\squash4.c">
       <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\xzembed;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -356,6 +360,44 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\lib\7z\Ppmd7aDec.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zArcIn.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zBuf.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zCrc.c">
+      <PreprocessorDefinitions>Z7_CRC_NUM_TABLES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zDec.c">
+      <PreprocessorDefinitions>Z7_PPMD_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zStream.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bcj2.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bra.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bra86.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Delta.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Lzma2Dec.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\LzmaDec.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Ppmd7Dec.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\lib\vbox\vbox.c" />
@@ -501,6 +543,15 @@
     <ClInclude Include="grub-core\lib\7z\Ppmd.h" />
     <ClInclude Include="grub-core\lib\7z\Ppmd7.h" />
     <ClInclude Include="grub-core\lib\7z\Precomp.h" />
+    <ClInclude Include="grub-core\lib\7z\7z.h" />
+    <ClInclude Include="grub-core\lib\7z\7zBuf.h" />
+    <ClInclude Include="grub-core\lib\7z\7zCrc.h" />
+    <ClInclude Include="grub-core\lib\7z\Bcj2.h" />
+    <ClInclude Include="grub-core\lib\7z\Bra.h" />
+    <ClInclude Include="grub-core\lib\7z\Delta.h" />
+    <ClInclude Include="grub-core\lib\7z\Lzma2Dec.h" />
+    <ClInclude Include="grub-core\lib\7z\LzmaDec.h" />
+    <ClInclude Include="grub-core\lib\7z\RotateDefs.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

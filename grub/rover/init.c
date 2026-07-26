@@ -110,6 +110,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (refs)	\
 	mod (reiserfs)	\
 	mod (romfs)	\
+	mod (sevenzip)	\
 	mod (sfs)	\
 	mod (squash4)	\
 	mod (tar)	\

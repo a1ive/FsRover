@@ -888,6 +888,45 @@
     <ClCompile Include="grub-core\fs\rar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\sevenzip.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zArcIn.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zBuf.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zCrc.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zDec.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\7zStream.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bcj2.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bra.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Bra86.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Delta.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Lzma2Dec.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\LzmaDec.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\Ppmd7Dec.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -930,6 +969,33 @@
       <Filter>grub-core\lib\7z</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\7z\Precomp.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\7z.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\7zBuf.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\7zCrc.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Bcj2.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Bra.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Delta.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\Lzma2Dec.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\LzmaDec.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\RotateDefs.h">
       <Filter>grub-core\lib\7z</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\unrar\rar_core.h">
