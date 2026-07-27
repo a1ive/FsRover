@@ -120,6 +120,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (ufs1)	\
 	mod (ufs1_be)	\
 	mod (ufs2)	\
+	mod (vmfs)	\
 	mod (wim)	\
 	mod (xfs)	\
 	mod (zfs)	\
