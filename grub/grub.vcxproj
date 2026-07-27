@@ -251,7 +251,7 @@
     <ClCompile Include="grub-core\fs\romfs.c" />
     <ClCompile Include="grub-core\fs\sevenzip.c">
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\bzip2;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\bzip2;$(ProjectDir)grub-core\lib\zstd;$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\sfs.c" />
     <ClCompile Include="grub-core\fs\squash4.c">

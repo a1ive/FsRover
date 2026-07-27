@@ -1,19 +1,5 @@
 /*
  *  Rover -- Filesystem browser for Windows
- *  Read-only 7z archive filesystem driver.
- *
- *  Header parsing uses the 7-Zip 26.02 ANSI-C reader as-is
- *  (grub-core\lib\7z: 7zArcIn.c and friends); folder decoding is
- *  reimplemented here as a chain of pull streams so that entries of
- *  any size can be read in constant memory instead of materializing
- *  whole folders the way C\7zDec.c does.  Semantics follow
- *  CPP\7zip\Archive\7z.
- *
- *  Supported coders: Copy, LZMA, LZMA2, PPMd7, BZip2, Deflate, ZSTD,
- *  Delta, BCJ (x86), BCJ2, ARM, ARMT, ARM64, PPC, SPARC, IA64, RISCV,
- *  SWAP2/SWAP4.  Encrypted entries and multi-volume sets are rejected
- *  with a clear error.
- *
  *  Copyright (C) 2026  A1ive
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -28,6 +14,22 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*  Read-only 7z archive filesystem driver.
+ *
+ *  Header parsing uses the 7-Zip 26.02 ANSI-C reader as-is
+ *  (grub-core\lib\7z: 7zArcIn.c and friends); folder decoding is
+ *  reimplemented here as a chain of pull streams so that entries of
+ *  any size can be read in constant memory instead of materializing
+ *  whole folders the way C\7zDec.c does.  Semantics follow
+ *  CPP\7zip\Archive\7z.
+ *
+ *  Supported coders: Copy, LZMA, LZMA2, PPMd7, BZip2, Deflate, ZSTD
+ *  (both the 0x4015D id and the 7-Zip-zstd fork's 0x4F71101), LZ4
+ *  (fork id 0x4F71104, standard LZ4 frames), Delta, BCJ (x86), BCJ2,
+ *  ARM, ARMT, ARM64, PPC, SPARC, IA64, RISCV, SWAP2/SWAP4.
+ *  Encrypted entries and multi-volume sets are not supported.
  */
 
 #include <grub/types.h>
@@ -51,6 +53,8 @@
 #include <miniz.h>
 #include <bzlib.h>
 #include <zstd.h>
+#include <xxhash.h>
+#include <lz4.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -67,6 +71,9 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define SZ_M_DEFLATE	0x40108
 #define SZ_M_BZIP2	0x40202
 #define SZ_M_ZSTD	0x4015D
+/* 7-Zip-zstd fork ids (CPP\7zip\Archive\7z\7zHeader.h there) */
+#define SZ_M_ZSTD_F	0x4F71101
+#define SZ_M_LZ4	0x4F71104
 #define SZ_M_BCJ	0x3030103
 #define SZ_M_BCJ2	0x303011B
 #define SZ_M_PPC	0x3030205
@@ -98,8 +105,6 @@ struct grub_7z_data
 	char **names;		/* per file, UTF-8, '\' turned into '/' */
 };
 
-/* ---------------- SDK allocator bridge ---------------- */
-
 static void *
 sz_mem_alloc (ISzAllocPtr p, size_t size)
 {
@@ -122,8 +127,6 @@ sz_data_error (void)
 	grub_error (GRUB_ERR_BAD_FS, "corrupt 7z data");
 	return -1;
 }
-
-/* ---------------- pull stream interface ---------------- */
 
 struct sz_stm;
 
@@ -184,8 +187,6 @@ sz_in_fill (struct sz_in *in)
 	return got;
 }
 
-/* ---------------- packed stream source ---------------- */
-
 struct sz_src
 {
 	struct sz_stm stm;
@@ -235,8 +236,6 @@ sz_src_create (struct grub_7z_data *data, grub_uint32_t folder_index,
 	s->left = ar->PackPositions[base + 1] - ar->PackPositions[base];
 	return &s->stm;
 }
-
-/* ---------------- LZMA ---------------- */
 
 struct sz_lzma
 {
@@ -331,8 +330,6 @@ fail:
 	return 0;
 }
 
-/* ---------------- LZMA2 ---------------- */
-
 struct sz_lzma2
 {
 	struct sz_stm stm;
@@ -424,8 +421,6 @@ fail:
 	sz_lzma2_free (&s->stm);
 	return 0;
 }
-
-/* ---------------- PPMd variant H, 7z range coder ---------------- */
 
 struct sz_ppmd;
 
@@ -578,8 +573,6 @@ fail:
 	return 0;
 }
 
-/* ---------------- Delta filter ---------------- */
-
 struct sz_delta
 {
 	struct sz_stm stm;
@@ -628,8 +621,6 @@ sz_delta_create (struct sz_stm *src, unsigned dist)
 	Delta_Init (s->state);
 	return &s->stm;
 }
-
-/* ---------------- branch filters and byte swappers ---------------- */
 
 struct sz_bra
 {
@@ -793,8 +784,6 @@ sz_bra_create (struct sz_stm *src, grub_uint32_t method, grub_uint32_t pc)
 	return &s->stm;
 }
 
-/* ---------------- BCJ2 ---------------- */
-
 struct sz_bcj2
 {
 	struct sz_stm stm;
@@ -931,8 +920,6 @@ sz_bcj2_create (struct sz_stm **ins, grub_uint64_t unp)
 	return &s->stm;
 }
 
-/* ---------------- BZip2 ---------------- */
-
 struct sz_bz
 {
 	struct sz_stm stm;
@@ -1039,8 +1026,6 @@ sz_bz_create (struct sz_stm *src, grub_uint64_t unp)
 	}
 	return &s->stm;
 }
-
-/* ---------------- Deflate (raw) ---------------- */
 
 struct sz_infl
 {
@@ -1155,8 +1140,6 @@ fail:
 	return 0;
 }
 
-/* ---------------- ZSTD ---------------- */
-
 struct sz_zstd
 {
 	struct sz_stm stm;
@@ -1248,7 +1231,368 @@ fail:
 	return 0;
 }
 
-/* ---------------- folder wiring ---------------- */
+/*
+ * The 7-Zip-zstd fork's coder stream is a sequence of standard LZ4 frames; the
+ * multi-threaded writer interleaves skippable frames as chunk hints.
+ * Frame parsing mirrors io\lz4io.c, including the 64 KiB rolling
+ * dictionary for linked blocks.
+ */
+
+#define SZ_LZ4_MAGIC		0x184D2204u
+#define SZ_LZ4_MAGIC_SKIP	0x184D2A50u	/* low nibble is free */
+#define SZ_LZ4_DICT_SIZE	(64 * 1024)
+
+struct sz_lz4
+{
+	struct sz_stm stm;
+	struct sz_in in;
+	grub_uint64_t out_left;
+
+	int in_frame;
+	int b_indep;
+	int b_checksum;
+	int c_checksum;
+	grub_size_t max_block;
+
+	grub_uint8_t *cbuf;
+	grub_uint8_t *ubuf;
+	grub_size_t buf_size;	/* capacity of cbuf/ubuf */
+	grub_uint8_t *dict;
+	grub_size_t dict_size;
+
+	grub_uint32_t u_size;	/* current decoded block */
+	grub_uint32_t u_pos;
+};
+
+/* reads exactly n packed bytes; anything less is a data error */
+static grub_err_t
+sz_lz4_pull (struct sz_lz4 *s, grub_uint8_t *dst, grub_size_t n)
+{
+	grub_size_t done = 0;
+
+	while (done < n)
+	{
+		grub_size_t avail = s->in.len - s->in.pos;
+
+		if (avail == 0)
+		{
+			grub_ssize_t got = sz_in_fill (&s->in);
+
+			if (got < 0)
+				return grub_errno;
+			if (got == 0)
+				return grub_error (GRUB_ERR_BAD_FS,
+						   "truncated lz4 frame");
+			continue;
+		}
+		if (avail > n - done)
+			avail = n - done;
+		grub_memcpy (dst + done, s->in.buf + s->in.pos, avail);
+		s->in.pos += avail;
+		done += avail;
+	}
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+sz_lz4_skip_in (struct sz_lz4 *s, grub_size_t n)
+{
+	while (n)
+	{
+		grub_size_t avail = s->in.len - s->in.pos;
+
+		if (avail == 0)
+		{
+			grub_ssize_t got = sz_in_fill (&s->in);
+
+			if (got < 0)
+				return grub_errno;
+			if (got == 0)
+				return grub_error (GRUB_ERR_BAD_FS,
+						   "truncated lz4 frame");
+			continue;
+		}
+		if (avail > n)
+			avail = n;
+		s->in.pos += avail;
+		n -= avail;
+	}
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+sz_lz4_read_u32 (struct sz_lz4 *s, grub_uint32_t *v)
+{
+	grub_uint8_t b[4];
+	grub_err_t err = sz_lz4_pull (s, b, 4);
+
+	if (err)
+		return err;
+	*v = (grub_uint32_t) b[0] | ((grub_uint32_t) b[1] << 8)
+	     | ((grub_uint32_t) b[2] << 16) | ((grub_uint32_t) b[3] << 24);
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+sz_lz4_frame_header (struct sz_lz4 *s)
+{
+	grub_uint8_t desc[15];
+	grub_size_t desc_len = 2;
+	unsigned flg, bd, bsid;
+	grub_err_t err;
+
+	err = sz_lz4_pull (s, desc, 2);
+	if (err)
+		return err;
+	flg = desc[0];
+	bd = desc[1];
+	if ((flg >> 6) != 1 || (flg & 0x02) != 0)
+		return grub_error (GRUB_ERR_BAD_FS, "bad lz4 frame header");
+	if (flg & 0x01)
+		return grub_error (GRUB_ERR_BAD_FS,
+				   "lz4 external dictionaries are not supported");
+	if ((bd & 0x8f) != 0)
+		return grub_error (GRUB_ERR_BAD_FS, "bad lz4 frame header");
+	bsid = (bd >> 4) & 7;
+	if (bsid < 4)
+		return grub_error (GRUB_ERR_BAD_FS, "bad lz4 frame header");
+
+	if (flg & 0x08)		/* content size */
+	{
+		err = sz_lz4_pull (s, desc + desc_len, 8);
+		if (err)
+			return err;
+		desc_len += 8;
+	}
+
+	/* header checksum: second byte of XXH32 over the descriptor */
+	err = sz_lz4_pull (s, desc + desc_len, 1);
+	if (err)
+		return err;
+	if (((XXH32 (desc, desc_len, 0) >> 8) & 0xFF) != desc[desc_len])
+		return grub_error (GRUB_ERR_BAD_FS,
+				   "lz4 frame header checksum mismatch");
+
+	s->b_indep = (flg & 0x20) != 0;
+	s->b_checksum = (flg & 0x10) != 0;
+	s->c_checksum = (flg & 0x04) != 0;
+	s->max_block = (grub_size_t) 1 << (2 * bsid + 8);
+
+	if (s->max_block > s->buf_size)
+	{
+		grub_free (s->cbuf);
+		grub_free (s->ubuf);
+		s->buf_size = 0;
+		s->cbuf = grub_malloc (s->max_block);
+		s->ubuf = grub_malloc (s->max_block);
+		if (!s->cbuf || !s->ubuf)
+			return grub_errno;
+		s->buf_size = s->max_block;
+	}
+
+	s->dict_size = 0;	/* linked blocks never cross frames */
+	s->in_frame = 1;
+	return GRUB_ERR_NONE;
+}
+
+static void
+sz_lz4_update_dict (struct sz_lz4 *s)
+{
+	grub_size_t keep;
+
+	if (s->b_indep)
+		return;
+	if (s->u_size >= SZ_LZ4_DICT_SIZE)
+	{
+		grub_memcpy (s->dict, s->ubuf + s->u_size - SZ_LZ4_DICT_SIZE,
+			     SZ_LZ4_DICT_SIZE);
+		s->dict_size = SZ_LZ4_DICT_SIZE;
+		return;
+	}
+	keep = SZ_LZ4_DICT_SIZE - s->u_size;
+	if (keep > s->dict_size)
+		keep = s->dict_size;
+	if (keep != 0)
+		grub_memmove (s->dict, s->dict + s->dict_size - keep, keep);
+	grub_memcpy (s->dict + keep, s->ubuf, s->u_size);
+	s->dict_size = keep + s->u_size;
+}
+
+/* decodes the next data block of the current frame into ubuf */
+static grub_err_t
+sz_lz4_next_block (struct sz_lz4 *s)
+{
+	for (;;)
+	{
+		grub_uint32_t hdr, size;
+		int uncompressed;
+		int result;
+		grub_err_t err;
+
+		if (!s->in_frame)
+		{
+			grub_uint32_t magic;
+
+			err = sz_lz4_read_u32 (s, &magic);
+			if (err)
+				return err;
+			if ((magic & 0xFFFFFFF0u) == SZ_LZ4_MAGIC_SKIP)
+			{
+				err = sz_lz4_read_u32 (s, &size);
+				if (err)
+					return err;
+				err = sz_lz4_skip_in (s, size);
+				if (err)
+					return err;
+				continue;
+			}
+			if (magic != SZ_LZ4_MAGIC)
+				return grub_error (GRUB_ERR_BAD_FS,
+						   "bad lz4 frame magic");
+			err = sz_lz4_frame_header (s);
+			if (err)
+				return err;
+			continue;
+		}
+
+		err = sz_lz4_read_u32 (s, &hdr);
+		if (err)
+			return err;
+		if (hdr == 0)	/* EndMark */
+		{
+			if (s->c_checksum)
+			{
+				err = sz_lz4_skip_in (s, 4);
+				if (err)
+					return err;
+			}
+			s->in_frame = 0;
+			continue;
+		}
+
+		uncompressed = (hdr & 0x80000000u) != 0;
+		size = hdr & 0x7FFFFFFFu;
+		if (size == 0 || size > s->max_block)
+			return grub_error (GRUB_ERR_BAD_FS,
+					   "bad lz4 block size");
+		err = sz_lz4_pull (s, s->cbuf, size);
+		if (err)
+			return err;
+		if (s->b_checksum)
+		{
+			grub_uint32_t stored;
+
+			err = sz_lz4_read_u32 (s, &stored);
+			if (err)
+				return err;
+			if (stored != XXH32 (s->cbuf, size, 0))
+				return grub_error (GRUB_ERR_BAD_FS,
+					"lz4 block checksum mismatch");
+		}
+
+		if (uncompressed)
+		{
+			grub_memcpy (s->ubuf, s->cbuf, size);
+			s->u_size = size;
+		}
+		else if (s->b_indep)
+		{
+			result = LZ4_decompress_safe ((const char *) s->cbuf,
+						      (char *) s->ubuf,
+						      (int) size,
+						      (int) s->max_block);
+			if (result <= 0)
+				return grub_error (GRUB_ERR_BAD_FS,
+						   "bad lz4 block");
+			s->u_size = (grub_uint32_t) result;
+		}
+		else
+		{
+			result = LZ4_decompress_safe_usingDict
+				((const char *) s->cbuf, (char *) s->ubuf,
+				 (int) size, (int) s->max_block,
+				 (const char *) s->dict, (int) s->dict_size);
+			if (result <= 0)
+				return grub_error (GRUB_ERR_BAD_FS,
+						   "bad lz4 block");
+			s->u_size = (grub_uint32_t) result;
+		}
+
+		sz_lz4_update_dict (s);
+		s->u_pos = 0;
+		return GRUB_ERR_NONE;
+	}
+}
+
+static grub_ssize_t
+sz_lz4_read (struct sz_stm *stm, grub_uint8_t *buf, grub_size_t len)
+{
+	struct sz_lz4 *s = (struct sz_lz4 *) stm;
+	grub_size_t done = 0;
+
+	if ((grub_uint64_t) len > s->out_left)
+		len = (grub_size_t) s->out_left;
+	if (len == 0)
+		return 0;
+
+	while (done < len)
+	{
+		grub_size_t n;
+
+		if (s->u_pos == s->u_size)
+		{
+			if (sz_lz4_next_block (s))
+				return -1;
+		}
+		n = s->u_size - s->u_pos;
+		if (n > len - done)
+			n = len - done;
+		grub_memcpy (buf + done, s->ubuf + s->u_pos, n);
+		s->u_pos += (grub_uint32_t) n;
+		done += n;
+	}
+
+	s->out_left -= done;
+	return (grub_ssize_t) done;
+}
+
+static void
+sz_lz4_free (struct sz_stm *stm)
+{
+	struct sz_lz4 *s = (struct sz_lz4 *) stm;
+
+	grub_free (s->cbuf);
+	grub_free (s->ubuf);
+	grub_free (s->dict);
+	sz_in_fini (&s->in);
+	grub_free (s);
+}
+
+static struct sz_stm *
+sz_lz4_create (struct sz_stm *src, grub_uint64_t unp)
+{
+	struct sz_lz4 *s;
+
+	s = grub_zalloc (sizeof (*s));
+	if (!s)
+	{
+		src->free (src);
+		return 0;
+	}
+	s->stm.read = sz_lz4_read;
+	s->stm.free = sz_lz4_free;
+	s->out_left = unp;
+	if (sz_in_init (&s->in, src))
+		goto fail;
+	s->dict = grub_malloc (SZ_LZ4_DICT_SIZE);
+	if (!s->dict)
+		goto fail;
+	return &s->stm;
+
+fail:
+	sz_lz4_free (&s->stm);
+	return 0;
+}
 
 static grub_err_t
 sz_parse_folder (struct grub_7z_data *data, grub_uint32_t folder_index,
@@ -1290,6 +1634,8 @@ sz_check_folder (struct grub_7z_data *data, grub_uint32_t folder_index)
 		case SZ_M_DEFLATE:
 		case SZ_M_BZIP2:
 		case SZ_M_ZSTD:
+		case SZ_M_ZSTD_F:
+		case SZ_M_LZ4:
 		case SZ_M_BCJ:
 		case SZ_M_BCJ2:
 		case SZ_M_PPC:
@@ -1303,7 +1649,7 @@ sz_check_folder (struct grub_7z_data *data, grub_uint32_t folder_index)
 				"encrypted 7z entries are not supported");
 		default:
 			return grub_error (GRUB_ERR_BAD_FS,
-				"unsupported 7z method %#x",
+				"unsupported 7z method 0x%x",
 				(unsigned) fo.Coders[i].MethodID);
 		}
 	return GRUB_ERR_NONE;
@@ -1392,7 +1738,10 @@ sz_build_stream (struct grub_7z_data *data, const CSzFolder *fo,
 	case SZ_M_DEFLATE:
 		return sz_infl_create (ins[0], unp);
 	case SZ_M_ZSTD:
+	case SZ_M_ZSTD_F:
 		return sz_zstd_create (ins[0], unp);
+	case SZ_M_LZ4:
+		return sz_lz4_create (ins[0], unp);
 	case SZ_M_DELTA:
 		if (coder->PropsSize != 1)
 			break;
@@ -1431,7 +1780,7 @@ sz_build_stream (struct grub_7z_data *data, const CSzFolder *fo,
 			    "encrypted 7z entries are not supported");
 		goto fail;
 	default:
-		grub_error (GRUB_ERR_BAD_FS, "unsupported 7z method %#x",
+		grub_error (GRUB_ERR_BAD_FS, "unsupported 7z method 0x%x",
 			    (unsigned) coder->MethodID);
 		goto fail;
 	}
@@ -1459,8 +1808,6 @@ sz_open_folder (struct grub_7z_data *data, grub_uint32_t folder_index)
 				+ data->db.db.FoCodersOffsets[folder_index],
 				folder_index, fo.UnpackStream, &visited);
 }
-
-/* ---------------- mount ---------------- */
 
 struct sz_disk_stream
 {
@@ -1639,8 +1986,6 @@ fail:
 	return 0;
 }
 
-/* ---------------- item helpers ---------------- */
-
 /* skips leading slashes and returns the normalized path length */
 static const char *
 sz_norm_path (const char *path, grub_size_t *len)
@@ -1731,8 +2076,6 @@ sz_is_symlink (struct grub_7z_data *data, grub_uint32_t i)
 		return 0;
 	return ((attrib >> 16) & 0xF000) == 0xA000;
 }
-
-/* ---------------- directory listing ---------------- */
 
 struct sz_seen
 {
@@ -1876,8 +2219,6 @@ out:
 	return err;
 }
 
-/* ---------------- file reading ---------------- */
-
 struct grub_7z_file
 {
 	struct grub_7z_data *data;
@@ -2017,8 +2358,6 @@ grub_7z_close (grub_file_t file)
 	}
 	return GRUB_ERR_NONE;
 }
-
-/* ---------------- misc fs callbacks ---------------- */
 
 static grub_err_t
 grub_7z_mtime (grub_device_t device, grub_int64_t *tm)
