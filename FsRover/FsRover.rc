@@ -281,6 +281,7 @@ BEGIN
 	IDS_DP_PARENTS		"Member devices"
 	IDS_DP_UNKNOWN		"Unrecognized"
 	IDS_DP_COPY		"Copy"
+	IDS_DP_PARENT_DEV	"Source device"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -429,6 +430,7 @@ BEGIN
 	IDS_DP_PARENTS		"成员设备"
 	IDS_DP_UNKNOWN		"未识别"
 	IDS_DP_COPY		"复制"
+	IDS_DP_PARENT_DEV	"源设备"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -574,6 +576,7 @@ BEGIN
 	IDS_DP_PARENTS		"成員裝置"
 	IDS_DP_UNKNOWN		"未識別"
 	IDS_DP_COPY		"複製"
+	IDS_DP_PARENT_DEV	"來源裝置"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -719,6 +722,7 @@ BEGIN
 	IDS_DP_PARENTS		"メンバーデバイス"
 	IDS_DP_UNKNOWN		"認識されていません"
 	IDS_DP_COPY		"コピー"
+	IDS_DP_PARENT_DEV	"元デバイス"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

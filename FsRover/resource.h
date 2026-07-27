@@ -210,5 +210,6 @@
 #define IDS_DP_PARENTS		96
 #define IDS_DP_UNKNOWN		97
 #define IDS_DP_COPY		98
+#define IDS_DP_PARENT_DEV	99
 
 #endif /* ! FSROVER_RESOURCE_H */

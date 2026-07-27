@@ -217,6 +217,9 @@ disk_props_text (const backend_diskent &d)
 	if (!d.parent_file.empty ())
 		append_field (out, IDS_DP_PARENT_FILE, widen (d.parent_file));
 
+	if (!d.parent_device.empty ())
+		append_field (out, IDS_DP_PARENT_DEV, widen (d.parent_device));
+
 	/* Diskfilter members arrive one grub device name per line; list each
 	   under its own indented row.  */
 	if (!d.parents.empty ())

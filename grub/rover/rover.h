@@ -83,11 +83,13 @@ struct rover_disk_info
 	   offset of the partition.  */
 	unsigned long long start_lba;
 	unsigned int sector_size;
-	/* Parentage, both valid only during the callback and both NULL unless
+	/* Parentage, all valid only during the callback and all NULL unless
 	   the device is of the matching class: parent_file is a loopback's
-	   backing file (grub path); parents is a diskfilter volume's member
-	   devices, one per line ('\n'-separated).  */
+	   backing file (grub path); parent_device is the source device an
+	   unlocked cryptodisk decrypts; parents is a diskfilter volume's
+	   member devices, one per line ('\n'-separated).  */
 	const char *parent_file;
+	const char *parent_device;
 	const char *parents;
 	/* A locked LUKS/LUKS2 or BitLocker container (no readable fs until
 	   unlocked).  crypto_type is "luks", "luks2" or "bitlocker";

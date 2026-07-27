@@ -353,6 +353,8 @@ enum_disk_shim (const char *name, void *data)
 			break;
 		case GRUB_DISK_DEVICE_CRYPTODISK_ID:
 			info.dev_id = ROVER_DEV_CRYPTODISK;
+			/* Unlocked container: the device holding its ciphertext.  */
+			info.parent_device = ((grub_cryptodisk_t) dev->disk->data)->source;
 			break;
 		case GRUB_DISK_DEVICE_PROCFS_ID:
 			info.dev_id = ROVER_DEV_PROCFS;
