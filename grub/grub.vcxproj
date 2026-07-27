@@ -200,6 +200,10 @@
     </ClCompile>
     <ClCompile Include="grub-core\fs\archelp.c" />
     <ClCompile Include="grub-core\fs\bfs.c" />
+    <ClCompile Include="grub-core\fs\cab.c">
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\mscab;$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\btrfs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -400,6 +404,12 @@
     <ClCompile Include="grub-core\lib\7z\Ppmd7Dec.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\mscab\lzx.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\mscab;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\mscab\quantum.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\mscab;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\vbox\vbox.c" />
     <ClCompile Include="grub-core\lib\vbox\vdparent.c" />
     <ClCompile Include="grub-core\lib\wimboot\huffman.c" />
@@ -552,6 +562,7 @@
     <ClInclude Include="grub-core\lib\7z\Lzma2Dec.h" />
     <ClInclude Include="grub-core\lib\7z\LzmaDec.h" />
     <ClInclude Include="grub-core\lib\7z\RotateDefs.h" />
+    <ClInclude Include="grub-core\lib\mscab\mscab.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -97,6 +97,9 @@
     <Filter Include="grub-core\lib\json">
       <UniqueIdentifier>{a9f7a383-4c62-4364-90ba-d53d05f82c12}</UniqueIdentifier>
     </Filter>
+    <Filter Include="grub-core\lib\mscab">
+      <UniqueIdentifier>{7b2f1f43-9a51-4d0e-b1c6-0f4c8a3e5d21}</UniqueIdentifier>
+    </Filter>
     <Filter Include="grub-core\lib\7z">
       <UniqueIdentifier>{25728b88-9d12-46ff-a8e1-5e95d721b9a8}</UniqueIdentifier>
     </Filter>
@@ -927,6 +930,15 @@
     <ClCompile Include="grub-core\lib\7z\Ppmd7Dec.c">
       <Filter>grub-core\lib\7z</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\cab.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\mscab\lzx.c">
+      <Filter>grub-core\lib\mscab</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\mscab\quantum.c">
+      <Filter>grub-core\lib\mscab</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -997,6 +1009,9 @@
     </ClInclude>
     <ClInclude Include="grub-core\lib\7z\RotateDefs.h">
       <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\mscab\mscab.h">
+      <Filter>grub-core\lib\mscab</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\unrar\rar_core.h">
       <Filter>grub-core\lib\rar</Filter>

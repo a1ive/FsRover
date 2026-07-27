@@ -77,6 +77,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (apfs)	\
 	mod (bfs)	\
 	mod (btrfs)	\
+	mod (cab)	\
 	mod (cpio)	\
 	mod (cpio_be)	\
 	mod (cramfs)	\
