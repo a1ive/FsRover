@@ -601,6 +601,7 @@ stat_dir_hook (const char *filename, const struct grub_dirhook_info *info, void 
 
 	ctx->found = 1;
 	ctx->st->is_dir = info->dir ? 1 : 0;
+	ctx->st->is_symlink = info->symlink ? 1 : 0;
 	ctx->st->mtime_set = info->mtimeset ? 1 : 0;
 	ctx->st->mtime = info->mtimeset ? info->mtime : 0;
 	return 1;

@@ -155,6 +155,7 @@ void rover_set_progress (rover_progress_hook cb, void *data);
 struct rover_stat
 {
 	int is_dir;
+	int is_symlink;
 	int mtime_set;
 	long long mtime;	/* seconds since Unix epoch */
 	unsigned long long size;	/* 0 for directories */

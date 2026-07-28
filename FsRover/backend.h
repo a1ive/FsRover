@@ -142,6 +142,7 @@ struct backend_result
 	std::vector<backend_dirent> entries;	/* list_dir, dirs first */
 	UINT64 stat_files = 0;	/* extract: files written */
 	UINT64 stat_bytes = 0;	/* extract: bytes written */
+	UINT64 stat_links = 0;	/* extract: symlinks skipped */
 	std::string text;	/* file_props: libmagic description */
 	std::string hash[BACKEND_HASH_COUNT];	/* hash_file: lowercase hex */
 	std::vector<char> data;	/* read_chunk: short read = EOF */

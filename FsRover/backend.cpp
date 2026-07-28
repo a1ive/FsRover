@@ -215,6 +215,11 @@ run_list_dir (const std::string &path, backend_result *res)
  * then recursing -- never from inside the dir callback, which would
  * re-enter the filesystem driver).  Phase 2 creates directories and
  * copies files in list order, so parents always precede children.
+ *
+ * Symlinks are never extracted, only counted.  grub resolves a link
+ * when the file is opened, so a dangling or absolute-to-the-host link
+ * would fail the copy and abort the whole run, and a link pointing at
+ * one of its own parents would make the walk recurse forever.
  */
 
 struct walk_item
@@ -230,6 +235,7 @@ struct extract_ctx
 	UINT64 files_total = 0;
 	UINT64 files_done = 0;
 	UINT64 bytes_done = 0;
+	UINT64 links_skipped = 0;
 	ULONGLONG last_tick = 0;
 	std::string cur;	/* source path of the file being copied */
 };
@@ -291,9 +297,10 @@ top_rel_name (const std::string &src)
 	return sanitize_component (base);
 }
 
-/* Returns false on error (error set) or cancellation (error empty).  */
+/* Returns false on error (error set) or cancellation (error empty);
+   LINKS counts the symlinks left out of the work list.  */
 bool
-walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item> &out, std::string &error)
+walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item> &out, UINT64 &links, std::string &error)
 {
 	std::vector<backend_dirent> children;
 
@@ -307,12 +314,18 @@ walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item
 	{
 		if (g_cancel.load (std::memory_order_relaxed))
 			return false;
+		/* Before is_dir: a link to a directory is still a link.  */
+		if (e.is_symlink)
+		{
+			links++;
+			continue;
+		}
 		walk_item item;
 		item.src = join_path (src, e.name);
 		item.rel = rel + L'\\' + sanitize_component (e.name);
 		item.is_dir = e.is_dir;
 		out.push_back (item);
-		if (e.is_dir && !walk_dir (item.src, item.rel, out, error))
+		if (e.is_dir && !walk_dir (item.src, item.rel, out, links, error))
 			return false;
 	}
 	return true;
@@ -407,12 +420,18 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 			set_error (res, "cannot stat source");
 			return;
 		}
+		if (st.is_symlink)
+		{
+			ctx.links_skipped++;
+			continue;
+		}
 		walk_item item;
 		item.src = src;
 		item.rel = top_rel_name (src);
 		item.is_dir = st.is_dir != 0;
 		work.push_back (item);
-		if (item.is_dir && !walk_dir (item.src, item.rel, work, res->error))
+		if (item.is_dir
+		    && !walk_dir (item.src, item.rel, work, ctx.links_skipped, res->error))
 			goto fail;
 	}
 	for (const walk_item &item : work)
@@ -446,6 +465,7 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 
 	res->stat_files = ctx.files_done;
 	res->stat_bytes = ctx.bytes_done;
+	res->stat_links = ctx.links_skipped;
 	if (res->error.empty () && g_cancel.load (std::memory_order_relaxed))
 		res->error = "extraction cancelled";
 	return;

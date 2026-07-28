@@ -211,5 +211,6 @@
 #define IDS_DP_UNKNOWN		97
 #define IDS_DP_COPY		98
 #define IDS_DP_PARENT_DEV	99
+#define IDS_FMT_EXTRACT_LINKS	100
 
 #endif /* ! FSROVER_RESOURCE_H */
