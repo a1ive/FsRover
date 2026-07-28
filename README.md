@@ -28,7 +28,7 @@ FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRU
 - **Linux:** Btrfs, cramfs, EROFS, ext2/3/4, F2FS, JFS, JFFS2, NILFS2, ReiserFS, UBIFS, XFS
 - **Windows:** FAT12/16/32, exFAT, NTFS, ReFS 3.x
 - **macOS:** APFS, HFS, HFS+
-- **Unix and other:** AFFS, AFS, BFS, FbFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, UFS1/2, ZFS
+- **Unix and other:** AFFS, AFS, BFS, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, UFS1/2, ZFS
 - **Optical media:** ISO9660, UDF
 - **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, CAB
 

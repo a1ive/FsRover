@@ -90,6 +90,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (hfs)	\
 	mod (hfsplus)	\
 	mod (hfspluscomp)	\
+	mod (hpfs)	\
 	mod (iso9660)	\
 	mod (jffs2)	\
 	mod (jfs)	\

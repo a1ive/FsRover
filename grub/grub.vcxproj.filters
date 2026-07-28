@@ -267,6 +267,9 @@
     <ClCompile Include="grub-core\fs\hfspluscomp.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\hpfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\iso9660.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
