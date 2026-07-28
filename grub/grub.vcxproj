@@ -299,6 +299,7 @@
     <ClCompile Include="grub-core\io\qcow.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\io\sparse.c" />
     <ClCompile Include="grub-core\io\vdi.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

@@ -763,6 +763,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 		{
 			"gzio", "xzio", "lzopio", "lz4io", "zstdio",
 			"vhd", "vhdx", "vdi", "qcow", "vmdk", "dmg", "isz",
+			"sparse",
 		};
 		int id;
 		for (id = GRUB_FILE_FILTER_COMPRESSION_FIRST; id <= GRUB_FILE_FILTER_VDISK_LAST; id++)

@@ -62,8 +62,8 @@ rover_loopback_add (const char *devname, const char *path, int decompress)
 		if (grub_strcmp (dev->devname, devname) == 0)
 			return grub_error (GRUB_ERR_BAD_ARGUMENT, "device `%s' already exists", devname);
 
-	/* FILTER_VDISK lets the vhd/vhdx/vdi/qcow/vmdk/dmg/isz io filters decode
-	   virtual disk images transparently; raw images pass through.
+	/* FILTER_VDISK lets the vhd/vhdx/vdi/qcow/vmdk/dmg/isz/sparse io filters
+	   decode virtual disk images transparently; raw images pass through.
 	   Compressed images stay raw unless the caller asks for
 	   transparent decompression through the gzip/xz/... filters.  */
 	if (!decompress)
