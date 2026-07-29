@@ -75,6 +75,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (affs)	\
 	mod (afs)	\
 	mod (apfs)	\
+	mod (arj)	\
 	mod (bfs)	\
 	mod (btrfs)	\
 	mod (cab)	\
@@ -95,6 +96,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (jffs2)	\
 	mod (jfs)	\
 	mod (lynxfs)	\
+	mod (lzh)	\
 	mod (minix)	\
 	mod (minix_be)	\
 	mod (minix2)	\

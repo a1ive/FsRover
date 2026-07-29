@@ -231,6 +231,9 @@
     <ClCompile Include="grub-core\fs\bfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\arj.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\btrfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -274,6 +277,9 @@
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\jfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\lzh.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\minix.c">
@@ -933,6 +939,9 @@
     <ClCompile Include="grub-core\lib\7z\Lzma2Dec.c">
       <Filter>grub-core\lib\7z</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\7z\LzhDecoder.c">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\7z\LzmaDec.c">
       <Filter>grub-core\lib\7z</Filter>
     </ClCompile>
@@ -1011,6 +1020,9 @@
       <Filter>grub-core\lib\7z</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\7z\Lzma2Dec.h">
+      <Filter>grub-core\lib\7z</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\7z\LzhDecoder.h">
       <Filter>grub-core\lib\7z</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\7z\LzmaDec.h">
