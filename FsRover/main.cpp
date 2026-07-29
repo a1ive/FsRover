@@ -426,20 +426,29 @@ address_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
 std::wstring
 pick_folder (void)
 {
-	wchar_t buf[MAX_PATH] = {};
-	BROWSEINFOW bi = {};
+	IFileDialog *dlg = nullptr;
+	IShellItem *item = nullptr;
+	wchar_t *path = nullptr;
+	FILEOPENDIALOGOPTIONS opts = 0;
 	std::wstring out;
 	std::wstring title = res_str (IDS_PICK_FOLDER);
 
-	bi.hwndOwner = g_main;
-	bi.lpszTitle = title.c_str ();
-	bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-	PIDLIST_ABSOLUTE pidl = SHBrowseForFolderW (&bi);
-	if (!pidl)
+	if (FAILED (CoCreateInstance (CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
 		return {};
-	if (SHGetPathFromIDListW (pidl, buf))
-		out = buf;
-	CoTaskMemFree (pidl);
+	if (FAILED (dlg->GetOptions (&opts))
+		|| FAILED (dlg->SetOptions (opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST))
+		|| FAILED (dlg->SetTitle (title.c_str ()))
+		|| FAILED (dlg->Show (g_main))
+		|| FAILED (dlg->GetResult (&item))
+		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
+		goto fail;
+
+	out = path;
+	CoTaskMemFree (path);
+fail:
+	if (item)
+		item->Release ();
+	dlg->Release ();
 	return out;
 }
 
