@@ -175,6 +175,7 @@ grub_md_unregister (gcry_md_spec_t *cipher)
 struct gcry_pk_spec *grub_crypto_pk_dsa;
 struct gcry_pk_spec *grub_crypto_pk_ecdsa;
 struct gcry_pk_spec *grub_crypto_pk_rsa;
+struct gcry_pk_spec *grub_crypto_pk_mldsa;
 
 void
 grub_crypto_hash (const gcry_md_spec_t *hash, void *out, const void *in,

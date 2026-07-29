@@ -40,6 +40,7 @@
 #pragma warning(disable:4389)	/* signed/unsigned mismatch (==) */
 
 #define U64_C(c) (c ## ULL)
+#define SIZE_MAX GRUB_SIZE_MAX
 #define memset grub_memset
 #define memcpy grub_memcpy
 #define wipememory(_ptr, _len) grub_memset ((_ptr), 0, (_len))
@@ -231,6 +232,7 @@ argon2_init (argon2_ctx_t a, unsigned int parallelism,
 {
   gpg_err_code_t ec = 0;
   unsigned int memory_blocks;
+  size_t memory_bytes;
   unsigned int segment_length;
   void *block;
   struct argon2_thread_data *thread_data;
@@ -251,13 +253,17 @@ argon2_init (argon2_ctx_t a, unsigned int parallelism,
   a->block = NULL;
   a->thread_data = NULL;
 
-  block = xtrymalloc (1024 * memory_blocks);
+  if (U64_C(1024) * memory_blocks > SIZE_MAX)
+    return GPG_ERR_INV_VALUE;
+
+  memory_bytes = 1024 * (size_t)memory_blocks;
+  block = xtrymalloc (memory_bytes);
   if (!block)
     {
       ec = gpg_err_code_from_errno (errno);
       return ec;
     }
-  memset (block, 0, 1024 * memory_blocks);
+  memset (block, 0, memory_bytes);
 
   thread_data = xtrymalloc (a->lanes * sizeof (struct argon2_thread_data));
   if (!thread_data)
@@ -319,9 +325,14 @@ fill_block (const u64 *prev_block, const u64 *ref_block, u64 *curr_block,
   u64 block_tmp[ARGON2_WORDS_IN_BLOCK];
   int i;
 
-  memcpy (block_r, ref_block, 1024);
   if (prev_block)
-    xor_block (block_r, prev_block);
+    {
+      for (i = 0; i < ARGON2_WORDS_IN_BLOCK; i++)
+        block_r[i] = ref_block[i] ^ prev_block[i];
+    }
+  else
+    memcpy (block_r, ref_block, 1024);
+
   memcpy (block_tmp, block_r, 1024);
 
   if (with_xor)
@@ -614,6 +625,9 @@ argon2_open (gcry_kdf_hd_t *hd, int subalgo,
     }
 
   if (parallelism == 0)
+    return GPG_ERR_INV_VALUE;
+
+  if (U64_C(1024) * m_cost > SIZE_MAX)
     return GPG_ERR_INV_VALUE;
 
   n = offsetof (struct argon2_context, out) + taglen;

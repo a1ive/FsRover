@@ -95,6 +95,7 @@ typedef enum
     GPG_ERR_BAD_DATA,
     GPG_ERR_EINVAL,
     GPG_ERR_INV_STATE,
+    GPG_ERR_BAD_PUBKEY,
   } gpg_err_code_t;
 typedef gpg_err_code_t gpg_error_t;
 typedef gpg_error_t gcry_error_t;
@@ -203,6 +204,10 @@ typedef struct gcry_cipher_spec
   struct gcry_cipher_spec *next;
 } gcry_cipher_spec_t;
 
+/* Definition of the selftest functions.  */
+typedef gpg_err_code_t (*selftest_func_t) (int algo, int extended,
+                                           selftest_report_func_t report);
+
 /* Type for the md_init function.  */
 typedef void (*gcry_md_init_t) (void *c, unsigned int flags);
 
@@ -214,6 +219,10 @@ typedef void (*gcry_md_final_t) (void *c);
 
 /* Type for the md_read function.  */
 typedef unsigned char *(*gcry_md_read_t) (void *c);
+
+/* Type for the md_extract function.  */
+typedef gpg_err_code_t (*gcry_md_extract_t) (void *c, void *outbuf,
+                                             grub_size_t nbytes);
 
 typedef struct gcry_md_oid_spec
 {
@@ -237,9 +246,10 @@ typedef struct gcry_md_spec
   gcry_md_write_t write;
   gcry_md_final_t final;
   gcry_md_read_t read;
-  void *extract;
+  gcry_md_extract_t extract;
   void *hash_buffers;
   grub_size_t contextsize; /* allocate this amount of context */
+  selftest_func_t selftest;
 
   /* Block size, needed for HMAC.  */
   grub_size_t blocksize;
@@ -284,6 +294,8 @@ typedef struct gcry_sexp *gcry_sexp_t;
 #define PUBKEY_FLAG_DJB_TWEAK      (1 << 15)
 #define PUBKEY_FLAG_SM2            (1 << 16)
 #define PUBKEY_FLAG_PREHASH        (1 << 17)
+#define PUBKEY_FLAG_BYTE_STRING    (1 << 18)
+#define PUBKEY_FLAG_NO_PREFIX      (1 << 19)
 
 enum pk_operation
   {
@@ -320,6 +332,10 @@ struct pk_encoding_ctx
   /* for PSS */
   grub_size_t saltlen;
 
+  /* for deterministic signature */
+  unsigned char *rnd;
+  grub_size_t rndlen;
+
   int (* verify_cmp) (void *opaque, gcry_mpi_t tmp);
   void *verify_arg;
 };
@@ -350,6 +366,14 @@ typedef gcry_err_code_t (*gcry_pk_sign_t) (gcry_sexp_t *r_sig,
 typedef gcry_err_code_t (*gcry_pk_verify_t) (gcry_sexp_t s_sig,
                                              gcry_sexp_t s_data,
                                              gcry_sexp_t keyparms);
+
+/* Type for the pk_raw_verify function.  */
+typedef gcry_err_code_t (*gcry_pk_raw_verify_t) (gcry_sexp_t s_sig,
+                                                 gcry_sexp_t keyparms,
+                                                 const grub_uint8_t *data,
+                                                 const grub_size_t data_len,
+                                                 const grub_uint8_t *ctx,
+                                                 const grub_size_t ctx_len);
 
 /* Type for the pk_get_nbits function.  */
 typedef unsigned (*gcry_pk_get_nbits_t) (gcry_sexp_t keyparms);
@@ -388,9 +412,11 @@ typedef struct gcry_pk_spec
   gcry_pk_sign_t sign;
   gcry_pk_verify_t verify;
   gcry_pk_get_nbits_t get_nbits;
+  selftest_func_t selftest;
   pk_comp_keygrip_t comp_keygrip;
   pk_get_curve_t get_curve;
   pk_get_curve_param_t get_curve_param;
+  gcry_pk_raw_verify_t raw_verify;
 
 #ifdef GRUB_UTIL
   const char *modname;
@@ -487,6 +513,7 @@ grub_md_unregister (gcry_md_spec_t *cipher);
 extern struct gcry_pk_spec *grub_crypto_pk_dsa;
 extern struct gcry_pk_spec *grub_crypto_pk_ecdsa;
 extern struct gcry_pk_spec *grub_crypto_pk_ecdh;
+extern struct gcry_pk_spec *grub_crypto_pk_mldsa;
 extern struct gcry_pk_spec *grub_crypto_pk_rsa;
 
 void
@@ -681,4 +708,5 @@ const char *gpg_strerror (gpg_error_t err);
 
 gcry_err_code_t blake2b_vl_hash (const void *in, grub_size_t inlen,
                                  grub_size_t outputlen, void *output);
+
 #endif
