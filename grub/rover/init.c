@@ -120,6 +120,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (tar)	\
 	mod (ubifs)	\
 	mod (udf)	\
+	mod (uefi)	\
 	mod (ufs1)	\
 	mod (ufs1_be)	\
 	mod (ufs2)	\

@@ -270,6 +270,9 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\udf.c" />
+    <ClCompile Include="grub-core\fs\uefi.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\ufs.c" />
     <ClCompile Include="grub-core\fs\ufs2.c" />
     <ClCompile Include="grub-core\fs\ufs_be.c" />
