@@ -393,6 +393,9 @@
     <ClCompile Include="grub-core\io\lzopio.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\parallels.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\qcow.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>

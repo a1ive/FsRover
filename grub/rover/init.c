@@ -145,7 +145,8 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (vmdk)	\
 	mod (dmg)	\
 	mod (isz)	\
-	mod (sparse)
+	mod (sparse)	\
+	mod (parallels)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\

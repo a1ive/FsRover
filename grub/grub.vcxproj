@@ -313,6 +313,7 @@
     <ClCompile Include="grub-core\io\lzopio.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\io\parallels.c" />
     <ClCompile Include="grub-core\io\qcow.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
