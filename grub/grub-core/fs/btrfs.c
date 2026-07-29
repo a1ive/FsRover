@@ -41,6 +41,8 @@
 #include <grub/crypto.h>
 #include <grub/diskfilter.h>
 #include <grub/safemath.h>
+#include <grub/command.h>
+#include <grub/env.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -80,9 +82,11 @@ struct grub_btrfs_superblock
   grub_uint64_t generation;
   grub_uint64_t root_tree;
   grub_uint64_t chunk_tree;
-  grub_uint8_t dummy2[0x20];
+  grub_uint8_t dummy2[0x18];
+  grub_uint64_t bytes_used;
   grub_uint64_t root_dir_objectid;
-  grub_uint8_t dummy3[0x41];
+  grub_uint64_t num_devices;
+  grub_uint8_t dummy3[0x39];
   struct grub_btrfs_device this_device;
   char label[0x100];
   grub_uint8_t dummy4[0x100];
@@ -196,6 +200,16 @@ struct grub_btrfs_leaf_descriptor
 };
 
 PRAGMA_BEGIN_PACKED
+struct grub_btrfs_root_ref
+{
+  grub_uint64_t dirid;
+  grub_uint64_t sequence;
+  grub_uint16_t name_len;
+  const char name[0];
+} GRUB_PACKED;
+PRAGMA_END_PACKED
+
+PRAGMA_BEGIN_PACKED
 struct grub_btrfs_time
 {
   grub_int64_t sec;
@@ -242,6 +256,10 @@ PRAGMA_END_PACKED
 
 #define GRUB_BTRFS_OBJECT_ID_CHUNK 0x100
 
+#define GRUB_BTRFS_FS_TREE_OBJECTID 5ULL
+#define GRUB_BTRFS_ROOT_REF_KEY     156
+#define GRUB_BTRFS_ROOT_ITEM_KEY     132
+
 static grub_disk_addr_t superblock_sectors[] = { 64 * 2, 64 * 1024 * 2,
   256 * 1048576 * 2, 1048576ULL * 1048576ULL * 2
 };
@@ -250,6 +268,13 @@ static grub_err_t
 grub_btrfs_read_logical (struct grub_btrfs_data *data,
 			 grub_disk_addr_t addr, void *buf, grub_size_t size,
 			 int recursion_depth);
+
+static grub_err_t
+grub_btrfs_get_parent_subvol_path (struct grub_btrfs_data *data,
+		grub_uint64_t child_id,
+		const char *child_path,
+		grub_uint64_t *parent_id,
+		char **path_out);
 
 static grub_err_t
 read_sblock (grub_disk_t disk, struct grub_btrfs_superblock *sb)
@@ -1800,6 +1825,103 @@ get_root (struct grub_btrfs_data *data, struct grub_btrfs_key *key,
 }
 
 static grub_err_t
+find_pathname(struct grub_btrfs_data *data, grub_uint64_t objectid,
+              grub_uint64_t fs_root, const char *name, char **pathname)
+{
+  grub_err_t err;
+  struct grub_btrfs_key key = {
+    .object_id = grub_cpu_to_le64 (objectid),
+    .type = GRUB_BTRFS_ITEM_TYPE_INODE_REF,
+    .offset = 0ULL,
+  };
+  struct grub_btrfs_key key_out;
+  struct grub_btrfs_leaf_descriptor desc;
+  char *p = grub_strdup (name);
+  grub_disk_addr_t elemaddr;
+  grub_size_t elemsize;
+  grub_size_t alloc = grub_strlen(name) + 1;
+
+  err = lower_bound(data, &key, &key_out, fs_root,
+                    &elemaddr, &elemsize, &desc, 0);
+  if (err)
+    {
+      free_iterator(&desc);
+      return grub_error(err, "lower_bound caught %d\n", err);
+    }
+
+  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_INODE_REF)
+    next(data, &desc, &elemaddr, &elemsize, &key_out);
+
+  free_iterator(&desc);
+  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_INODE_REF)
+    {
+      return grub_error(GRUB_ERR_FILE_NOT_FOUND,
+                        "Can't find inode ref for {%"PRIuGRUB_UINT64_T
+                        ", %u, %"PRIuGRUB_UINT64_T"} %"PRIuGRUB_UINT64_T
+                        "/%"PRIuGRUB_SIZE"\n",
+                        key_out.object_id, key_out.type,
+                        key_out.offset, elemaddr, elemsize);
+    }
+
+  while (key_out.type == GRUB_BTRFS_ITEM_TYPE_INODE_REF &&
+         key_out.object_id != key_out.offset)
+    {
+      struct grub_btrfs_inode_ref *inode_ref;
+      char *new;
+      grub_size_t sz;
+
+      if (grub_add (elemsize, 1, &sz))
+	return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
+
+      inode_ref = grub_malloc(sz);
+      if (!inode_ref)
+	return grub_error(GRUB_ERR_OUT_OF_MEMORY,
+			  "couldn't allocate memory for inode_ref (%"PRIuGRUB_SIZE")\n", elemsize);
+
+      err = grub_btrfs_read_logical(data, elemaddr, inode_ref, elemsize, 0);
+      if (err)
+	return grub_error(err, "read_logical caught %d\n", err);
+
+      if (grub_add (grub_le_to_cpu16 (inode_ref->n), 2, &sz) ||
+	  grub_add (alloc, sz, &alloc))
+	return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
+
+      new = grub_malloc(alloc);
+      if (!new)
+	return grub_error(GRUB_ERR_OUT_OF_MEMORY,
+			  "couldn't allocate memory for name (%"PRIuGRUB_SIZE")\n", alloc);
+
+      grub_memcpy(new, inode_ref->name, grub_le_to_cpu16 (inode_ref->n));
+      if (p)
+	{
+	  new[grub_le_to_cpu16 (inode_ref->n)] = '/';
+	  grub_strcpy (new + grub_le_to_cpu16 (inode_ref->n) + 1, p);
+	  grub_free(p);
+	}
+      else
+	new[grub_le_to_cpu16 (inode_ref->n)] = 0;
+      grub_free(inode_ref);
+
+      p = new;
+      key.object_id = key_out.offset;
+      err = lower_bound(data, &key, &key_out, fs_root, &elemaddr,
+			&elemsize, &desc, 0);
+      if (err)
+	{
+	  free_iterator(&desc);
+	  return grub_error(err, "lower_bound caught %d\n", err);
+	}
+
+      if (key_out.type != GRUB_BTRFS_ITEM_TYPE_INODE_REF)
+	next(data, &desc, &elemaddr, &elemsize, &key_out);
+      free_iterator(&desc);
+    }
+
+  *pathname = p;
+  return 0;
+}
+
+static grub_err_t
 find_path (struct grub_btrfs_data *data,
 	   const char *path, struct grub_btrfs_key *key,
 	   grub_uint64_t *tree, grub_uint8_t *type)
@@ -2295,6 +2417,20 @@ grub_btrfs_read (grub_file_t file, char *buf, grub_size_t len)
 				 data->tree, file->offset, buf, len);
 }
 
+static char *
+btrfs_unparse_uuid(struct grub_btrfs_data *data)
+{
+  return grub_xasprintf ("%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+			 grub_be_to_cpu16 (data->sblock.uuid[0]),
+			 grub_be_to_cpu16 (data->sblock.uuid[1]),
+			 grub_be_to_cpu16 (data->sblock.uuid[2]),
+			 grub_be_to_cpu16 (data->sblock.uuid[3]),
+			 grub_be_to_cpu16 (data->sblock.uuid[4]),
+			 grub_be_to_cpu16 (data->sblock.uuid[5]),
+			 grub_be_to_cpu16 (data->sblock.uuid[6]),
+			 grub_be_to_cpu16 (data->sblock.uuid[7]));
+}
+
 static grub_err_t
 grub_btrfs_uuid (grub_device_t device, char **uuid)
 {
@@ -2306,15 +2442,7 @@ grub_btrfs_uuid (grub_device_t device, char **uuid)
   if (!data)
     return grub_errno;
 
-  *uuid = grub_xasprintf ("%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
-			  grub_be_to_cpu16 (data->sblock.uuid[0]),
-			  grub_be_to_cpu16 (data->sblock.uuid[1]),
-			  grub_be_to_cpu16 (data->sblock.uuid[2]),
-			  grub_be_to_cpu16 (data->sblock.uuid[3]),
-			  grub_be_to_cpu16 (data->sblock.uuid[4]),
-			  grub_be_to_cpu16 (data->sblock.uuid[5]),
-			  grub_be_to_cpu16 (data->sblock.uuid[6]),
-			  grub_be_to_cpu16 (data->sblock.uuid[7]));
+  *uuid = btrfs_unparse_uuid (data);
 
   grub_btrfs_unmount (data);
 
@@ -2444,6 +2572,346 @@ grub_btrfs_embed (grub_device_t device __attribute__ ((unused)),
 }
 #endif
 
+static grub_err_t
+grub_cmd_btrfs_info (grub_command_t cmd __attribute__ ((unused)), int argc,
+		     char **argv)
+{
+  grub_device_t dev;
+  char *devname;
+  struct grub_btrfs_data *data;
+  char *uuid;
+
+  if (argc < 1)
+    return grub_error (GRUB_ERR_BAD_ARGUMENT, "device name required");
+
+  devname = grub_file_get_device_name(argv[0]);
+
+  if (!devname)
+    return grub_errno;
+
+  dev = grub_device_open (devname);
+  grub_free (devname);
+  if (!dev)
+    return grub_errno;
+
+  data = grub_btrfs_mount (dev);
+  if (!data)
+    {
+      grub_device_close(dev);
+      return grub_error (GRUB_ERR_BAD_ARGUMENT, "failed to open fs");
+    }
+
+  if (*data->sblock.label != '\0')
+    {
+      char *label = grub_strndup (data->sblock.label, sizeof (data->sblock.label));
+      if (!label)
+	{
+	  grub_btrfs_unmount (data);
+	  grub_device_close (dev);
+	  return grub_errno;
+	}
+      grub_printf("Label: '%s' ", label);
+      grub_free (label);
+    }
+  else
+    grub_printf("Label: none ");
+
+  uuid = btrfs_unparse_uuid (data);
+  if (!uuid)
+    {
+      grub_btrfs_unmount (data);
+      grub_device_close (dev);
+      return grub_errno;
+    }
+
+  grub_printf (" uuid: %s\n\tTotal devices %" PRIuGRUB_UINT64_T
+	       " FS bytes used %" PRIuGRUB_UINT64_T "\n",
+	       uuid,
+	       grub_le_to_cpu64 (data->sblock.num_devices),
+	       grub_le_to_cpu64 (data->sblock.bytes_used));
+
+  grub_free (uuid);
+  grub_btrfs_unmount (data);
+  grub_device_close (dev);
+
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+get_fs_root(struct grub_btrfs_data *data, grub_uint64_t tree,
+            grub_uint64_t objectid, grub_uint64_t offset,
+            grub_uint64_t *fs_root, grub_uint64_t *flags)
+{
+  grub_err_t err;
+  struct grub_btrfs_key key_in = {
+    .object_id = grub_cpu_to_le64 (objectid),
+    .type = GRUB_BTRFS_ROOT_ITEM_KEY,
+    .offset = grub_cpu_to_le64 (offset),
+  }, key_out;
+  grub_disk_addr_t elemaddr;
+  grub_size_t elemsize;
+  struct grub_btrfs_root_item ri;
+
+  err = lower_bound(data, &key_in, &key_out, tree,
+                    &elemaddr, &elemsize, NULL, 0);
+  if (err)
+    return err;
+
+  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_ITEM || elemaddr == 0)
+    {
+      return grub_error(GRUB_ERR_FILE_NOT_FOUND,
+                    N_("can't find fs root for subvol %"PRIuGRUB_UINT64_T"\n"),
+                    key_in.object_id);
+    }
+
+  err = grub_btrfs_read_logical (data, elemaddr, &ri, sizeof (ri), 0);
+  if (err)
+    return err;
+
+  *fs_root = ri.tree;
+
+  if (flags)
+    *flags = grub_le_to_cpu64 (ri.flags);
+
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_btrfs_get_parent_subvol_path (struct grub_btrfs_data *data,
+		grub_uint64_t child_id,
+		const char *child_path,
+		grub_uint64_t *parent_id,
+		char **path_out)
+{
+  grub_uint64_t fs_root = 0;
+  struct grub_btrfs_key key_in = {
+    .object_id = grub_cpu_to_le64 (child_id),
+    .type = GRUB_BTRFS_ITEM_TYPE_ROOT_BACKREF,
+    .offset = 0ULL,
+  }, key_out;
+  struct grub_btrfs_root_ref *ref;
+  char *buf;
+  struct grub_btrfs_leaf_descriptor desc;
+  grub_size_t elemsize;
+  grub_disk_addr_t elemaddr;
+  grub_err_t err;
+  char *parent_path = NULL;
+  grub_size_t sz;
+
+  *parent_id = 0;
+  *path_out = 0;
+
+  err = lower_bound(data, &key_in, &key_out, data->sblock.root_tree,
+                    &elemaddr, &elemsize, &desc, 0);
+  if (err)
+    return err;
+
+  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_BACKREF || elemaddr == 0)
+    next(data, &desc, &elemaddr, &elemsize, &key_out);
+
+  if (key_out.type != GRUB_BTRFS_ITEM_TYPE_ROOT_BACKREF)
+    {
+      free_iterator(&desc);
+      return grub_error(GRUB_ERR_FILE_NOT_FOUND, N_("can't find root backrefs"));
+    }
+
+  if (grub_add (elemsize, 1, &sz))
+    {
+      free_iterator(&desc);
+      return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
+    }
+
+  buf = grub_malloc(sz);
+  if (!buf)
+    {
+      free_iterator(&desc);
+      return grub_errno;
+    }
+
+  err = grub_btrfs_read_logical(data, elemaddr, buf, elemsize, 0);
+  if (err)
+    {
+      grub_free(buf);
+      free_iterator(&desc);
+      return err;
+    }
+
+  buf[elemsize] = 0;
+  ref = (struct grub_btrfs_root_ref *)buf;
+
+  err = get_fs_root(data, data->sblock.root_tree, grub_le_to_cpu64 (key_out.offset),
+                    (grub_uint64_t) -1, &fs_root, NULL);
+  if (err)
+    {
+      grub_free(buf);
+      free_iterator(&desc);
+      return err;
+    }
+
+  err = find_pathname(data, grub_le_to_cpu64 (ref->dirid), fs_root, ref->name, &parent_path);
+  if (err)
+    {
+      grub_free(buf);
+      free_iterator(&desc);
+      return err;
+    }
+
+  if (child_path)
+    {
+      *path_out = grub_xasprintf ("%s/%s", parent_path, child_path);
+      grub_free (parent_path);
+    }
+  else
+    *path_out = parent_path;
+
+  *parent_id = grub_le_to_cpu64 (key_out.offset);
+
+  grub_free(buf);
+  free_iterator(&desc);
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_btrfs_get_default_subvolume_id (struct grub_btrfs_data *data, grub_uint64_t *id)
+{
+  grub_err_t err;
+  grub_disk_addr_t elemaddr;
+  grub_size_t elemsize;
+  struct grub_btrfs_key key, key_out;
+  struct grub_btrfs_dir_item *direl = NULL;
+  const char *ctoken = "default";
+  grub_size_t ctokenlen = sizeof ("default") - 1;
+  grub_size_t sz;
+
+  *id = 0;
+  key.object_id = data->sblock.root_dir_objectid;
+  key.type = GRUB_BTRFS_ITEM_TYPE_DIR_ITEM;
+  key.offset = grub_cpu_to_le64 (~grub_getcrc32c (1, ctoken, ctokenlen));
+  err = lower_bound (data, &key, &key_out, data->sblock.root_tree, &elemaddr, &elemsize,
+			 NULL, 0);
+  if (err)
+    return err;
+
+  if (key_cmp (&key, &key_out) != 0)
+    return grub_error (GRUB_ERR_FILE_NOT_FOUND, N_("file not found"));
+
+  struct grub_btrfs_dir_item *cdirel;
+
+  if (grub_add (elemsize, 1, &sz))
+    return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
+
+  direl = grub_malloc (sz);
+  if (!direl)
+    return grub_errno;
+
+  err = grub_btrfs_read_logical (data, elemaddr, direl, elemsize, 0);
+  if (err)
+    {
+      grub_free (direl);
+      return err;
+    }
+  for (cdirel = direl;
+       (grub_uint8_t *) cdirel - (grub_uint8_t *) direl
+       < (grub_ssize_t) elemsize;
+       cdirel = (void *) ((grub_uint8_t *) (direl + 1)
+       + grub_le_to_cpu16 (cdirel->n)
+       + grub_le_to_cpu16 (cdirel->m)))
+    {
+      if (ctokenlen == grub_le_to_cpu16 (cdirel->n)
+        && grub_memcmp (cdirel->name, ctoken, ctokenlen) == 0)
+      break;
+    }
+  if ((grub_uint8_t *) cdirel - (grub_uint8_t *) direl
+      >= (grub_ssize_t) elemsize)
+    {
+      grub_free (direl);
+      err = grub_error (GRUB_ERR_FILE_NOT_FOUND, N_("file not found"));
+      return err;
+    }
+
+  if (cdirel->key.type != GRUB_BTRFS_ITEM_TYPE_ROOT_ITEM)
+    {
+      grub_free (direl);
+      err = grub_error (GRUB_ERR_FILE_NOT_FOUND, N_("file not found"));
+      return err;
+    }
+
+  *id = grub_le_to_cpu64 (cdirel->key.object_id);
+  grub_free (direl);
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_btrfs_get_default_subvol (const char *name, grub_uint64_t *ret_subvolid, char **ret_subvol)
+{
+  char *devname;
+  grub_device_t dev;
+  struct grub_btrfs_data *data;
+  grub_err_t err;
+  grub_uint64_t id;
+  char *subvol = NULL;
+  grub_uint64_t subvolid = 0;
+
+  devname = grub_file_get_device_name(name);
+  if (!devname)
+    return grub_errno;
+  dev = grub_device_open (devname);
+  grub_free (devname);
+  if (!dev)
+    return grub_errno;
+
+  data = grub_btrfs_mount(dev);
+  if (!data)
+    {
+      grub_device_close (dev);
+      grub_dprintf ("btrfs", "failed to open fs\n");
+      return grub_errno;
+    }
+
+  err = grub_btrfs_get_default_subvolume_id (data, &subvolid);
+  if (err)
+    {
+      grub_btrfs_unmount (data);
+      grub_device_close (dev);
+      return err;
+    }
+
+  id = subvolid;
+
+  if (id == GRUB_BTRFS_ROOT_VOL_OBJECTID)
+    subvol = grub_strdup ("");
+  else
+    {
+      while (id != GRUB_BTRFS_ROOT_VOL_OBJECTID)
+	{
+	  grub_uint64_t parent_id;
+	  char *path_out;
+
+	  err = grub_btrfs_get_parent_subvol_path (data, id, subvol, &parent_id, &path_out);
+	  if (err)
+	    {
+	      grub_btrfs_unmount (data);
+	      grub_device_close (dev);
+	      return err;
+	    }
+
+	  grub_free (subvol);
+	  subvol = path_out;
+	  id = parent_id;
+	}
+    }
+
+  if (ret_subvolid)
+    *ret_subvolid = subvolid;
+  if (ret_subvol)
+    *ret_subvol = subvol;
+
+  grub_btrfs_unmount (data);
+  grub_device_close (dev);
+
+  return GRUB_ERR_NONE;
+}
+
 static struct grub_fs grub_btrfs_fs = {
   .name = "btrfs",
   .fs_dir = grub_btrfs_dir,
@@ -2459,13 +2927,20 @@ static struct grub_fs grub_btrfs_fs = {
 #endif
 };
 
+static grub_command_t cmd_info;
+
 GRUB_MOD_INIT (btrfs)
 {
   grub_btrfs_fs.mod = mod;
   grub_fs_register (&grub_btrfs_fs);
+  cmd_info = grub_register_command ("btrfs-info",
+				    grub_cmd_btrfs_info,
+				    "DEVICE",
+				    "Print BtrFS info about DEVICE.");
 }
 
 GRUB_MOD_FINI (btrfs)
 {
   grub_fs_unregister (&grub_btrfs_fs);
+  grub_unregister_command (cmd_info);
 }
