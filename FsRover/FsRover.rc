@@ -283,6 +283,7 @@ BEGIN
 	IDS_DP_COPY		"Copy"
 	IDS_DP_PARENT_DEV	"Source device"
 	IDS_FMT_EXTRACT_LINKS	" (%llu symlink(s) skipped)"
+	IDS_MENU_TIMESTAMPS	"Preserve &Timestamps"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -433,6 +434,7 @@ BEGIN
 	IDS_DP_COPY		"复制"
 	IDS_DP_PARENT_DEV	"源设备"
 	IDS_FMT_EXTRACT_LINKS	"（已跳过 %llu 个符号链接）"
+	IDS_MENU_TIMESTAMPS	"保留时间戳(&T)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -580,6 +582,7 @@ BEGIN
 	IDS_DP_COPY		"複製"
 	IDS_DP_PARENT_DEV	"來源裝置"
 	IDS_FMT_EXTRACT_LINKS	"（已略過 %llu 個符號連結）"
+	IDS_MENU_TIMESTAMPS	"保留時間戳記(&T)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -727,6 +730,7 @@ BEGIN
 	IDS_DP_COPY		"コピー"
 	IDS_DP_PARENT_DEV	"元デバイス"
 	IDS_FMT_EXTRACT_LINKS	"（%llu 個のシンボリックリンクをスキップ）"
+	IDS_MENU_TIMESTAMPS	"タイムスタンプを保持(&T)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

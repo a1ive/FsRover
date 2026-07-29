@@ -70,6 +70,7 @@ constexpr int IDC_UP = 102;
    arrives.  */
 constexpr int IDM_FILE_REFRESH = 200;
 constexpr int IDM_FILE_EXIT = 201;
+constexpr int IDM_FILE_TIMESTAMPS = 202;
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_HELP_SUPPORT = 220;
@@ -142,6 +143,9 @@ HWND g_status;
 HWND g_progress;
 HMENU g_menu_file;	/* File popup: Refresh grays while extracting */
 HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
+
+/* File menu toggle, copied into each extract task when it starts.  */
+bool g_preserve_times = true;
 
 /* Current view; owned by the GUI thread, replaced from task results.  */
 struct list_row
@@ -477,6 +481,7 @@ start_extract (std::vector<std::string> &&paths)
 	task.type = backend_task_type::extract;
 	task.paths = std::move (paths);
 	task.dest = std::move (dest);
+	task.preserve_times = g_preserve_times;
 	g_seq_extract = backend_post (std::move (task));
 	g_extracting = true;
 	SetWindowTextW (g_btn_extract, res_str (IDS_BTN_CANCEL).c_str ());
@@ -1229,6 +1234,9 @@ create_menu_bar (HWND wnd)
 	g_menu_file = CreatePopupMenu ();
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
+	/* Check mark set by on_menu_popup from g_preserve_times.  */
+	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
+	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
 
 	HMENU sel = CreatePopupMenu ();
@@ -1258,6 +1266,7 @@ on_menu_popup (HMENU menu)
 		   queue behind a running extraction and overwrite the
 		   progress line.  */
 		EnableMenuItem (menu, IDM_FILE_REFRESH, g_extracting ? MF_GRAYED : MF_ENABLED);
+		CheckMenuItem (menu, IDM_FILE_TIMESTAMPS, g_preserve_times ? MF_CHECKED : MF_UNCHECKED);
 		return;
 	}
 	if (menu != g_menu_dokan)
@@ -1344,6 +1353,10 @@ on_command (int id)
 	case IDM_FILE_REFRESH:
 		if (!g_extracting)
 			refresh ();
+		break;
+	case IDM_FILE_TIMESTAMPS:
+		/* A running extraction keeps the setting it started with.  */
+		g_preserve_times = !g_preserve_times;
 		break;
 	case IDM_FILE_EXIT:
 		SendMessageW (g_main, WM_CLOSE, 0, 0);

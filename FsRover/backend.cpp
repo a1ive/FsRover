@@ -227,6 +227,7 @@ struct walk_item
 	std::string src;	/* grub path */
 	std::wstring rel;	/* Win32 path relative to the destination */
 	bool is_dir;
+	INT64 mtime;	/* seconds since Unix epoch, 0 = unknown */
 };
 
 struct extract_ctx
@@ -237,8 +238,38 @@ struct extract_ctx
 	UINT64 bytes_done = 0;
 	UINT64 links_skipped = 0;
 	ULONGLONG last_tick = 0;
+	bool preserve_times = true;
 	std::string cur;	/* source path of the file being copied */
 };
+
+/* Unix seconds -> FILETIME (100 ns ticks since 1601, UTC like the
+   list view's mtime).  False for values outside the FILETIME range,
+   which a corrupt or exotic timestamp can produce.  */
+bool
+unix_to_filetime (INT64 sec, FILETIME *ft)
+{
+	ULONGLONG t;
+
+	if (sec < -11644473600LL || sec > 1833029933770LL)
+		return false;
+	t = (ULONGLONG) ((sec + 11644473600LL) * 10000000LL);
+	ft->dwLowDateTime = (DWORD) t;
+	ft->dwHighDateTime = (DWORD) (t >> 32);
+	return true;
+}
+
+/* Best effort: a destination that refuses timestamps (some network
+   shares, a read-only attribute set by the copy) must not fail the
+   extraction, so the result is ignored.  */
+void
+set_mtime (HANDLE h, INT64 mtime)
+{
+	FILETIME ft;
+
+	if (!mtime || !unix_to_filetime (mtime, &ft))
+		return;
+	SetFileTime (h, nullptr, nullptr, &ft);
+}
 
 void
 post_progress (extract_ctx &ctx, int percent)
@@ -324,6 +355,7 @@ walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item
 		item.src = join_path (src, e.name);
 		item.rel = rel + L'\\' + sanitize_component (e.name);
 		item.is_dir = e.is_dir;
+		item.mtime = e.mtime;
 		out.push_back (item);
 		if (e.is_dir && !walk_dir (item.src, item.rel, out, links, error))
 			return false;
@@ -334,7 +366,7 @@ walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item
 /* Returns false on error (error set) or cancellation (error empty);
    the partial destination file is deleted either way.  */
 bool
-extract_file (const std::string &src, const std::wstring &dst, extract_ctx &ctx, std::vector<char> &buf, std::string &error)
+extract_file (const std::string &src, const std::wstring &dst, INT64 mtime, extract_ctx &ctx, std::vector<char> &buf, std::string &error)
 {
 	rover_file *f;
 	HANDLE h;
@@ -383,6 +415,10 @@ extract_file (const std::string &src, const std::wstring &dst, extract_ctx &ctx,
 		ctx.bytes_done += (UINT64) r;
 	}
 
+	/* Last write, before the handle goes away: the copy loop is what
+	   set the destination mtime to "now" in the first place.  */
+	if (ok && ctx.preserve_times)
+		set_mtime (h, mtime);
 	CloseHandle (h);
 	rover_file_close (f);
 	if (!ok)
@@ -399,6 +435,7 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 	std::wstring root;
 
 	ctx.seq = seq;
+	ctx.preserve_times = task.preserve_times;
 	if (task.paths.empty () || task.dest.empty ())
 	{
 		res->error = "nothing to extract";
@@ -429,6 +466,7 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 		item.src = src;
 		item.rel = top_rel_name (src);
 		item.is_dir = st.is_dir != 0;
+		item.mtime = st.mtime_set ? st.mtime : 0;
 		work.push_back (item);
 		if (item.is_dir
 		    && !walk_dir (item.src, item.rel, work, ctx.links_skipped, res->error))
@@ -458,10 +496,29 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 		ctx.cur = item.src;
 		ctx.last_tick = GetTickCount64 ();
 		post_progress (ctx, 0);
-		if (!extract_file (item.src, dst, ctx, buf, res->error))
+		if (!extract_file (item.src, dst, item.mtime, ctx, buf, res->error))
 			break;
 	}
 	rover_set_progress (nullptr, nullptr);
+
+	/* Directories come last, deepest first: writing a child bumps its
+	   parent's mtime again, so a directory can only be stamped once
+	   nothing more will be created inside it.  Directories missing
+	   from a cancelled or failed run just fail to open.  */
+	if (ctx.preserve_times)
+		for (size_t i = work.size (); i-- > 0;)
+		{
+			if (!work[i].is_dir || !work[i].mtime)
+				continue;
+			std::wstring dst = root + L'\\' + work[i].rel;
+			HANDLE h = CreateFileW (dst.c_str (), FILE_WRITE_ATTRIBUTES,
+						FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+						nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+			if (h == INVALID_HANDLE_VALUE)
+				continue;
+			set_mtime (h, work[i].mtime);
+			CloseHandle (h);
+		}
 
 	res->stat_files = ctx.files_done;
 	res->stat_bytes = ctx.bytes_done;

@@ -82,6 +82,7 @@ struct backend_task
 	UINT64 limit = ~0ULL;	/* read_chunk: optional logical EOF */
 	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes */
 	bool decompress = false;	/* loopback_add: decode gzip/xz/... transparently */
+	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
 };
 
 struct backend_progress
