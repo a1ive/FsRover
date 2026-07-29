@@ -55,6 +55,7 @@ HIMAGELIST button_icons (const wchar_t *dll, int id, int size);
 void set_button_icon (HWND btn, HIMAGELIST himl);
 void load_dpi_api (void);
 int dpi_scale (int value);
+int dpi_unscale (int value);
 UINT dpi_for_window (HWND wnd);
 int system_metric_dpi (int index);
 HFONT create_message_font (void);

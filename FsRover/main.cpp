@@ -99,7 +99,10 @@ constexpr UINT WM_APP_TRAY = WM_APP + 5;
 
 /* Layout metrics authored at 96 DPI; scaled through dpi_scale().  */
 constexpr int TOP_BAR_H = 28;
-constexpr int TREE_W = 280;
+constexpr int TREE_W = 280;	/* initial splitter position */
+constexpr int TREE_MIN_W = 120;	/* neither pane can be dragged away */
+constexpr int LIST_MIN_W = 200;
+constexpr int SPLIT_W = 5;	/* draggable gap between the two panes */
 constexpr int MARGIN = 2;
 constexpr int BTN_W = 90;
 constexpr int PROGRESS_W = 260;
@@ -146,6 +149,12 @@ HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
 
 /* File menu toggle, copied into each extract task when it starts.  */
 bool g_preserve_times = true;
+
+/* Splitter state.  The width is kept in 96-DPI units like every other
+   layout metric, so a move to another monitor rescales it for free.  */
+int g_tree_w = TREE_W;
+bool g_split_drag;
+int g_split_grab;	/* cursor offset inside the bar when the drag began */
 
 /* Current view; owned by the GUI thread, replaced from task results.  */
 struct list_row
@@ -1298,17 +1307,57 @@ on_menu_popup (HMENU menu)
 	}
 }
 
+/* Range where both panes stay usable, in device pixels.  */
+int
+clamp_split_x (int x, int client_w)
+{
+	const int min_w = dpi_scale (TREE_MIN_W);
+	const int max_w = client_w - dpi_scale (SPLIT_W + LIST_MIN_W);
+
+	if (x > max_w)
+		x = max_w;
+	if (x < min_w)
+		x = min_w;
+	return x;
+}
+
+/* Where the bar sits right now.  A window too narrow for the stored
+   width is clamped here and not in g_tree_w, so widening it again
+   gives the user's chosen width back.  */
+int
+splitter_x (int client_w)
+{
+	return clamp_split_x (dpi_scale (g_tree_w), client_w);
+}
+
+/* The bar itself: the gap between the two panes, below the top row.
+   Everything under it is covered by a child window, so a client hit
+   this far down is either the gap or one of the panes.  */
+bool
+in_splitter (HWND wnd, POINT pt)
+{
+	RECT rc;
+	int x;
+
+	if (pt.y < dpi_scale (TOP_BAR_H + MARGIN))
+		return false;
+	GetClientRect (wnd, &rc);
+	x = splitter_x (rc.right);
+	return pt.x >= x && pt.x < x + dpi_scale (SPLIT_W);
+}
+
 void
 layout (HWND wnd)
 {
 	RECT rc;
 	const int margin = dpi_scale (MARGIN);
 	const int top_bar_h = dpi_scale (TOP_BAR_H);
-	const int tree_w = dpi_scale (TREE_W);
+	const int split_w = dpi_scale (SPLIT_W);
 	const int btn_w = dpi_scale (BTN_W);
 	const int progress_w = dpi_scale (PROGRESS_W);
 
 	GetClientRect (wnd, &rc);
+	const int tree_w = splitter_x (rc.right);
 	SendMessageW (g_status, WM_SIZE, 0, 0);
 
 	int parts[2] = { rc.right - progress_w - dpi_scale (20), -1 };
@@ -1331,7 +1380,7 @@ layout (HWND wnd)
 	MoveWindow (g_address, btn_w + 2 * margin, margin, rc.right - 2 * btn_w - 4 * margin, btn_h, TRUE);
 	MoveWindow (g_btn_extract, rc.right - btn_w - margin, margin, btn_w, btn_h, TRUE);
 	MoveWindow (g_tree, 0, body_top, tree_w, body_h, TRUE);
-	MoveWindow (g_list, tree_w + margin, body_top, rc.right - tree_w - margin, body_h, TRUE);
+	MoveWindow (g_list, tree_w + split_w, body_top, rc.right - tree_w - split_w, body_h, TRUE);
 }
 
 void
@@ -1424,6 +1473,53 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 			SWP_NOZORDER | SWP_NOACTIVATE);
 		return 0;
 	}
+	case WM_SETCURSOR:
+	{
+		/* WM_SETCURSOR carries no position, and during a drag the
+		   cursor has usually left the bar already.  */
+		POINT pt;
+		if (LOWORD (lp) != HTCLIENT)
+			break;
+		GetCursorPos (&pt);
+		ScreenToClient (wnd, &pt);
+		if (!g_split_drag && !in_splitter (wnd, pt))
+			break;
+		SetCursor (LoadCursorW (nullptr, IDC_SIZEWE));
+		return TRUE;
+	}
+	case WM_LBUTTONDOWN:
+	{
+		POINT pt = { (short) LOWORD (lp), (short) HIWORD (lp) };
+		RECT rc;
+		if (!in_splitter (wnd, pt))
+			break;
+		GetClientRect (wnd, &rc);
+		/* Grab offset, so the bar does not jump under the cursor.  */
+		g_split_grab = pt.x - splitter_x (rc.right);
+		g_split_drag = true;
+		SetCapture (wnd);
+		return 0;
+	}
+	case WM_MOUSEMOVE:
+	{
+		RECT rc;
+		if (!g_split_drag)
+			break;
+		/* Clamped here too: the bar stops at the limit and follows
+		   again the moment the cursor comes back, instead of
+		   trailing however far it was dragged past it.  */
+		GetClientRect (wnd, &rc);
+		g_tree_w = dpi_unscale (clamp_split_x ((short) LOWORD (lp) - g_split_grab, rc.right));
+		layout (wnd);
+		return 0;
+	}
+	case WM_LBUTTONUP:
+		if (g_split_drag)
+			ReleaseCapture ();	/* clears the flag below */
+		break;
+	case WM_CAPTURECHANGED:
+		g_split_drag = false;
+		return 0;
 	case WM_COMMAND:
 		on_command (LOWORD (wp));
 		return 0;

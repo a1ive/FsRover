@@ -180,6 +180,14 @@ dpi_scale (int value)
 	return MulDiv (value, (int) g_dpi, 96);
 }
 
+/* Device pixels back to a 96-DPI metric, for the few sizes the user
+   sets with the mouse and the app then stores like an authored one.  */
+int
+dpi_unscale (int value)
+{
+	return MulDiv (value, 96, (int) g_dpi);
+}
+
 UINT
 dpi_for_window (HWND wnd)
 {
