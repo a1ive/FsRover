@@ -25,9 +25,6 @@
  *
  * LZX decompression
  *
- * Imported from ref\wimboot and adapted for Rover/MSVC: grub types,
- * raw symbol tables passed explicitly to huffman_alphabet().
- *
  */
 
 #include <grub/types.h>
@@ -70,7 +67,8 @@
 #define LZX_WIM_MAGIC_FILESIZE 12000000
 
 /** Block types */
-enum lzx_block_type {
+enum lzx_block_type
+{
 	/** Verbatim block */
 	LZX_BLOCK_VERBATIM = 1,
 	/** Aligned offset block */
@@ -80,7 +78,8 @@ enum lzx_block_type {
 };
 
 /** An LZX input stream */
-struct lzx_input_stream {
+struct lzx_input_stream
+{
 	/** Data */
 	const grub_uint8_t *data;
 	/** Length */
@@ -90,7 +89,8 @@ struct lzx_input_stream {
 };
 
 /** An LZX output stream */
-struct lzx_output_stream {
+struct lzx_output_stream
+{
 	/** Data, or NULL */
 	grub_uint8_t *data;
 	/** Offset within stream */
@@ -100,7 +100,8 @@ struct lzx_output_stream {
 };
 
 /** LZX decompressor */
-struct lzx {
+struct lzx
+{
 	/** Input stream */
 	struct lzx_input_stream input;
 	/** Output stream */
@@ -138,7 +139,8 @@ struct lzx {
 	 * used as one LZX_MAIN_CODES-long length table (arrays of
 	 * bytes, so there is no padding between them).
 	 */
-	struct {
+	struct
+	{
 		/** Literals */
 		grub_uint8_t literals[LZX_MAIN_LIT_CODES];
 		/** Remaining symbols */
@@ -159,18 +161,22 @@ struct lzx {
  * @v position_slot	Position slot
  * @ret footer_bits 	Number of footer bits
  */
-static inline unsigned int lzx_footer_bits ( unsigned int position_slot ) {
-
-	if ( position_slot < 2 ) {
+static inline unsigned int lzx_footer_bits (unsigned int position_slot)
+{
+	if ( position_slot < 2 )
+	{
 		return 0;
-	} else if ( position_slot < 38 ) {
-		return ( ( position_slot / 2 ) - 1 );
-	} else {
+	}
+	else if (position_slot < 38)
+	{
+		return ((position_slot / 2) - 1);
+	}
+	else
+	{
 		return 17;
 	}
 }
 
-extern grub_ssize_t lzx_decompress ( const void *data, grub_size_t len,
-				     void *buf );
+extern grub_ssize_t lzx_decompress (const void *data, grub_size_t len, void *buf);
 
 #endif /* _LZX_H */

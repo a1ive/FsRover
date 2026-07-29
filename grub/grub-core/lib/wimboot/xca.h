@@ -25,9 +25,6 @@
  *
  * Xpress Compression Algorithm (MS-XCA) decompression
  *
- * Imported from ref\wimboot and adapted for Rover/MSVC: grub types,
- * no GNU statement expressions.
- *
  * Note: the bitstream reader may read up to two bytes beyond the end
  * of the compressed input; callers must provide that much slack after
  * the input buffer.
@@ -41,7 +38,8 @@
 #define XCA_CODES 512
 
 /** XCA decompressor */
-struct xca {
+struct xca
+{
 	/** Huffman alphabet */
 	struct huffman_alphabet alphabet;
 	/** Raw symbols */
@@ -60,19 +58,17 @@ struct xca {
  * @v symbol		Raw symbol
  * @ret len		Huffman-coded length
  */
-static inline unsigned int xca_huf_len ( const grub_uint8_t *lengths,
-					 unsigned int symbol ) {
-	return ( ( ( lengths[ symbol / 2 ] ) >>
-		   ( 4 * ( symbol % 2 ) ) ) & 0x0f );
+static inline unsigned int xca_huf_len (const grub_uint8_t *lengths, unsigned int symbol)
+{
+	return (((lengths[symbol / 2]) >> (4 * (symbol % 2))) & 0x0f);
 }
 
 /** XCA source data stream end marker */
 #define XCA_END_MARKER 256
 
 /** XCA block size */
-#define XCA_BLOCK_SIZE ( 64 * 1024 )
+#define XCA_BLOCK_SIZE (64 * 1024)
 
-extern grub_ssize_t xca_decompress ( const void *data, grub_size_t len,
-				     void *buf );
+extern grub_ssize_t xca_decompress (const void *data, grub_size_t len, void *buf);
 
 #endif /* _XCA_H */

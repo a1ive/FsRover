@@ -37,7 +37,7 @@ APFS and ZFS native encryption are not supported.
 
 ## Other Supported Formats
 
-- **Virtual disks:** VHD, VHDX, VDI, QCOW1/2/3, VMDK, DMG, ISZ, Parallels HDD, Android sparse
+- **Virtual disks:** VHD, VHDX, VDI, QCOW1/2/3, VMDK, DMG, ISZ, Parallels HDD, Android sparse, Windows FFU
 - **Compression:** gzip, LZ4, LZOP, XZ, Zstandard
 - **Dynamic disks and RAID:** Windows LDM, Linux LVM, mdraid, RAID5/6, NVIDIA dmraid
 - **Partition tables:** MBR, GPT, Apple, BSD, DragonFly BSD, Acorn, Amiga, DVH, Plan 9, Sun
