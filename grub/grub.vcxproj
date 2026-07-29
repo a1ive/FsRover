@@ -157,6 +157,11 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="grub-core\fs\pkg_common.c">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="rover\init.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
@@ -213,6 +218,7 @@
     <ClCompile Include="grub-core\fs\cpio.c" />
     <ClCompile Include="grub-core\fs\cpio_be.c" />
     <ClCompile Include="grub-core\fs\cramfs.c" />
+    <ClCompile Include="grub-core\fs\deb.c" />
     <ClCompile Include="grub-core\fs\erofs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -256,6 +262,7 @@
     <ClCompile Include="grub-core\fs\refs.c" />
     <ClCompile Include="grub-core\fs\reiserfs.c" />
     <ClCompile Include="grub-core\fs\romfs.c" />
+    <ClCompile Include="grub-core\fs\rpm.c" />
     <ClCompile Include="grub-core\fs\sevenzip.c">
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\bzip2;$(ProjectDir)grub-core\lib\zstd;$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -296,6 +303,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\io\gzio.c" />
+    <ClCompile Include="grub-core\io\offset.c" />
     <ClCompile Include="grub-core\io\isz.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

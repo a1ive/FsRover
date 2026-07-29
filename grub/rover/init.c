@@ -82,6 +82,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (cpio)	\
 	mod (cpio_be)	\
 	mod (cramfs)	\
+	mod (deb)	\
 	mod (erofs)	\
 	mod (exfat)	\
 	mod (ext2)	\
@@ -114,6 +115,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (refs)	\
 	mod (reiserfs)	\
 	mod (romfs)	\
+	mod (rpm)	\
 	mod (sevenzip)	\
 	mod (sfs)	\
 	mod (squash4)	\
