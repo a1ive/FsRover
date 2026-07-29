@@ -63,6 +63,8 @@ namespace
 
 constexpr int IDC_EXTRACT = 101;
 constexpr int IDC_UP = 102;
+constexpr int IDC_BACK = 103;
+constexpr int IDC_FWD = 104;
 
 /* Menu bar commands.  IDM_DOKAN_UNMOUNT_BASE + i unmounts
    dokanfs_get(i); the Dokan popup is rebuilt on every open, and a
@@ -105,6 +107,7 @@ constexpr int LIST_MIN_W = 200;
 constexpr int SPLIT_W = 5;	/* draggable gap between the two panes */
 constexpr int MARGIN = 2;
 constexpr int BTN_W = 90;
+constexpr int NAV_W = 30;	/* Back/Forward: glyph only, no label */
 constexpr int PROGRESS_W = 260;
 constexpr int DEF_W = 1000;	/* default window size */
 constexpr int DEF_H = 700;
@@ -140,6 +143,8 @@ constexpr int IMG_UNLOCK = 7;
 HWND g_address;
 HWND g_btn_extract;
 HWND g_btn_up;
+HWND g_btn_back;
+HWND g_btn_fwd;
 HWND g_tree;
 HWND g_list;
 HWND g_status;
@@ -155,6 +160,15 @@ bool g_preserve_times = true;
 int g_tree_w = TREE_W;
 bool g_split_drag;
 int g_split_grab;	/* cursor offset inside the bar when the drag began */
+
+/* Back/Forward, Explorer style: the visited paths in order with a
+   cursor on the current one.  Only a listing that succeeded is
+   recorded (fill_list), so the history never points at a path that
+   could not be read.  */
+constexpr size_t HIST_MAX = 10;
+std::vector<std::string> g_hist;	/* oldest first */
+int g_hist_pos = -1;	/* index of the current path, -1 = empty */
+UINT g_hist_seq;	/* list_dir seq posted by Back/Forward, 0 = none */
 
 /* Current view; owned by the GUI thread, replaced from task results.  */
 struct list_row
@@ -211,7 +225,7 @@ apply_dpi_resources (void)
 
 	/* Shared message font.  */
 	HFONT font = create_message_font ();
-	for (HWND ctl : { g_address, g_btn_extract, g_btn_up, g_tree, g_list })
+	for (HWND ctl : { g_address, g_btn_extract, g_btn_up, g_btn_back, g_btn_fwd, g_tree, g_list })
 		SendMessageW (ctl, WM_SETFONT, (WPARAM) font, TRUE);
 	if (g_font)
 		DeleteObject (g_font);
@@ -394,6 +408,62 @@ refresh (void)
 namespace
 {
 
+/* Back, Forward and Up all post a list_dir, which would queue behind a
+   running extraction and overwrite its progress line, so they follow
+   the same rule as the File menu's Refresh.  */
+void
+update_nav_buttons (void)
+{
+	EnableWindow (g_btn_back, !g_extracting && g_hist_pos > 0);
+	EnableWindow (g_btn_fwd, !g_extracting && g_hist_pos >= 0
+		      && (size_t) (g_hist_pos + 1) < g_hist.size ());
+	EnableWindow (g_btn_up, !g_extracting);
+}
+
+/* Called for every listing that came back without an error.  A Back or
+   Forward only moves the cursor (it already did); anything else drops
+   whatever was ahead of the cursor and appends.  */
+void
+hist_record (UINT seq)
+{
+	if (seq == g_hist_seq)
+	{
+		g_hist_seq = 0;
+		return;
+	}
+	/* Refresh, or navigating to where we already are.  */
+	if (g_hist_pos >= 0 && g_hist[(size_t) g_hist_pos] == g_path)
+		return;
+	g_hist.erase (g_hist.begin () + (g_hist_pos + 1), g_hist.end ());
+	g_hist.push_back (g_path);
+	if (g_hist.size () > HIST_MAX)
+		g_hist.erase (g_hist.begin ());
+	g_hist_pos = (int) g_hist.size () - 1;
+}
+
+/* Both moves walk the cursor first and remember the seq they posted:
+   should the user navigate somewhere else before the listing lands,
+   that result carries a different seq and is recorded normally.  */
+void
+go_back (void)
+{
+	if (g_hist_pos <= 0)
+		return;
+	g_hist_pos--;
+	navigate (g_hist[(size_t) g_hist_pos]);
+	g_hist_seq = g_seq_list;
+}
+
+void
+go_forward (void)
+{
+	if (g_hist_pos < 0 || (size_t) (g_hist_pos + 1) >= g_hist.size ())
+		return;
+	g_hist_pos++;
+	navigate (g_hist[(size_t) g_hist_pos]);
+	g_hist_seq = g_seq_list;
+}
+
 void
 go_up (void)
 {
@@ -495,11 +565,11 @@ start_extract (std::vector<std::string> &&paths)
 	g_extracting = true;
 	SetWindowTextW (g_btn_extract, res_str (IDS_BTN_CANCEL).c_str ());
 	set_button_icon (g_btn_extract, g_himl_cancel);
-	/* Refresh (File menu, grayed in on_menu_popup) and Up would only
-	   queue list tasks behind the running extraction and overwrite the
-	   progress line; the context menus gray their backend items for
-	   the same reason.  */
-	EnableWindow (g_btn_up, FALSE);
+	/* Refresh (File menu, grayed in on_menu_popup) and the navigation
+	   buttons would only queue list tasks behind the running extraction
+	   and overwrite the progress line; the context menus gray their
+	   backend items for the same reason.  */
+	update_nav_buttons ();
 	SendMessageW (g_progress, PBM_SETPOS, 0, 0);
 	ShowWindow (g_progress, SW_SHOW);
 	set_status (IDS_STATUS_EXTRACTING);
@@ -953,6 +1023,8 @@ fill_list (backend_result *res)
 {
 	g_path = res->path;
 	g_entries = std::move (res->entries);
+	hist_record (res->seq);
+	update_nav_buttons ();
 
 	g_rows.clear ();
 	g_rows.reserve (g_entries.size ());
@@ -998,7 +1070,7 @@ on_task_done (backend_result *raw)
 		g_extracting = false;
 		SetWindowTextW (g_btn_extract, res_str (IDS_BTN_EXTRACT).c_str ());
 		set_button_icon (g_btn_extract, g_himl_extract);
-		EnableWindow (g_btn_up, TRUE);
+		update_nav_buttons ();
 		ShowWindow (g_progress, SW_HIDE);
 		break;
 	case backend_task_type::loopback_add:
@@ -1188,6 +1260,10 @@ create_children (HWND wnd)
 		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_EXTRACT, nullptr, nullptr);
 	g_btn_up = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_UP).c_str (),
 		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_UP, nullptr, nullptr);
+	g_btn_back = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_BACK).c_str (),
+		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_BACK, nullptr, nullptr);
+	g_btn_fwd = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_FWD).c_str (),
+		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_FWD, nullptr, nullptr);
 	g_tree = CreateWindowExW (WS_EX_CLIENTEDGE, WC_TREEVIEWW, L"",
 		child | TVS_HASBUTTONS | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT, 0, 0, 0, 0, wnd, nullptr, nullptr, nullptr);
 	g_list = CreateWindowExW (WS_EX_CLIENTEDGE, WC_LISTVIEWW, L"",
@@ -1211,6 +1287,7 @@ create_children (HWND wnd)
 	/* Font, file/tree icons and button icons, all sized for the current
 	   monitor DPI (rebuilt on WM_DPICHANGED).  */
 	apply_dpi_resources ();
+	update_nav_buttons ();	/* nothing visited yet: both grayed */
 
 	LVCOLUMNW col = {};
 	std::wstring col_name = res_str (IDS_COL_NAME);
@@ -1354,6 +1431,7 @@ layout (HWND wnd)
 	const int top_bar_h = dpi_scale (TOP_BAR_H);
 	const int split_w = dpi_scale (SPLIT_W);
 	const int btn_w = dpi_scale (BTN_W);
+	const int nav_w = dpi_scale (NAV_W);
 	const int progress_w = dpi_scale (PROGRESS_W);
 
 	GetClientRect (wnd, &rc);
@@ -1376,8 +1454,14 @@ layout (HWND wnd)
 	const int body_h = rc.bottom - body_top - status_h;
 	const int btn_h = top_bar_h - 2 * margin;
 
-	MoveWindow (g_btn_up, margin, margin, btn_w, btn_h, TRUE);
-	MoveWindow (g_address, btn_w + 2 * margin, margin, rc.right - 2 * btn_w - 4 * margin, btn_h, TRUE);
+	int x = margin;
+	MoveWindow (g_btn_back, x, margin, nav_w, btn_h, TRUE);
+	x += nav_w + margin;
+	MoveWindow (g_btn_fwd, x, margin, nav_w, btn_h, TRUE);
+	x += nav_w + margin;
+	MoveWindow (g_btn_up, x, margin, btn_w, btn_h, TRUE);
+	x += btn_w + margin;
+	MoveWindow (g_address, x, margin, rc.right - x - btn_w - 2 * margin, btn_h, TRUE);
 	MoveWindow (g_btn_extract, rc.right - btn_w - margin, margin, btn_w, btn_h, TRUE);
 	MoveWindow (g_tree, 0, body_top, tree_w, body_h, TRUE);
 	MoveWindow (g_list, tree_w + split_w, body_top, rc.right - tree_w - split_w, body_h, TRUE);
@@ -1422,6 +1506,12 @@ on_command (int id)
 		break;
 	case IDM_HELP_ABOUT:
 		show_about ();
+		break;
+	case IDC_BACK:
+		go_back ();
+		break;
+	case IDC_FWD:
+		go_forward ();
 		break;
 	case IDC_UP:
 		go_up ();
