@@ -159,6 +159,7 @@
   <ItemGroup>
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="cryptodlg.cpp" />
+    <ClCompile Include="diskprops.cpp" />
     <ClCompile Include="dokanfs.cpp" />
     <ClCompile Include="helpdlg.cpp" />
     <ClCompile Include="hexview.cpp" />

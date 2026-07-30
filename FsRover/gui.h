@@ -31,6 +31,7 @@
 #include <commctrl.h>
 
 #include <string>
+#include <vector>
 
 #include "backend.h"
 
@@ -43,6 +44,7 @@ extern HWND g_main;	/* owner window for every modal dialog */
 extern bool g_extracting;	/* an extract task is in flight */
 void navigate (const std::string &path);
 void refresh (void);
+int device_icon_id (const backend_diskent &d);	/* imageres.dll icon id */
 
 /* util.cpp */
 extern UINT g_dpi;	/* main-window DPI; drives all layout scaling */
@@ -66,12 +68,15 @@ void clipboard_set_text (HWND owner, const std::wstring &text);
 
 /* propsdlg.cpp */
 extern HWND g_props;	/* modal file properties dialog, null when closed */
-extern HWND g_diskprops;	/* modal disk properties dialog, null when closed */
 void show_props (const std::string &path);
-void show_disk_props (const backend_diskent &d);
 void props_on_type (backend_result *res);
 void props_on_hash (backend_result *res);
 bool props_on_progress (backend_progress *p);
+
+/* diskprops.cpp */
+extern HWND g_diskprops;	/* modal disk properties dialog, null when closed */
+void show_disk_props (const backend_diskent &d,
+		      const std::vector<backend_diskent> &disks);
 
 /* cryptodlg.cpp */
 extern HWND g_crypto;	/* modal unlock dialog, null when closed */

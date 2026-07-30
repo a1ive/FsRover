@@ -59,7 +59,7 @@
 /* Dokan mount options: drive-letter picker + open-in-Explorer switch.  */
 #define IDD_DOKANMOUNT		108
 
-/* Disk/partition properties: one read-only edit filled at runtime.  */
+/* Disk/partition properties: buttons only, the sheet itself is painted.  */
 #define IDD_DISKPROPS		109
 
 #define IDC_TEXT_EDIT		1301
@@ -96,7 +96,6 @@
 #define IDC_DOKAN_LETTER	1603
 #define IDC_DOKAN_EXPLORER	1604
 
-#define IDC_DISKPROPS_TEXT	1701
 #define IDC_DISKPROPS_COPY	1702
 
 #define IDC_PROPS_TYPE		1001
@@ -218,5 +217,14 @@
 #define IDS_BTN_FWD		104
 #define IDS_MENU_SHORTCUTS	105
 #define IDS_KEY_LIST		106
+#define IDS_DP_TYPE		107
+#define IDS_DP_COLON		108
+#define IDS_DP_FREE		109
+#define IDS_DP_T_DISK		110
+#define IDS_DP_T_PART		111
+#define IDS_DP_T_IMAGE		112
+#define IDS_DP_T_VOLUME		113
+#define IDS_DP_T_CRYPTO		114
+#define IDS_DP_T_PSEUDO		115
 
 #endif /* ! FSROVER_RESOURCE_H */

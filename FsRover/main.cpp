@@ -127,7 +127,7 @@ constexpr int IR_ICON_UNLOCK = 1030;
 constexpr int SH_ICON_CANCEL = 240;
 constexpr int SH_ICON_EXTRACT = 241;
 
-/* Tree image list order.  */
+/* Tree image list order, and the imageres.dll icon each index holds.  */
 constexpr int IMG_DISK = 0;
 constexpr int IMG_FLOPPY = 1;
 constexpr int IMG_CD = 2;
@@ -136,6 +136,9 @@ constexpr int IMG_LVM = 4;
 constexpr int IMG_FW = 5;
 constexpr int IMG_LOCK = 6;
 constexpr int IMG_UNLOCK = 7;
+constexpr int TREE_ICON_IDS[] =
+	{ IR_ICON_DISK, IR_ICON_FLOPPY, IR_ICON_CD, IR_ICON_ZIP,
+	  IR_ICON_BACK, IR_ICON_CHIP, IR_ICON_LOCK, IR_ICON_UNLOCK };
 
 /* The file list uses per-extension shell icons copied into a DPI-sized
    image list; indexes come from list_icon() below, not a fixed order.  */
@@ -217,9 +220,6 @@ int list_icon (const std::string &name, bool is_dir);
 void
 apply_dpi_resources (void)
 {
-	static const int tree_ids[] =
-		{ IR_ICON_DISK, IR_ICON_FLOPPY, IR_ICON_CD, IR_ICON_ZIP,
-		  IR_ICON_BACK, IR_ICON_CHIP, IR_ICON_LOCK, IR_ICON_UNLOCK };
 	int sm = system_metric_dpi (SM_CXSMICON);
 
 	/* Shared message font.  */
@@ -257,7 +257,8 @@ apply_dpi_resources (void)
 		shell_iml->Release ();
 
 	/* Tree device icons.  */
-	HIMAGELIST tree_iml = icon_list (L"\\imageres.dll", tree_ids, 8, sm);
+	HIMAGELIST tree_iml = icon_list (L"\\imageres.dll", TREE_ICON_IDS,
+					 ARRAYSIZE (TREE_ICON_IDS), sm);
 	TreeView_SetImageList (g_tree, tree_iml, TVSIL_NORMAL);
 	if (g_tree_iml)
 		ImageList_Destroy (g_tree_iml);
@@ -369,6 +370,14 @@ list_icon (const std::string &name, bool is_dir)
 }
 
 } // namespace
+
+/* Same icon the tree shows for a device, as an imageres.dll id, for the
+   dialogs that want one icon instead of the tree image list.  */
+int
+device_icon_id (const backend_diskent &d)
+{
+	return TREE_ICON_IDS[device_icon (d)];
+}
 
 /* Navigation: every view change goes through a list_dir task; the
    address bar and g_path are updated from the result, so the UI
@@ -864,7 +873,7 @@ on_tree_rclick (void)
 	else if (cmd == IDM_HEX && can_hex)
 		show_hex ("(" + d.name + ")0+", widen ("(" + d.name + ")"), d.size);
 	else if (cmd == IDM_PROPS)
-		show_disk_props (d);
+		show_disk_props (d, g_disks);
 	else if (cmd == IDM_DOKAN_UNMOUNT && dm)
 		do_dokan_unmount (dm);
 	else if (cmd == IDM_UNMOUNT && is_loop)

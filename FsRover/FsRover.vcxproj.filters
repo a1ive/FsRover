@@ -22,6 +22,9 @@
     <ClCompile Include="cryptodlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="diskprops.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="dokanfs.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
