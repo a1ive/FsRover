@@ -57,9 +57,56 @@ static inline unsigned long long
 read_number (const char *str, grub_size_t size)
 {
   unsigned long long ret = 0;
+  /* Pre-POSIX tars pad the numeric fields with leading spaces rather than
+     zeroes; POSIX allows either.  Without this every field of such a
+     header, the entry size included, reads back as zero.  */
+  while (size && *str == ' ')
+    {
+      str++;
+      size--;
+    }
   while (size-- && *str >= '0' && *str <= '7')
     ret = (ret << 3) | (*str++ & 0xf);
   return ret;
+}
+
+/* Pre-POSIX ("v7") tars carry no magic, so fall back to the header
+   checksum: it covers the whole 512 byte block with the chksum field
+   taken as eight spaces.  Some old writers summed signed chars, so
+   accept that reading as well.  */
+static int
+checksum_ok (grub_disk_t disk, grub_off_t hofs)
+{
+  grub_uint8_t blk[GRUB_DISK_SECTOR_SIZE];
+  unsigned long long stored;
+  unsigned long long sum = 0;
+  long long ssum = 0;
+  grub_size_t i;
+
+  if (grub_disk_read (disk, 0, hofs, sizeof (blk), blk))
+    {
+      grub_errno = GRUB_ERR_NONE;
+      return 0;
+    }
+
+  stored = read_number ((char *) blk + 148, 8);
+  for (i = 0; i < sizeof (blk); i++)
+    {
+      grub_uint8_t c = (i >= 148 && i < 156) ? ' ' : blk[i];
+
+      sum += c;
+      ssum += (signed char) c;
+    }
+
+  return (stored == sum || (ssum >= 0 && stored == (unsigned long long) ssum));
+}
+
+static int
+head_ok (grub_disk_t disk, grub_off_t hofs, const struct head *hd)
+{
+  if (grub_memcmp (hd->magic, MAGIC, sizeof (MAGIC) - 1) == 0)
+    return 1;
+  return checksum_ok (disk, hofs);
 }
 
 struct grub_archelp_data
@@ -95,7 +142,7 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	  return GRUB_ERR_NONE;
 	}
 
-      if (grub_memcmp (hd.magic, MAGIC, sizeof (MAGIC) - 1))
+      if (!head_ok (data->disk, data->hofs, &hd))
 	return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
 
       if (hd.typeflag == 'L')
@@ -211,6 +258,17 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	    case '5':
 	      *mode |= GRUB_ARCHELP_ATTR_DIR;
 	      break;
+	      /* Pre-POSIX tars have no type byte and mark a directory by a
+		 trailing slash in its name; POSIX also lets a plain file
+		 use NUL in place of '0'.  */
+	    case '\0':
+	      {
+		grub_size_t len = *name ? grub_strlen (*name) : 0;
+
+		*mode |= (len != 0 && (*name)[len - 1] == '/')
+			 ? GRUB_ARCHELP_ATTR_DIR : GRUB_ARCHELP_ATTR_FILE;
+	      }
+	      break;
 	    }
 	}
       if (!have_longlink)
@@ -265,7 +323,7 @@ grub_cpio_mount (grub_disk_t disk)
   if (grub_disk_read (disk, 0, 0, sizeof (hd), &hd))
     goto fail;
 
-  if (grub_memcmp (hd.magic, MAGIC, sizeof (MAGIC) - 1))
+  if (!head_ok (disk, 0, &hd))
     goto fail;
 
   data = (struct grub_archelp_data *) grub_zalloc (sizeof (*data));
