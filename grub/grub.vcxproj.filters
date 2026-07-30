@@ -312,6 +312,9 @@
     <ClCompile Include="grub-core\fs\odc.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\pkghelp.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\cramfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -729,6 +732,9 @@
     <ClInclude Include="include\grub\partition.h">
       <Filter>include\grub</Filter>
     </ClInclude>
+    <ClInclude Include="include\grub\pkghelp.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
     <ClInclude Include="include\grub\procfs.h">
       <Filter>include\grub</Filter>
     </ClInclude>
@@ -974,9 +980,6 @@
     </ClCompile>
     <ClCompile Include="grub-core\lib\mscab\quantum.c">
       <Filter>grub-core\lib\mscab</Filter>
-    </ClCompile>
-    <ClCompile Include="grub-core\fs\pkg_common.c">
-      <Filter>grub-core\fs</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -22,7 +22,7 @@
  * Argon2 KDF for Rover.  Only the Argon2 (d/i/id) portion of libgcrypt's
  * kdf.c is kept; the PBKDF2 / scrypt / balloon / onestep / HKDF / X9.63
  * KDFs are dropped (grub does the same via its 11-kdf-remove-unsupported
- * -kdfs patch).  The Argon2 core is spliced verbatim from ref/grub
+ * -kdfs patch).  The Argon2 core is spliced verbatim from grub
  * cipher/kdf.c; only the header web and the BLAKE2b hash_buffers call are
  * shimmed.  Single-threaded only (grub always passes ops == NULL).
  */

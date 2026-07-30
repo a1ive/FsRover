@@ -16,18 +16,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- *  Read-only Microsoft Cabinet (.cab) archive filesystem driver.
- *
- *  Container parsing and folder decoding follow 7-Zip 26.02
- *  (CPP\7zip\Archive\Cab\CabIn.cpp / CabHandler.cpp /
- *  CabBlockInStream.cpp).  MSZIP blocks are inflated with the miniz
- *  tinfl core over a shared 32 KiB history window; LZX and Quantum
- *  live in grub-core\lib\mscab.  Cabinets spanning several volumes
- *  are rejected per entry with a clear error.
-
- */
-
 #include <grub/types.h>
 #include <grub/fs.h>
 #include <grub/mm.h>

@@ -3,7 +3,7 @@
  * The Rijndael reference "fst" core below (Vincent Rijmen, Antoon
  * Bosselaers, Paulo Barreto; version 3.0, December 2000) was placed in
  * the public domain by its authors and is taken verbatim from
- * ref/grub/gnulib/lib/rijndael-alg-fst.c (the four API functions made
+ * grub/gnulib/lib/rijndael-alg-fst.c (the four API functions made
  * static).  The gcry_cipher_spec glue at the bottom plugs it into this
  * project's crypto.c registry as _gcry_cipher_spec_aes / _aes192 /
  * _aes256, mirroring libgcrypt's rijndael.c.  Only block-level

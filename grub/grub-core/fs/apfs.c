@@ -20,9 +20,9 @@
  * APFS (Apple File System) read-only driver.
  *
  * On-disk structures follow Apple's reference documentation and
- * ref\linux-apfs-rw (apfs_raw.h); the overall approach -- checkpoint
+ * linux-apfs-rw (apfs_raw.h); the overall approach -- checkpoint
  * selection, object map lookups, sealed-volume fext trees, decmpfs
- * compressed files -- matches ref\7z2602 ApfsHandler.cpp, but the
+ * compressed files -- matches 7z2602 ApfsHandler.cpp, but the
  * B-trees are walked on demand instead of being slurped into memory.
  *
  * Each volume of the container is exposed as a top-level directory
@@ -30,9 +30,7 @@
  * at mount time; snapshots and fusion containers are not supported.
  *
  * decmpfs compressed files support the zlib, lzvn, lzfse, lzbitmap
- * and uncompressed flavours: zlib decoding reuses grub's gzio, the
- * other decoders live in grub-core\lib\lzfse and
- * grub-core\lib\libzbitmap.c (both ported from ref\linux-apfs-rw).
+ * and uncompressed flavours.
  */
 
 #include <grub/types.h>

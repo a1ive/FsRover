@@ -1,10 +1,6 @@
-/* isz.c - UltraISO ISZ compressed ISO image io filter */
 /*
  *  Rover -- GRUB 2 filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
- *
- *  Implemented from the ISZ File Format Specification 1.00
- *  (EZB Systems, 2006), see ref\iszspec.txt.
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,6 +17,8 @@
  */
 
 /*
+ * Implemented from the ISZ File Format Specification 1.00
+ * (EZB Systems, 2006), see iszspec.txt.
  * Supported: single-file images with zero / raw / zlib / bzip2 chunks,
  * with or without a chunk definition table (no table = raw contiguous
  * data).  Not supported: segmented images (.i01 sibling files) and

@@ -22,8 +22,8 @@
  *  A deb is an "!<arch>" (ar) archive whose first member is
  *  "debian-binary", followed by the compressed control and data
  *  tarballs.  Container parsing follows 7-Zip 26.02
- *  (CPP\7zip\Archive\ArHandler.cpp); both tarballs are expanded
- *  in place by pkg_common.c, so a package browses as
+ *  (CPP\7zip\Archive\ArHandler.cpp); both tarballs are expanded in place
+ *  by grub-core\fs\pkghelp.c, so a package browses as
  *
  *      /debian-binary
  *      /control/...    maintainer scripts, md5sums, conffiles, ...
@@ -40,14 +40,10 @@
 #include <grub/disk.h>
 #include <grub/file.h>
 #include <grub/misc.h>
+#include <grub/pkghelp.h>
 #include <grub/dl.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
-
-#define PKG_FSNAME	"deb"
-#define PKG_WANT_TAR	1
-
-#include "pkg_common.c"
 
 #define DEB_MAGIC	"!<arch>\n"
 #define DEB_MAGIC_LEN	8
@@ -114,7 +110,7 @@ deb_read_member (struct grub_pkg_data *data, grub_off_t pos,
 	mem->mtime = (grub_int64_t) deb_number (hd + 16, 12);
 	mem->size = deb_number (hd + 48, 10);
 	mem->off = pos + DEB_HEAD_LEN;
-	if (mem->size > PKG_MAX_SIZE
+	if (mem->size > GRUB_PKG_MAX_SIZE
 	    || mem->size > data->disk_size - mem->off)
 		return 0;
 	return 1;
@@ -124,20 +120,20 @@ deb_read_member (struct grub_pkg_data *data, grub_off_t pos,
 static grub_err_t
 deb_add_member (struct grub_pkg_data *data, const struct deb_member *mem)
 {
-	struct pkg_entry *ent;
+	struct grub_pkg_entry *ent;
 	char *name;
 	grub_err_t err;
 
-	err = pkg_norm_name (NULL, mem->name, &name);
+	err = grub_pkg_norm_name (NULL, mem->name, &name);
 	if (err)
 		return err;
 	if (!name)	/* the "/" and "//" bookkeeping members */
 		return GRUB_ERR_NONE;
 
-	ent = pkg_new_entry (data, name);
+	ent = grub_pkg_new_entry (data, name);
 	if (!ent)
 		return grub_errno;
-	ent->stream = PKG_STREAM_RAW;
+	ent->stream = GRUB_PKG_STREAM_RAW;
 	ent->off = mem->off;
 	ent->size = mem->size;
 	ent->mtime = mem->mtime;
@@ -153,16 +149,16 @@ deb_add_payload (struct grub_pkg_data *data, const struct deb_member *mem,
 	int stream;
 	grub_err_t err;
 
-	stream = pkg_add_stream (data, mem->off, mem->size);
+	stream = grub_pkg_add_stream (data, mem->off, mem->size);
 	if (stream < 0)
 		return grub_error (GRUB_ERR_BAD_FS, "too many deb payloads");
 
-	err = pkg_scan_tar (data, stream, prefix);
+	err = grub_pkg_scan_tar (data, stream, prefix);
 	if (err)
 	{
 		/* not a tarball this build decodes: undo and fall back */
-		pkg_truncate_entries (data, saved);
-		data->num_streams--;
+		grub_pkg_truncate_entries (data, saved);
+		grub_pkg_drop_stream (data);
 		grub_errno = GRUB_ERR_NONE;
 	}
 	return err;
@@ -187,20 +183,20 @@ static void
 deb_read_label (struct grub_pkg_data *data)
 {
 	char buf[DEB_CONTROL_MAX + 1];
-	const struct pkg_entry *ent;
+	const struct grub_pkg_entry *ent;
 	grub_file_t file;
 	char *line, *next, *name = NULL, *version = NULL;
 	grub_ssize_t got = 0;
 	int index;
 
-	index = pkg_find_entry (data, "control/control");
+	index = grub_pkg_find_entry (data, "control/control");
 	if (index < 0)
 		return;
 	ent = &data->entries[index];
 	if (ent->stream < 0 || ent->size == 0)
 		return;
 
-	file = pkg_stream_open (data, ent->stream);
+	file = grub_pkg_stream_open (data, ent->stream);
 	if (!file)
 	{
 		grub_errno = GRUB_ERR_NONE;
@@ -247,7 +243,7 @@ deb_read_label (struct grub_pkg_data *data)
 }
 
 static grub_err_t
-pkg_parse (struct grub_pkg_data *data)
+deb_parse (struct grub_pkg_data *data)
 {
 	char magic[DEB_MAGIC_LEN];
 	grub_off_t pos = DEB_MAGIC_LEN;
@@ -301,15 +297,46 @@ pkg_parse (struct grub_pkg_data *data)
 	return GRUB_ERR_NONE;
 }
 
+static struct grub_pkg_ops deb_ops =
+{
+	.name = "deb",
+	.parse = deb_parse
+};
+
+static grub_err_t
+grub_deb_dir (grub_device_t device, const char *path,
+	      grub_fs_dir_hook_t hook, void *hook_data)
+{
+	return grub_pkg_dir (device, &deb_ops, path, hook, hook_data);
+}
+
+static grub_err_t
+grub_deb_open (grub_file_t file, const char *name)
+{
+	return grub_pkg_open (file, &deb_ops, name);
+}
+
+static grub_err_t
+grub_deb_label (grub_device_t device, char **label)
+{
+	return grub_pkg_label (device, &deb_ops, label);
+}
+
+static grub_err_t
+grub_deb_mtime (grub_device_t device, grub_int64_t *tm)
+{
+	return grub_pkg_mtime (device, &deb_ops, tm);
+}
+
 static struct grub_fs grub_deb_fs =
 {
 	.name = "deb",
-	.fs_dir = pkg_dir,
-	.fs_open = pkg_open,
-	.fs_read = pkg_read,
-	.fs_close = pkg_close,
-	.fs_label = pkg_label,
-	.fs_mtime = pkg_mtime,
+	.fs_dir = grub_deb_dir,
+	.fs_open = grub_deb_open,
+	.fs_read = grub_pkg_read,
+	.fs_close = grub_pkg_close,
+	.fs_label = grub_deb_label,
+	.fs_mtime = grub_deb_mtime,
 	.fs_uuid = 0,
 	.next = 0
 };
@@ -323,5 +350,5 @@ GRUB_MOD_INIT (deb)
 GRUB_MOD_FINI (deb)
 {
 	grub_fs_unregister (&grub_deb_fs);
-	pkg_cache_clear ();
+	grub_pkg_cache_release (&deb_ops);
 }

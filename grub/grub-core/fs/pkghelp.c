@@ -1,3 +1,4 @@
+/* pkghelp.c -- Linux software package helper functions */
 /*
  *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
@@ -16,30 +17,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- *  Shared machinery for the Linux software package filesystems (deb.c and rpm.c).
- *  Both formats are a metadata container wrapped around one or more compressed
- *  tar / cpio payloads, so the common part is: turn a byte range of the disk into a
- *  decompressed grub_file_t, walk the archive inside it once recording
- *  every member, then serve that flat name list as a directory tree.
- *
- *  Decompression is not open coded here.  A byte range of the disk is
- *  wrapped in a minimal grub_file_t (pkg_disk_fs) and handed to
- *  grub_file_offset_open(), which runs the gzip / xz / lzop / lz4 / zstd
- *  io filters over it, so every compressor with a filter built into
- *  grub.lib is decoded transparently.  Payloads compressed with anything
- *  else are left for the caller to expose verbatim.
- *
- *  Walking a payload means decompressing it, which is far too expensive to
- *  redo for every grub_file_open() the GUI makes while sizing a directory
- *  listing.  The parsed entry list is therefore kept in a one slot cache
- *  keyed on disk identity plus the first sector; payload data itself is
- *  never cached, it is re-read through a fresh stream on demand.
- *
- *  The including file must define PKG_FSNAME, select the payload scanners
- *  it needs with PKG_WANT_TAR / PKG_WANT_CPIO, and provide pkg_parse().
- */
-
+#include <grub/pkghelp.h>
 #include <grub/types.h>
 #include <grub/fs.h>
 #include <grub/mm.h>
@@ -48,62 +26,22 @@
 #include <grub/misc.h>
 #include <grub/dl.h>
 
-/* pkg_entry.stream: a payload index, or one of these */
-#define PKG_STREAM_RAW		(-1)	/* plain byte range of the disk */
-#define PKG_STREAM_MEM		(-2)	/* pkg_entry.target holds the data */
+GRUB_MOD_LICENSE ("GPLv3+");
 
-#define PKG_MAX_STREAMS		8
 #define PKG_MAX_ENTRIES		(1u << 20)
 #define PKG_MAX_NAME		(1u << 14)
 #define PKG_MAX_PAX		(1u << 16)
-#define PKG_MAX_SIZE		((grub_off_t) 1 << 48)
 #define PKG_SEEN_BUCKETS	256
 #define PKG_SIG_SIZE		512
 
-/* one compressed payload of the package */
-struct pkg_stream
-{
-	grub_off_t off;		/* start of the compressed data on the disk */
-	grub_off_t len;
-};
-
-/* one file of the package, named by its full path from the root */
-struct pkg_entry
-{
-	char *name;
-	char *target;		/* link target, NULL when not a link */
-	grub_off_t off;		/* data offset within STREAM */
-	grub_off_t size;
-	grub_int64_t mtime;
-	int stream;
-	unsigned is_dir:1;
-	unsigned is_lnk:1;
-};
-
-struct grub_pkg_data
-{
-	grub_disk_t disk;
-	grub_uint64_t disk_size;
-	struct pkg_entry *entries;
-	unsigned num_entries;
-	unsigned max_entries;
-	struct pkg_stream streams[PKG_MAX_STREAMS];
-	unsigned num_streams;
-	grub_int64_t mtime;
-	char *label;
-};
-
-/* provided by the including filesystem: fills in entries and streams */
-static grub_err_t pkg_parse (struct grub_pkg_data *data);
-
 /* Entry list */
 
-static void
-pkg_truncate_entries (struct grub_pkg_data *data, unsigned num)
+void
+grub_pkg_truncate_entries (struct grub_pkg_data *data, unsigned num)
 {
 	while (data->num_entries > num)
 	{
-		struct pkg_entry *ent = &data->entries[--data->num_entries];
+		struct grub_pkg_entry *ent = &data->entries[--data->num_entries];
 
 		grub_free (ent->name);
 		grub_free (ent->target);
@@ -113,22 +51,21 @@ pkg_truncate_entries (struct grub_pkg_data *data, unsigned num)
 static void
 pkg_free_data (struct grub_pkg_data *data)
 {
-	pkg_truncate_entries (data, 0);
+	grub_pkg_truncate_entries (data, 0);
 	grub_free (data->entries);
 	grub_free (data->label);
 	grub_free (data);
 }
 
-/* appends a zeroed entry owning NAME; NULL on failure (NAME is freed) */
-static struct pkg_entry *
-pkg_new_entry (struct grub_pkg_data *data, char *name)
+struct grub_pkg_entry *
+grub_pkg_new_entry (struct grub_pkg_data *data, char *name)
 {
-	struct pkg_entry *ent;
+	struct grub_pkg_entry *ent;
 
 	if (data->num_entries == data->max_entries)
 	{
 		unsigned num = data->max_entries ? data->max_entries * 2 : 64;
-		struct pkg_entry *grown;
+		struct grub_pkg_entry *grown;
 
 		if (num > PKG_MAX_ENTRIES)
 		{
@@ -149,27 +86,29 @@ pkg_new_entry (struct grub_pkg_data *data, char *name)
 	ent = &data->entries[data->num_entries++];
 	grub_memset (ent, 0, sizeof (*ent));
 	ent->name = name;
-	ent->stream = PKG_STREAM_RAW;
+	ent->stream = GRUB_PKG_STREAM_RAW;
 	return ent;
 }
 
-static int
-pkg_add_stream (struct grub_pkg_data *data, grub_off_t off, grub_off_t len)
+int
+grub_pkg_add_stream (struct grub_pkg_data *data, grub_off_t off, grub_off_t len)
 {
-	if (data->num_streams >= PKG_MAX_STREAMS)
+	if (data->num_streams >= GRUB_PKG_MAX_STREAMS)
 		return -1;
 	data->streams[data->num_streams].off = off;
 	data->streams[data->num_streams].len = len;
 	return (int) data->num_streams++;
 }
 
-/*
- * Builds "PREFIX/RAW" with the empty and "." path components of RAW
- * dropped.  *OUT is left NULL when nothing is left of the name, which is
- * how the "./" root entry of a tar or cpio payload gets skipped.
- */
-static grub_err_t
-pkg_norm_name (const char *prefix, const char *raw, char **out)
+void
+grub_pkg_drop_stream (struct grub_pkg_data *data)
+{
+	if (data->num_streams)
+		data->num_streams--;
+}
+
+grub_err_t
+grub_pkg_norm_name (const char *prefix, const char *raw, char **out)
 {
 	grub_size_t plen = prefix ? grub_strlen (prefix) : 0;
 	grub_size_t rlen = grub_strlen (raw);
@@ -219,10 +158,16 @@ pkg_norm_name (const char *prefix, const char *raw, char **out)
 	return GRUB_ERR_NONE;
 }
 
-/* Entry list cache */
+/*
+ * Entry list cache.  One slot for all package filesystems: the GUI sizes a
+ * directory listing by opening every entry in turn, which all hits the same
+ * disk, so the slot stays warm through the access pattern that matters.
+ * Alternating between a deb and an rpm device only costs a re-parse.
+ */
 
 struct pkg_cache
 {
+	struct grub_pkg_ops *ops;
 	char *name;
 	unsigned long id;
 	grub_uint64_t size;
@@ -242,8 +187,16 @@ pkg_cache_clear (void)
 	grub_memset (&pkg_cache, 0, sizeof (pkg_cache));
 }
 
+void
+grub_pkg_cache_release (struct grub_pkg_ops *ops)
+{
+	if (pkg_cache.ops == ops)
+		pkg_cache_clear ();
+}
+
 static void
-pkg_cache_store (grub_disk_t disk, const grub_uint8_t *sig, grub_size_t siglen,
+pkg_cache_store (grub_disk_t disk, struct grub_pkg_ops *ops,
+		 const grub_uint8_t *sig, grub_size_t siglen,
 		 grub_uint64_t size, struct grub_pkg_data *data)
 {
 	char *name = grub_strdup (disk->name);
@@ -255,6 +208,7 @@ pkg_cache_store (grub_disk_t disk, const grub_uint8_t *sig, grub_size_t siglen,
 		return;
 	}
 	pkg_cache_clear ();
+	pkg_cache.ops = ops;
 	pkg_cache.name = name;
 	pkg_cache.id = disk->id;
 	pkg_cache.size = size;
@@ -264,7 +218,7 @@ pkg_cache_store (grub_disk_t disk, const grub_uint8_t *sig, grub_size_t siglen,
 }
 
 static struct grub_pkg_data *
-pkg_mount (grub_disk_t disk)
+pkg_mount (grub_disk_t disk, struct grub_pkg_ops *ops)
 {
 	struct grub_pkg_data *data;
 	grub_uint8_t sig[PKG_SIG_SIZE];
@@ -278,11 +232,11 @@ pkg_mount (grub_disk_t disk)
 	siglen = (size < PKG_SIG_SIZE) ? (grub_size_t) size : PKG_SIG_SIZE;
 	if (siglen == 0 || grub_disk_read (disk, 0, 0, siglen, sig))
 	{
-		grub_error (GRUB_ERR_BAD_FS, "not a " PKG_FSNAME " archive");
+		grub_error (GRUB_ERR_BAD_FS, "not a %s archive", ops->name);
 		return 0;
 	}
 
-	if (pkg_cache.data && pkg_cache.id == disk->id
+	if (pkg_cache.data && pkg_cache.ops == ops && pkg_cache.id == disk->id
 	    && pkg_cache.size == size && pkg_cache.siglen == siglen
 	    && grub_memcmp (pkg_cache.sig, sig, siglen) == 0
 	    && grub_strcmp (pkg_cache.name, disk->name) == 0)
@@ -298,7 +252,7 @@ pkg_mount (grub_disk_t disk)
 	data->disk = disk;
 	data->disk_size = size;
 
-	if (pkg_parse (data))
+	if (ops->parse (data))
 	{
 		err = grub_errno;
 		pkg_free_data (data);
@@ -306,7 +260,7 @@ pkg_mount (grub_disk_t disk)
 		return 0;
 	}
 
-	pkg_cache_store (disk, sig, siglen, size, data);
+	pkg_cache_store (disk, ops, sig, siglen, size, data);
 	grub_errno = GRUB_ERR_NONE;
 	return data;
 }
@@ -355,10 +309,7 @@ static struct grub_fs pkg_disk_fs =
 	.next = 0
 };
 
-/*
- * Opens the byte range [OFF, OFF + LEN) of DISK as a file, letting the
- * compression filters decode it.  Close the result with grub_file_close().
- */
+/* opens the byte range [OFF, OFF + LEN) of DISK as a decompressed file */
 static grub_file_t
 pkg_range_open (grub_disk_t disk, grub_uint64_t disk_size,
 		grub_off_t off, grub_off_t len)
@@ -390,8 +341,8 @@ pkg_range_open (grub_disk_t disk, grub_uint64_t disk_size,
 	return file;
 }
 
-static grub_file_t
-pkg_stream_open (struct grub_pkg_data *data, int stream)
+grub_file_t
+grub_pkg_stream_open (struct grub_pkg_data *data, int stream)
 {
 	return pkg_range_open (data->disk, data->disk_size,
 			       data->streams[stream].off,
@@ -423,8 +374,6 @@ pkg_read_string (grub_file_t file, grub_off_t off, grub_off_t size, char **out)
 	*out = str;
 	return GRUB_ERR_NONE;
 }
-
-#ifdef PKG_WANT_TAR
 
 /* tar payload */
 
@@ -565,13 +514,8 @@ pkg_read_pax (grub_file_t file, grub_off_t off, grub_off_t size, char **out)
 	return GRUB_ERR_NONE;
 }
 
-/*
- * Records every member of the tar in STREAM under PREFIX.  Fails with
- * GRUB_ERR_BAD_FS when the payload does not decode as a tar, which is how
- * the caller learns that the member has to be exposed verbatim instead.
- */
-static grub_err_t
-pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
+grub_err_t
+grub_pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 {
 	char namebuf[PKG_TAR_NAME_MAX];
 	char *longname = NULL, *longlink = NULL, *paxname = NULL, *name;
@@ -580,14 +524,14 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 	grub_err_t err = GRUB_ERR_NONE;
 	int first = 1;
 
-	file = pkg_stream_open (data, stream);
+	file = grub_pkg_stream_open (data, stream);
 	if (!file)
 		return grub_errno ? grub_errno : GRUB_ERR_BAD_FS;
 
 	for (;;)
 	{
 		struct pkg_tar_head hd;
-		struct pkg_entry *ent;
+		struct grub_pkg_entry *ent;
 		const char *raw, *link;
 		grub_off_t size, dofs;
 
@@ -613,7 +557,7 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 		first = 0;
 
 		size = pkg_tar_number (hd.size, sizeof (hd.size));
-		if (size > PKG_MAX_SIZE)
+		if (size > GRUB_PKG_MAX_SIZE)
 		{
 			err = grub_error (GRUB_ERR_BAD_FS, "tar size overflow");
 			break;
@@ -669,13 +613,13 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 			raw = namebuf;
 		}
 
-		err = pkg_norm_name (prefix, raw, &name);
+		err = grub_pkg_norm_name (prefix, raw, &name);
 		if (err)
 			break;
 		if (!name)
 			goto next;
 
-		ent = pkg_new_entry (data, name);
+		ent = grub_pkg_new_entry (data, name);
 		if (!ent)
 		{
 			err = grub_errno;
@@ -687,7 +631,7 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 		if (hd.typeflag == '5')
 		{
 			ent->is_dir = 1;
-			ent->stream = PKG_STREAM_MEM;
+			ent->stream = GRUB_PKG_STREAM_MEM;
 		}
 		else if (hd.typeflag == '1' || hd.typeflag == '2')
 		{
@@ -706,7 +650,7 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 				break;
 			}
 			ent->is_lnk = 1;
-			ent->stream = PKG_STREAM_MEM;
+			ent->stream = GRUB_PKG_STREAM_MEM;
 			ent->size = grub_strlen (ent->target);
 		}
 		else
@@ -735,10 +679,6 @@ pkg_scan_tar (struct grub_pkg_data *data, int stream, const char *prefix)
 	grub_file_close (file);
 	return err;
 }
-
-#endif /* PKG_WANT_TAR */
-
-#ifdef PKG_WANT_CPIO
 
 /* cpio payload */
 
@@ -782,13 +722,8 @@ pkg_cpio_oct (const grub_uint8_t *str, grub_size_t size)
 	return ret;
 }
 
-/*
- * Records every member of the cpio in STREAM under PREFIX.  Understands
- * the "new ASCII" (070701/070702) and "portable ASCII" (070707) headers,
- * which covers every rpm payload since rpm 3.
- */
-static grub_err_t
-pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
+grub_err_t
+grub_pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 {
 	grub_uint8_t hd[PKG_CPIO_NEWC_HEAD];
 	char *raw = NULL, *name;
@@ -797,13 +732,13 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 	grub_err_t err = GRUB_ERR_NONE;
 	int first = 1;
 
-	file = pkg_stream_open (data, stream);
+	file = grub_pkg_stream_open (data, stream);
 	if (!file)
 		return grub_errno ? grub_errno : GRUB_ERR_BAD_FS;
 
 	for (;;)
 	{
-		struct pkg_entry *ent;
+		struct grub_pkg_entry *ent;
 		grub_off_t size, nsize, dofs, align;
 		grub_uint64_t mode, mtime;
 		grub_size_t hlen;
@@ -853,7 +788,7 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 		}
 
 		if (nsize == 0 || nsize > PKG_CPIO_NAME_MAX
-		    || size > PKG_MAX_SIZE)
+		    || size > GRUB_PKG_MAX_SIZE)
 		{
 			err = grub_error (GRUB_ERR_BAD_FS,
 					  "corrupt cpio payload");
@@ -868,13 +803,13 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 		if (grub_strcmp (raw, "TRAILER!!!") == 0)
 			break;
 
-		err = pkg_norm_name (prefix, raw, &name);
+		err = grub_pkg_norm_name (prefix, raw, &name);
 		if (err)
 			break;
 		if (!name)
 			goto next;
 
-		ent = pkg_new_entry (data, name);
+		ent = grub_pkg_new_entry (data, name);
 		if (!ent)
 		{
 			err = grub_errno;
@@ -885,7 +820,7 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 		if ((mode & PKG_S_IFMT) == PKG_S_IFDIR)
 		{
 			ent->is_dir = 1;
-			ent->stream = PKG_STREAM_MEM;
+			ent->stream = GRUB_PKG_STREAM_MEM;
 		}
 		else if ((mode & PKG_S_IFMT) == PKG_S_IFLNK)
 		{
@@ -894,7 +829,7 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 			if (err)
 				break;
 			ent->is_lnk = 1;
-			ent->stream = PKG_STREAM_MEM;
+			ent->stream = GRUB_PKG_STREAM_MEM;
 			ent->size = grub_strlen (ent->target);
 		}
 		else
@@ -920,8 +855,6 @@ pkg_scan_cpio (struct grub_pkg_data *data, int stream, const char *prefix)
 	grub_file_close (file);
 	return err;
 }
-
-#endif /* PKG_WANT_CPIO */
 
 /* Directory tree over the flat entry list */
 
@@ -1011,9 +944,9 @@ pkg_seen_add (struct pkg_seen **buckets, char *name)
 	return 0;
 }
 
-static grub_err_t
-pkg_dir (grub_device_t device, const char *path,
-	 grub_fs_dir_hook_t hook, void *hook_data)
+grub_err_t
+grub_pkg_dir (grub_device_t device, struct grub_pkg_ops *ops,
+	      const char *path, grub_fs_dir_hook_t hook, void *hook_data)
 {
 	struct grub_pkg_data *data;
 	struct pkg_seen **buckets;
@@ -1023,7 +956,7 @@ pkg_dir (grub_device_t device, const char *path,
 	int found;
 	grub_err_t err = GRUB_ERR_NONE;
 
-	data = pkg_mount (device->disk);
+	data = pkg_mount (device->disk, ops);
 	if (!data)
 		return grub_errno;
 
@@ -1039,7 +972,7 @@ pkg_dir (grub_device_t device, const char *path,
 
 	for (i = 0; i < data->num_entries; i++)
 	{
-		const struct pkg_entry *entry = &data->entries[i];
+		const struct grub_pkg_entry *entry = &data->entries[i];
 		struct grub_dirhook_info info;
 		const char *child;
 		grub_size_t child_len;
@@ -1114,8 +1047,8 @@ out:
 	return err;
 }
 
-static int
-pkg_find_entry (struct grub_pkg_data *data, const char *name)
+int
+grub_pkg_find_entry (struct grub_pkg_data *data, const char *name)
 {
 	grub_size_t len;
 	const char *path = pkg_norm_path (name, &len);
@@ -1137,26 +1070,26 @@ struct pkg_file
 {
 	grub_disk_t disk;
 	grub_uint64_t disk_size;
-	struct pkg_stream range;
+	struct grub_pkg_stream range;
 	grub_off_t data_off;
 	grub_file_t stream;	/* opened on the first read */
 	char *mem;
 	int kind;
 };
 
-static grub_err_t
-pkg_open (grub_file_t file, const char *name)
+grub_err_t
+grub_pkg_open (grub_file_t file, struct grub_pkg_ops *ops, const char *name)
 {
 	struct grub_pkg_data *data;
-	struct pkg_entry *ent;
+	struct grub_pkg_entry *ent;
 	struct pkg_file *ctx;
 	int index;
 
-	data = pkg_mount (file->device->disk);
+	data = pkg_mount (file->device->disk, ops);
 	if (!data)
 		return grub_errno;
 
-	index = pkg_find_entry (data, name);
+	index = grub_pkg_find_entry (data, name);
 	if (index < 0)
 	{
 		pkg_unmount (data);
@@ -1178,11 +1111,15 @@ pkg_open (grub_file_t file, const char *name)
 		return grub_errno;
 	}
 
+	/*
+	 * Everything the read path needs is copied out: an open file must
+	 * not point into the entry list, which the cache may drop.
+	 */
 	ctx->disk = data->disk;
 	ctx->disk_size = data->disk_size;
 	ctx->data_off = ent->off;
 	ctx->kind = ent->stream;
-	if (ent->stream == PKG_STREAM_MEM)
+	if (ent->stream == GRUB_PKG_STREAM_MEM)
 	{
 		ctx->mem = grub_strdup (ent->target ? ent->target : "");
 		if (!ctx->mem)
@@ -1202,8 +1139,8 @@ pkg_open (grub_file_t file, const char *name)
 	return GRUB_ERR_NONE;
 }
 
-static grub_ssize_t
-pkg_read (grub_file_t file, char *buf, grub_size_t len)
+grub_ssize_t
+grub_pkg_read (grub_file_t file, char *buf, grub_size_t len)
 {
 	struct pkg_file *ctx = file->data;
 	grub_ssize_t ret;
@@ -1211,12 +1148,12 @@ pkg_read (grub_file_t file, char *buf, grub_size_t len)
 	if (len == 0)
 		return 0;
 
-	if (ctx->kind == PKG_STREAM_MEM)
+	if (ctx->kind == GRUB_PKG_STREAM_MEM)
 	{
 		grub_memcpy (buf, ctx->mem + file->offset, len);
 		ret = (grub_ssize_t) len;
 	}
-	else if (ctx->kind == PKG_STREAM_RAW)
+	else if (ctx->kind == GRUB_PKG_STREAM_RAW)
 	{
 		if (grub_disk_read (ctx->disk, 0, ctx->data_off + file->offset,
 				    len, buf))
@@ -1251,8 +1188,8 @@ pkg_read (grub_file_t file, char *buf, grub_size_t len)
 	return ret;
 }
 
-static grub_err_t
-pkg_close (grub_file_t file)
+grub_err_t
+grub_pkg_close (grub_file_t file)
 {
 	struct pkg_file *ctx = file->data;
 
@@ -1263,13 +1200,13 @@ pkg_close (grub_file_t file)
 	return GRUB_ERR_NONE;
 }
 
-static grub_err_t
-pkg_label (grub_device_t device, char **label)
+grub_err_t
+grub_pkg_label (grub_device_t device, struct grub_pkg_ops *ops, char **label)
 {
 	struct grub_pkg_data *data;
 
 	*label = NULL;
-	data = pkg_mount (device->disk);
+	data = pkg_mount (device->disk, ops);
 	if (!data)
 		return grub_errno;
 	if (data->label)
@@ -1278,13 +1215,14 @@ pkg_label (grub_device_t device, char **label)
 	return GRUB_ERR_NONE;
 }
 
-static grub_err_t
-pkg_mtime (grub_device_t device, grub_int64_t *tm)
+grub_err_t
+grub_pkg_mtime (grub_device_t device, struct grub_pkg_ops *ops,
+		grub_int64_t *tm)
 {
 	struct grub_pkg_data *data;
 
 	*tm = 0;
-	data = pkg_mount (device->disk);
+	data = pkg_mount (device->disk, ops);
 	if (!data)
 		return grub_errno;
 	*tm = data->mtime;

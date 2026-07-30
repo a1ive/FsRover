@@ -25,11 +25,6 @@
  *
  * Huffman alphabets
  *
- * Imported from ref\wimboot and adapted for Rover/MSVC: grub types,
- * and the raw symbol table is supplied by the caller instead of a
- * trailing zero-length array (MSVC cannot embed a struct ending in a
- * zero-length array inside another struct).
- *
  */
 
 #include <grub/types.h>

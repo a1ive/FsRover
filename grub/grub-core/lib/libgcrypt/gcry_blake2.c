@@ -20,7 +20,7 @@
 /*
  * BLAKE2b for Rover, reduced to the generic (no-AVX) blake2b core plus
  * the variable-length hash H' (blake2b_vl_hash) that argon2 needs.  The
- * blake2b algorithm code below is spliced verbatim from ref/grub
+ * blake2b algorithm code below is spliced verbatim from grub
  * cipher/blake2.c; only the libgcrypt internal-header dependencies are
  * shimmed here (gcry_wrap.h supplies buf_get/put_le64 and u64/byte).
  */

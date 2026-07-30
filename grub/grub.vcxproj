@@ -157,11 +157,6 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="grub-core\fs\pkg_common.c">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="rover\init.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
@@ -251,6 +246,7 @@
     <ClCompile Include="grub-core\fs\ntfs.c" />
     <ClCompile Include="grub-core\fs\ntfscomp.c" />
     <ClCompile Include="grub-core\fs\odc.c" />
+    <ClCompile Include="grub-core\fs\pkghelp.c" />
     <ClCompile Include="grub-core\fs\qnx4.c" />
     <ClCompile Include="grub-core\fs\qnx6.c" />
     <ClCompile Include="grub-core\fs\rar.c">
@@ -531,6 +527,7 @@
     <ClInclude Include="include\grub\ntfs.h" />
     <ClInclude Include="include\grub\offsets.h" />
     <ClInclude Include="include\grub\partition.h" />
+    <ClInclude Include="include\grub\pkghelp.h" />
     <ClInclude Include="include\grub\procfs.h" />
     <ClInclude Include="include\grub\safemath.h" />
     <ClInclude Include="include\grub\symbol.h" />

@@ -22,9 +22,6 @@
  *
  * Huffman alphabets
  *
- * Imported from ref\wimboot and adapted for Rover/MSVC: grub types,
- * caller-provided raw symbol table, debug transcription removed.
- *
  */
 
 #include <grub/misc.h>

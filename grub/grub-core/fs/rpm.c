@@ -23,8 +23,8 @@
  *  header and finally the payload: a cpio archive compressed with gzip,
  *  xz, zstd, lzo, lz4 or nothing at all.  Header parsing follows 7-Zip
  *  26.02 (CPP\7zip\Archive\RpmHandler.cpp); the payload is expanded in
- *  place by pkg_common.c, so a package browses straight as
- *  the file tree it installs (/usr/bin/..., /etc/...).
+ *  place by grub-core\fs\pkghelp.c, so a package browses straight as the
+ *  file tree it installs (/usr/bin/..., /etc/...).
  *
  *  Only the few header tags that name the package are read, so the
  *  (frequently large) rest of the header costs nothing.  The volume
@@ -37,14 +37,10 @@
 #include <grub/disk.h>
 #include <grub/file.h>
 #include <grub/misc.h>
+#include <grub/pkghelp.h>
 #include <grub/dl.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
-
-#define PKG_FSNAME	"rpm"
-#define PKG_WANT_CPIO	1
-
-#include "pkg_common.c"
 
 #define RPM_LEAD_SIZE		96
 #define RPM_LEAD_NAME		66
@@ -331,7 +327,7 @@ rpm_set_label (struct grub_pkg_data *data, const struct rpm_info *info,
 }
 
 static grub_err_t
-pkg_parse (struct grub_pkg_data *data)
+rpm_parse (struct grub_pkg_data *data)
 {
 	grub_uint8_t lead[RPM_LEAD_SIZE];
 	struct rpm_header hdr;
@@ -413,28 +409,59 @@ pkg_parse (struct grub_pkg_data *data)
 			payload_len = sigsize - hdr_len;
 	}
 
-	stream = pkg_add_stream (data, hdr.end, payload_len);
+	stream = grub_pkg_add_stream (data, hdr.end, payload_len);
 	if (stream < 0)
 	{
 		err = grub_error (GRUB_ERR_BAD_FS, "too many rpm payloads");
 		goto fail;
 	}
-	err = pkg_scan_cpio (data, stream, NULL);
+	err = grub_pkg_scan_cpio (data, stream, NULL);
 
 fail:
 	rpm_free_info (&info);
 	return err;
 }
 
+static struct grub_pkg_ops rpm_ops =
+{
+	.name = "rpm",
+	.parse = rpm_parse
+};
+
+static grub_err_t
+grub_rpm_dir (grub_device_t device, const char *path,
+	      grub_fs_dir_hook_t hook, void *hook_data)
+{
+	return grub_pkg_dir (device, &rpm_ops, path, hook, hook_data);
+}
+
+static grub_err_t
+grub_rpm_open (grub_file_t file, const char *name)
+{
+	return grub_pkg_open (file, &rpm_ops, name);
+}
+
+static grub_err_t
+grub_rpm_label (grub_device_t device, char **label)
+{
+	return grub_pkg_label (device, &rpm_ops, label);
+}
+
+static grub_err_t
+grub_rpm_mtime (grub_device_t device, grub_int64_t *tm)
+{
+	return grub_pkg_mtime (device, &rpm_ops, tm);
+}
+
 static struct grub_fs grub_rpm_fs =
 {
 	.name = "rpm",
-	.fs_dir = pkg_dir,
-	.fs_open = pkg_open,
-	.fs_read = pkg_read,
-	.fs_close = pkg_close,
-	.fs_label = pkg_label,
-	.fs_mtime = pkg_mtime,
+	.fs_dir = grub_rpm_dir,
+	.fs_open = grub_rpm_open,
+	.fs_read = grub_pkg_read,
+	.fs_close = grub_pkg_close,
+	.fs_label = grub_rpm_label,
+	.fs_mtime = grub_rpm_mtime,
 	.fs_uuid = 0,
 	.next = 0
 };
@@ -448,5 +475,5 @@ GRUB_MOD_INIT (rpm)
 GRUB_MOD_FINI (rpm)
 {
 	grub_fs_unregister (&grub_rpm_fs);
-	pkg_cache_clear ();
+	grub_pkg_cache_release (&rpm_ops);
 }
