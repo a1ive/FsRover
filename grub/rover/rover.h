@@ -91,9 +91,9 @@ struct rover_disk_info
 	const char *parent_file;
 	const char *parent_device;
 	const char *parents;
-	/* A locked LUKS/LUKS2 or BitLocker container (no readable fs until
-	   unlocked).  crypto_type is "luks", "luks2" or "bitlocker";
-	   crypto_uuid is its UUID.
+	/* A locked LUKS/LUKS2, BitLocker or GELI container (no readable fs
+	   until unlocked).  crypto_type is "luks", "luks2", "bitlocker" or
+	   "geli"; crypto_uuid is its UUID.
 	   Both pointers are valid only during the callback.  */
 	int encrypted;
 	const char *crypto_type;
@@ -178,7 +178,8 @@ const char *rover_fs_name (const char *device);
 #define ROVER_SUPPORT_FS	0	/* filesystems */
 #define ROVER_SUPPORT_PARTMAP	1	/* partition maps */
 #define ROVER_SUPPORT_DISKFILTER	2	/* volume managers / RAID */
-#define ROVER_SUPPORT_IOFILTER	3	/* compression + vdisk io filters */
+#define ROVER_SUPPORT_CRYPTODISK	3	/* LUKS/LUKS2/BitLocker/GELI */
+#define ROVER_SUPPORT_IOFILTER	4	/* compression + vdisk io filters */
 
 typedef int (*rover_support_hook) (const char *name, void *data);
 

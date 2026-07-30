@@ -755,6 +755,14 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 				return 1;
 		break;
 	}
+	case ROVER_SUPPORT_CRYPTODISK:
+	{
+		grub_cryptodisk_dev_t cd;
+		FOR_CRYPTODISK_DEVS (cd)
+			if (cb (cd->name, data))
+				return 1;
+		break;
+	}
 	case ROVER_SUPPORT_IOFILTER:
 	{
 		/* grub_file_filters[] holds bare function pointers; these

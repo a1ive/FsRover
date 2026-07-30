@@ -1237,6 +1237,7 @@ out:
 }
 
 struct grub_cryptodisk_dev bitlocker_crypto = {
+  .name = "bitlocker",
   .scan = bl_scan,
   .recover_key = bl_recover_key
 };

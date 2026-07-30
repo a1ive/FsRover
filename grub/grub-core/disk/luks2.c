@@ -829,6 +829,7 @@ luks2_recover_key (grub_disk_t source,
 }
 
 static struct grub_cryptodisk_dev luks2_crypto = {
+  .name = "luks2",
   .scan = luks2_scan,
   .recover_key = luks2_recover_key
 };

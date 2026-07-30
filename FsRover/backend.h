@@ -119,8 +119,8 @@ struct backend_diskent
 	std::string parent_file;	/* loopback backing file (grub path), else empty */
 	std::string parent_device;	/* cryptodisk source device, else empty */
 	std::string parents;	/* diskfilter member devices, one per line, else empty */
-	bool encrypted = false;	/* locked LUKS/LUKS2 or BitLocker container */
-	std::string crypto_type;	/* "luks", "luks2" or "bitlocker" */
+	bool encrypted = false;	/* locked LUKS/LUKS2, BitLocker or GELI container */
+	std::string crypto_type;	/* "luks", "luks2", "bitlocker" or "geli" */
 	std::string crypto_uuid;	/* container UUID when encrypted */
 };
 
@@ -160,6 +160,7 @@ struct backend_support
 	std::vector<std::string> fs;
 	std::vector<std::string> partmap;
 	std::vector<std::string> diskfilter;
+	std::vector<std::string> cryptodisk;
 	std::vector<std::string> iofilter;
 };
 

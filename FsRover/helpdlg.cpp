@@ -184,6 +184,16 @@ show_about (void)
 			 about_dlg_proc, 0);
 }
 
+/* The whole list is one string resource: the key names are not
+   translated, only the actions after them.  */
+void
+show_shortcuts (void)
+{
+	MessageBoxW (g_main, res_str (IDS_KEY_LIST).c_str (),
+		     menu_caption (IDS_MENU_SHORTCUTS).c_str (),
+		     MB_ICONINFORMATION | MB_OK);
+}
+
 void
 show_support (void)
 {
@@ -191,6 +201,7 @@ show_support (void)
 	std::wstring text = support_section (IDS_SUPPORT_FS, s.fs)
 		+ support_section (IDS_SUPPORT_PARTMAP, s.partmap)
 		+ support_section (IDS_SUPPORT_DISKFILTER, s.diskfilter)
+		+ support_section (IDS_SUPPORT_CRYPTODISK, s.cryptodisk)
 		+ support_section (IDS_SUPPORT_IOFILTER, s.iofilter);
 
 	DialogBoxParamW (GetModuleHandleW (nullptr),

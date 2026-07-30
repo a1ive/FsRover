@@ -286,6 +286,7 @@ luks_recover_key (grub_disk_t source,
 }
 
 struct grub_cryptodisk_dev luks_crypto = {
+  .name = "luks",
   .scan = luks_scan,
   .recover_key = luks_recover_key
 };

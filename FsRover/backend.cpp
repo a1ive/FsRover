@@ -1000,10 +1000,12 @@ backend_get_support (void)
 			&s.partmap);
 		rover_enum_support (ROVER_SUPPORT_DISKFILTER, support_hook,
 			&s.diskfilter);
+		rover_enum_support (ROVER_SUPPORT_CRYPTODISK, support_hook,
+			&s.cryptodisk);
 		rover_enum_support (ROVER_SUPPORT_IOFILTER, support_hook,
 			&s.iofilter);
 	});
-	for (auto *v : { &s.fs, &s.partmap, &s.diskfilter, &s.iofilter })
+	for (auto *v : { &s.fs, &s.partmap, &s.diskfilter, &s.cryptodisk, &s.iofilter })
 		std::sort (v->begin (), v->end (),
 			[] (const std::string &a, const std::string &b)
 			{

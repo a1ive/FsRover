@@ -78,6 +78,7 @@ constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_HELP_SUPPORT = 220;
 constexpr int IDM_HELP_ABOUT = 221;
 constexpr int IDM_DOKAN_INSTALL = 222;
+constexpr int IDM_HELP_SHORTCUTS = 223;
 constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
 
 constexpr int IDM_EXTRACT = 1;
@@ -107,7 +108,7 @@ constexpr int LIST_MIN_W = 200;
 constexpr int SPLIT_W = 5;	/* draggable gap between the two panes */
 constexpr int MARGIN = 2;
 constexpr int BTN_W = 90;
-constexpr int NAV_W = 30;	/* Back/Forward: glyph only, no label */
+constexpr int NAV_W = 30;	/* Back/Forward/Up: glyph only, no label */
 constexpr int PROGRESS_W = 260;
 constexpr int DEF_W = 1000;	/* default window size */
 constexpr int DEF_H = 700;
@@ -125,7 +126,6 @@ constexpr int IR_ICON_UNLOCK = 1030;
 /* SHELL32.dll */
 constexpr int SH_ICON_CANCEL = 240;
 constexpr int SH_ICON_EXTRACT = 241;
-constexpr int SH_ICON_UP = 255;
 
 /* Tree image list order.  */
 constexpr int IMG_DISK = 0;
@@ -192,7 +192,6 @@ std::set<std::string> g_mounted;	/* loopback devices we created */
 HFONT g_font;	/* message font, shared by all controls */
 HIMAGELIST g_himl_extract;	/* Extract button icon */
 HIMAGELIST g_himl_cancel;	/* same button while extracting */
-HIMAGELIST g_himl_up;	/* Up button icon */
 HIMAGELIST g_tree_iml;	/* tree device-icon image list */
 HIMAGELIST g_list_iml;	/* DPI-sized file/folder icons */
 IImageList *g_shell_iml;	/* source shell icons at the nearest larger size */
@@ -265,15 +264,8 @@ apply_dpi_resources (void)
 	g_tree_iml = tree_iml;
 
 	/* Toolbar button icons; a button keeps its current icon if the shell
-	   has no replacement at this size rather than being blanked.  */
-	HIMAGELIST up = button_icons (L"\\SHELL32.dll", SH_ICON_UP, sm);
-	if (up)
-	{
-		set_button_icon (g_btn_up, up);
-		if (g_himl_up)
-			ImageList_Destroy (g_himl_up);
-		g_himl_up = up;
-	}
+	   has no replacement at this size rather than being blanked.  The
+	   Back/Forward/Up buttons carry a glyph from the string table instead.  */
 	HIMAGELIST extract = button_icons (L"\\SHELL32.dll", SH_ICON_EXTRACT, sm);
 	HIMAGELIST cancel = button_icons (L"\\SHELL32.dll", SH_ICON_CANCEL, sm);
 	if (extract && cancel)
@@ -1332,6 +1324,7 @@ create_menu_bar (HWND wnd)
 	g_menu_dokan = CreatePopupMenu ();
 
 	HMENU help = CreatePopupMenu ();
+	AppendMenuW (help, MF_STRING, IDM_HELP_SHORTCUTS, res_str (IDS_MENU_SHORTCUTS).c_str ());
 	AppendMenuW (help, MF_STRING, IDM_HELP_SUPPORT, res_str (IDS_MENU_SUPPORT).c_str ());
 	AppendMenuW (help, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (help, MF_STRING, IDM_HELP_ABOUT, res_str (IDS_MENU_ABOUT).c_str ());
@@ -1459,8 +1452,8 @@ layout (HWND wnd)
 	x += nav_w + margin;
 	MoveWindow (g_btn_fwd, x, margin, nav_w, btn_h, TRUE);
 	x += nav_w + margin;
-	MoveWindow (g_btn_up, x, margin, btn_w, btn_h, TRUE);
-	x += btn_w + margin;
+	MoveWindow (g_btn_up, x, margin, nav_w, btn_h, TRUE);
+	x += nav_w + margin;
 	MoveWindow (g_address, x, margin, rc.right - x - btn_w - 2 * margin, btn_h, TRUE);
 	MoveWindow (g_btn_extract, rc.right - btn_w - margin, margin, btn_w, btn_h, TRUE);
 	MoveWindow (g_tree, 0, body_top, tree_w, body_h, TRUE);
@@ -1501,20 +1494,28 @@ on_command (int id)
 		for (int i = 0, n = ListView_GetItemCount (g_list); i < n; i++)
 			ListView_SetItemState (g_list, i, ListView_GetItemState (g_list, i, LVIS_SELECTED) ^ LVIS_SELECTED, LVIS_SELECTED);
 		break;
+	case IDM_HELP_SHORTCUTS:
+		show_shortcuts ();
+		break;
 	case IDM_HELP_SUPPORT:
 		show_support ();
 		break;
 	case IDM_HELP_ABOUT:
 		show_about ();
 		break;
+	/* The buttons are disabled while extracting, but their accelerators
+	   fire regardless of the button state.  */
 	case IDC_BACK:
-		go_back ();
+		if (!g_extracting)
+			go_back ();
 		break;
 	case IDC_FWD:
-		go_forward ();
+		if (!g_extracting)
+			go_forward ();
 		break;
 	case IDC_UP:
-		go_up ();
+		if (!g_extracting)
+			go_up ();
 		break;
 	case IDC_EXTRACT:
 		on_extract_button ();
@@ -1710,12 +1711,32 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 	ShowWindow (wnd, show);
 	UpdateWindow (wnd);
 
+	/* Explorer's navigation bindings plus Ctrl+A.  Built here rather than
+	   loaded from an ACCELERATORS resource because the command ids live in
+	   main.cpp, not resource.h, and the table needs no translation.  */
+	ACCEL accels[] =
+	{
+		{ FVIRTKEY | FALT, VK_LEFT, IDC_BACK },
+		{ FVIRTKEY | FALT, VK_RIGHT, IDC_FWD },
+		{ FVIRTKEY | FALT, VK_UP, IDC_UP },
+		{ FVIRTKEY | FCONTROL, 'A', IDM_SEL_ALL },
+	};
+	HACCEL accel = CreateAcceleratorTableW (accels,
+		sizeof (accels) / sizeof (accels[0]));
+
 	MSG msg;
 	while (GetMessageW (&msg, nullptr, 0, 0) > 0)
 	{
+		/* Editing the address bar keeps its own keys, Ctrl+A included.
+		   Every other window is a modal dialog running its own loop, so
+		   nothing else reaches this one.  */
+		if (GetFocus () != g_address
+		    && TranslateAcceleratorW (wnd, accel, &msg))
+			continue;
 		TranslateMessage (&msg);
 		DispatchMessageW (&msg);
 	}
+	DestroyAcceleratorTable (accel);
 	CoUninitialize ();
 	return (int) msg.wParam;
 }

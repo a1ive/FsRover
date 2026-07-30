@@ -571,6 +571,7 @@ geli_recover_key (grub_disk_t source, grub_cryptodisk_t dev, grub_cryptomount_ar
 }
 
 struct grub_cryptodisk_dev geli_crypto = {
+  .name = "geli",
   .scan = geli_scan,
   .recover_key = geli_recover_key
 };

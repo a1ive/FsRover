@@ -167,6 +167,8 @@ struct grub_cryptodisk_dev
   struct grub_cryptodisk_dev *next;
   struct grub_cryptodisk_dev **prev;
 
+  const char *name;
+
   grub_cryptodisk_t (*scan) (grub_disk_t disk, grub_cryptomount_args_t cargs);
   grub_err_t (*recover_key) (grub_disk_t disk, grub_cryptodisk_t dev, grub_cryptomount_args_t cargs);
 };

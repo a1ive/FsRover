@@ -100,5 +100,6 @@ extern HWND g_about;	/* modal About dialog, null when closed */
 extern HWND g_support;	/* modal supported-features dialog */
 void show_about (void);
 void show_support (void);
+void show_shortcuts (void);
 
 #endif /* ! FSROVER_GUI_H */
