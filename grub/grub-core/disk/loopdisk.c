@@ -184,20 +184,24 @@ static grub_err_t
 loopdisk_read (grub_disk_t disk, grub_disk_addr_t sector, grub_size_t size, char *buf)
 {
 	grub_file_t file = ((struct loopdisk *) disk->data)->file;
-	grub_off_t pos;
+	grub_size_t len = size << GRUB_DISK_SECTOR_BITS;
+	grub_ssize_t got;
 
-	grub_file_seek (file, sector << GRUB_DISK_SECTOR_BITS);
-	grub_file_read (file, buf, size << GRUB_DISK_SECTOR_BITS);
-	if (grub_errno)
+	if (grub_file_seek (file, sector << GRUB_DISK_SECTOR_BITS) == (grub_off_t) -1)
+		return grub_errno;
+	got = grub_file_read (file, buf, len);
+	if (got < 0)
 		return grub_errno;
 
-	/* Zero-fill the tail when the file is not a whole number of sectors long.  */
-	pos = (sector + size) << GRUB_DISK_SECTOR_BITS;
-	if (pos > file->size)
-	{
-		grub_size_t amount = (grub_size_t) (pos - file->size);
-		grub_memset (buf + (size << GRUB_DISK_SECTOR_BITS) - amount, 0, amount);
-	}
+	/* Zero-fill whatever the image does not cover: it need not be a whole
+	   number of sectors long, and a transparently decompressed one ends
+	   wherever its stream does.  Deriving the gap from the length actually
+	   read rather than from file->size matters for those: their size is
+	   GRUB_FILE_SIZE_UNKNOWN when the disk is opened, so total_sectors does
+	   not fence off reads past the end, and a request landing wholly beyond
+	   it would compute a gap larger than the buffer.  */
+	if ((grub_size_t) got < len)
+		grub_memset (buf + got, 0, len - got);
 	return GRUB_ERR_NONE;
 }
 
