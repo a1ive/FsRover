@@ -16,9 +16,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Hex viewer: a 64-bit sliding window over the raw bytes of one file or
-   device (NO_DECOMPRESS, like extraction).  A virtual ListView is limited
-   to 100,000,000 items, so exposing one row per 16 bytes cannot represent
+/* A virtual ListView is limited to 100,000,000 items,
+   so exposing one row per 16 bytes cannot represent
    a normal disk directly.  The control instead contains at most 1M rows
    (16 MiB); the offset bar and previous/next buttons move that window over
    the full 64-bit address space.  Rows render from a small FIFO cache of
@@ -109,8 +108,7 @@ hex_set_view (HWND dlg, UINT64 offset)
 		offset &= ~(UINT64) (HEX_ROW_BYTES - 1);
 	g_hex_view_base = offset;
 
-	UINT64 rows = g_hex_size > offset
-			? (g_hex_size - offset + HEX_ROW_BYTES - 1) / HEX_ROW_BYTES : 0;
+	UINT64 rows = g_hex_size > offset ? (g_hex_size - offset + HEX_ROW_BYTES - 1) / HEX_ROW_BYTES : 0;
 	if (rows > HEX_WINDOW_ROWS)
 		rows = HEX_WINDOW_ROWS;
 
@@ -184,8 +182,7 @@ hex_getdispinfo (NMLVDISPINFOW *di)
 	if (di->item.iSubItem == 1)
 	{
 		for (size_t i = 0; i < n; i++)
-			swprintf (buf + i * 3, 4, L"%02X ",
-				  (unsigned char) data[start + i]);
+			swprintf (buf + i * 3, 4, L"%02X ", (unsigned char) data[start + i]);
 		buf[n * 3 - 1] = L'\0';
 	}
 	else if (di->item.iSubItem == 2)
@@ -242,8 +239,7 @@ hex_init_dialog (HWND dlg)
 	else
 	{
 		size_t cut = g_hex_path.find_last_of ('/');
-		name = widen (cut == std::string::npos
-			? g_hex_path : g_hex_path.substr (cut + 1));
+		name = widen (cut == std::string::npos ? g_hex_path : g_hex_path.substr (cut + 1));
 	}
 	SetWindowTextW (dlg, (name + L" - " + res_str (IDS_HEX_TITLE)).c_str ());
 
@@ -403,8 +399,7 @@ show_hex (const std::string &path, const std::wstring &title,
 	g_hex_path = path;
 	g_hex_title = title;
 	g_hex_size = known_size;
-	DialogBoxParamW (GetModuleHandleW (nullptr),
-		MAKEINTRESOURCEW (IDD_HEX), g_main, hex_dlg_proc, 0);
+	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_HEX), g_main, hex_dlg_proc, 0);
 	g_hex = nullptr;
 	g_hex_cache.clear ();
 	g_hex_fifo.clear ();

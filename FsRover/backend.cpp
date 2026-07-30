@@ -110,12 +110,12 @@ join_path (const std::string &dir, const std::string &name)
 }
 
 static_assert (BACKEND_DEV_OTHER == ROVER_DEV_OTHER
-	       && BACKEND_DEV_WINDISK == ROVER_DEV_WINDISK
-	       && BACKEND_DEV_LOOPBACK == ROVER_DEV_LOOPBACK
-	       && BACKEND_DEV_DISKFILTER == ROVER_DEV_DISKFILTER
-	       && BACKEND_DEV_CRYPTODISK == ROVER_DEV_CRYPTODISK
-	       && BACKEND_DEV_PROCFS == ROVER_DEV_PROCFS,
-	       "BACKEND_DEV_* must match ROVER_DEV_*");
+	&& BACKEND_DEV_WINDISK == ROVER_DEV_WINDISK
+	&& BACKEND_DEV_LOOPBACK == ROVER_DEV_LOOPBACK
+	&& BACKEND_DEV_DISKFILTER == ROVER_DEV_DISKFILTER
+	&& BACKEND_DEV_CRYPTODISK == ROVER_DEV_CRYPTODISK
+	&& BACKEND_DEV_PROCFS == ROVER_DEV_PROCFS,
+	"BACKEND_DEV_* must match ROVER_DEV_*");
 
 int
 enum_disk_hook (const struct rover_disk_info *info, void *data)
@@ -634,7 +634,6 @@ hex_bytes (const UCHAR *data, DWORD len)
 }
 
 /* Reflected CRC-32 (zip) and CRC-64/XZ (ECMA-182).  */
-
 void
 crc32_fill (DWORD table[256])
 {
@@ -642,8 +641,7 @@ crc32_fill (DWORD table[256])
 	{
 		DWORD crc = i;
 		for (int bit = 0; bit < 8; bit++)
-			crc = (crc & 1) ? ((crc >> 1) ^ 0xedb88320UL)
-					: (crc >> 1);
+			crc = (crc & 1) ? ((crc >> 1) ^ 0xedb88320UL) : (crc >> 1);
 		table[i] = crc;
 	}
 }
@@ -655,8 +653,7 @@ crc64_fill (UINT64 table[256])
 	{
 		UINT64 crc = i;
 		for (int bit = 0; bit < 8; bit++)
-			crc = (crc & 1) ? ((crc >> 1) ^ 0xc96c5795d7870f42ULL)
-					: (crc >> 1);
+			crc = (crc & 1) ? ((crc >> 1) ^ 0xc96c5795d7870f42ULL) : (crc >> 1);
 		table[i] = crc;
 	}
 }
@@ -736,8 +733,7 @@ run_hash_file (const backend_task &task, UINT seq, backend_result *res)
 		if (r == 0)
 			break;
 		for (int i = 0; i < BACKEND_HASH_COUNT; i++)
-			if ((mask & (1u << i)) && alg_ids[i]
-				&& BCryptHashData (cng[i].hash, (PUCHAR) buf.data (), (ULONG) r, 0) < 0)
+			if ((mask & (1u << i)) && alg_ids[i] && BCryptHashData (cng[i].hash, (PUCHAR) buf.data (), (ULONG) r, 0) < 0)
 			{
 				rover_file_close (f);
 				res->error = "hash provider error";
@@ -875,8 +871,7 @@ run_crypto_unlock (const backend_task &task, backend_result *res)
 	crypto_prog_ctx ctx = { res->seq, 0 };
 
 	rover_set_crypto_progress (crypto_progress, &ctx);
-	if (rover_crypto_unlock (task.path.c_str (), task.key.data (),
-				 task.key.size (), dev, sizeof (dev)))
+	if (rover_crypto_unlock (task.path.c_str (), task.key.data (), task.key.size (), dev, sizeof (dev)))
 		set_error (res, "cannot unlock volume");
 	else
 		res->path = dev;

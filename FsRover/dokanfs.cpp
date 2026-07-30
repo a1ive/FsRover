@@ -51,9 +51,7 @@ namespace
 
 typedef VOID (__stdcall *fn_DokanInit) (void);
 typedef VOID (__stdcall *fn_DokanShutdown) (void);
-typedef int (__stdcall *fn_DokanCreateFileSystem) (PDOKAN_OPTIONS,
-						   PDOKAN_OPERATIONS,
-						   PDOKAN_HANDLE);
+typedef int (__stdcall *fn_DokanCreateFileSystem) (PDOKAN_OPTIONS, PDOKAN_OPERATIONS, PDOKAN_HANDLE);
 typedef VOID (__stdcall *fn_DokanCloseHandle) (DOKAN_HANDLE);
 typedef ULONG (__stdcall *fn_DokanDriverVersion) (void);
 
@@ -119,9 +117,8 @@ unix_to_filetime (long long t)
 }
 
 NTSTATUS DOKAN_CALLBACK
-fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT,
-	   ACCESS_MASK, ULONG, ULONG, ULONG disposition, ULONG options,
-	   PDOKAN_FILE_INFO info)
+fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
+	ULONG disposition, ULONG options, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
 
@@ -166,8 +163,7 @@ fs_close (LPCWSTR name, PDOKAN_FILE_INFO info)
 }
 
 NTSTATUS DOKAN_CALLBACK
-fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got,
-	 LONGLONG off, PDOKAN_FILE_INFO info)
+fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got, LONGLONG off, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
 	std::string path = grub_path (m, name);
@@ -215,8 +211,7 @@ fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got,
 }
 
 NTSTATUS DOKAN_CALLBACK
-fs_getinfo (LPCWSTR name, LPBY_HANDLE_FILE_INFORMATION out,
-	    PDOKAN_FILE_INFO info)
+fs_getinfo (LPCWSTR name, LPBY_HANDLE_FILE_INFORMATION out, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
 	std::string path = grub_path (m, name);
@@ -283,8 +278,7 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 		{
 			if (e.is_dir)
 				continue;
-			rover_file *f =
-				rover_file_open ((prefix + e.name).c_str ());
+			rover_file *f = rover_file_open ((prefix + e.name).c_str ());
 			if (f)
 			{
 				e.size = rover_file_size (f);
@@ -317,8 +311,7 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 }
 
 NTSTATUS DOKAN_CALLBACK
-fs_freespace (PULONGLONG avail, PULONGLONG total, PULONGLONG free_total,
-	      PDOKAN_FILE_INFO info)
+fs_freespace (PULONGLONG avail, PULONGLONG total, PULONGLONG free_total, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
 	unsigned long long size = m->size;
@@ -333,16 +326,14 @@ fs_freespace (PULONGLONG avail, PULONGLONG total, PULONGLONG free_total,
 
 NTSTATUS DOKAN_CALLBACK
 fs_volinfo (LPWSTR vol_name, DWORD vol_size, LPDWORD serial,
-	    LPDWORD max_component, LPDWORD flags,
-	    LPWSTR fs_name, DWORD fs_size, PDOKAN_FILE_INFO info)
+	LPDWORD max_component, LPDWORD flags, LPWSTR fs_name, DWORD fs_size, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
 
 	wcsncpy_s (vol_name, vol_size, widen (m->device).c_str (), _TRUNCATE);
 	*serial = m->serial;
 	*max_component = 255;
-	*flags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES
-		 | FILE_UNICODE_ON_DISK | FILE_READ_ONLY_VOLUME;
+	*flags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES | FILE_UNICODE_ON_DISK | FILE_READ_ONLY_VOLUME;
 	wcsncpy_s (fs_name, fs_size, m->fs_name.c_str (), _TRUNCATE);
 	return STATUS_SUCCESS;
 }
@@ -411,8 +402,7 @@ dokan_load (void)
 		GetProcAddress (g_dll, "DokanCloseHandle");
 	p_DokanDriverVersion = (fn_DokanDriverVersion)
 		GetProcAddress (g_dll, "DokanDriverVersion");
-	if (!p_DokanInit || !p_DokanShutdown || !p_DokanCreateFileSystem
-		|| !p_DokanCloseHandle || !p_DokanDriverVersion)
+	if (!p_DokanInit || !p_DokanShutdown || !p_DokanCreateFileSystem || !p_DokanCloseHandle || !p_DokanDriverVersion)
 		goto fail;
 
 	p_DokanInit ();
@@ -466,9 +456,7 @@ write_resource (int id, const wchar_t *path, std::wstring *error)
 bool
 install_service (const wchar_t *sys_path, std::wstring *error)
 {
-	SC_HANDLE scm = OpenSCManagerW (nullptr, nullptr,
-					SC_MANAGER_CONNECT
-					| SC_MANAGER_CREATE_SERVICE);
+	SC_HANDLE scm = OpenSCManagerW (nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE);
 	if (!scm)
 	{
 		*error = L"cannot open the service control manager";

@@ -416,8 +416,7 @@ void
 update_nav_buttons (void)
 {
 	EnableWindow (g_btn_back, !g_extracting && g_hist_pos > 0);
-	EnableWindow (g_btn_fwd, !g_extracting && g_hist_pos >= 0
-		      && (size_t) (g_hist_pos + 1) < g_hist.size ());
+	EnableWindow (g_btn_fwd, !g_extracting && g_hist_pos >= 0 && (size_t) (g_hist_pos + 1) < g_hist.size ());
 	EnableWindow (g_btn_up, !g_extracting);
 }
 
@@ -946,8 +945,7 @@ tray_menu (void)
 		SendMessageW (g_main, WM_CLOSE, 0, 0);
 	else if (cmd >= IDM_TRAY_UNMOUNT_BASE)
 	{
-		dokan_mount *m = dokanfs_get (
-			(size_t) (cmd - IDM_TRAY_UNMOUNT_BASE));
+		dokan_mount *m = dokanfs_get ((size_t) (cmd - IDM_TRAY_UNMOUNT_BASE));
 		if (m)
 			do_dokan_unmount (m);
 	}
@@ -1002,8 +1000,7 @@ fill_tree (backend_result *res)
 		TVINSERTSTRUCTW ins = {};
 		ins.hParent = parent;
 		ins.hInsertAfter = TVI_LAST;
-		ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE
-				| TVIF_SELECTEDIMAGE;
+		ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
 		ins.item.pszText = const_cast<wchar_t *> (text.c_str ());
 		ins.item.lParam = (LPARAM) i;
 		ins.item.iImage = device_icon (d);
@@ -1730,8 +1727,7 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 		{ FVIRTKEY | FALT, VK_UP, IDC_UP },
 		{ FVIRTKEY | FCONTROL, 'A', IDM_SEL_ALL },
 	};
-	HACCEL accel = CreateAcceleratorTableW (accels,
-		sizeof (accels) / sizeof (accels[0]));
+	HACCEL accel = CreateAcceleratorTableW (accels, ARRAYSIZE (accels));
 
 	MSG msg;
 	while (GetMessageW (&msg, nullptr, 0, 0) > 0)
@@ -1739,8 +1735,7 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 		/* Editing the address bar keeps its own keys, Ctrl+A included.
 		   Every other window is a modal dialog running its own loop, so
 		   nothing else reaches this one.  */
-		if (GetFocus () != g_address
-		    && TranslateAcceleratorW (wnd, accel, &msg))
+		if (GetFocus () != g_address && TranslateAcceleratorW (wnd, accel, &msg))
 			continue;
 		TranslateMessage (&msg);
 		DispatchMessageW (&msg);

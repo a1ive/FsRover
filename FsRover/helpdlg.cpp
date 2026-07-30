@@ -72,8 +72,7 @@ menu_caption (UINT id)
 
 	if (amp == std::wstring::npos)
 		return s;
-	if (amp > 0 && s[amp - 1] == L'(' && amp + 2 < s.size ()
-	    && s[amp + 2] == L')')
+	if (amp > 0 && s[amp - 1] == L'(' && amp + 2 < s.size () && s[amp + 2] == L')')
 		s.erase (amp - 1, 4);
 	else
 		s.erase (amp, 1);
@@ -91,15 +90,12 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		SetWindowTextW (dlg, menu_caption (IDS_MENU_ABOUT).c_str ());
 
 		int size = dpi_scale (32);
-		HICON icon = (HICON) LoadImageW (GetModuleHandleW (nullptr),
-						 MAKEINTRESOURCEW (IDI_APP),
-						 IMAGE_ICON, size, size, 0);
+		HICON icon = (HICON) LoadImageW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDI_APP), IMAGE_ICON, size, size, 0);
 		SendDlgItemMessageW (dlg, IDC_ABOUT_ICON, STM_SETICON, (WPARAM) icon, 0);
 
 		std::wstring name = L"FsRover " + widen (ROVER_VERSION_STR) + L" (" ROVER_ARCH_W L")";
 		SetDlgItemTextW (dlg, IDC_ABOUT_NAME, name.c_str ());
-		SetDlgItemTextW (dlg, IDC_ABOUT_CREDITS_LABEL,
-				 res_str (IDS_ABOUT_CREDITS).c_str ());
+		SetDlgItemTextW (dlg, IDC_ABOUT_CREDITS_LABEL, res_str (IDS_ABOUT_CREDITS).c_str ());
 		SetDlgItemTextW (dlg, IDC_ABOUT_CREDITS, k_credits);
 		/* Keep focus off the edit: the dialog manager select-alls
 		   an edit it focuses (DLGC_HASSETSEL).  */
@@ -116,8 +112,7 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 	case WM_DESTROY:
 	{
 		/* The icon set with STM_SETICON is ours to free.  */
-		HICON icon = (HICON) SendDlgItemMessageW (dlg, IDC_ABOUT_ICON,
-							  STM_GETICON, 0, 0);
+		HICON icon = (HICON) SendDlgItemMessageW (dlg, IDC_ABOUT_ICON, STM_GETICON, 0, 0);
 		if (icon)
 			DestroyIcon (icon);
 		g_about = nullptr;
@@ -135,8 +130,7 @@ support_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_INITDIALOG:
 		g_support = dlg;
 		SetWindowTextW (dlg, menu_caption (IDS_MENU_SUPPORT).c_str ());
-		SetDlgItemTextW (dlg, IDC_SUPPORT_TEXT,
-				 (const wchar_t *) lp);
+		SetDlgItemTextW (dlg, IDC_SUPPORT_TEXT, (const wchar_t *) lp);
 		/* Keep focus off the edit: the dialog manager select-alls
 		   an edit it focuses (DLGC_HASSETSEL).  */
 		SetFocus (GetDlgItem (dlg, IDOK));
@@ -179,9 +173,7 @@ support_section (UINT title_id, const std::vector<std::string> &names)
 void
 show_about (void)
 {
-	DialogBoxParamW (GetModuleHandleW (nullptr),
-			 MAKEINTRESOURCEW (IDD_ABOUT), g_main,
-			 about_dlg_proc, 0);
+	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_ABOUT), g_main, about_dlg_proc, 0);
 }
 
 /* The whole list is one string resource: the key names are not
@@ -189,9 +181,7 @@ show_about (void)
 void
 show_shortcuts (void)
 {
-	MessageBoxW (g_main, res_str (IDS_KEY_LIST).c_str (),
-		     menu_caption (IDS_MENU_SHORTCUTS).c_str (),
-		     MB_ICONINFORMATION | MB_OK);
+	MessageBoxW (g_main, res_str (IDS_KEY_LIST).c_str (), menu_caption (IDS_MENU_SHORTCUTS).c_str (), MB_ICONINFORMATION | MB_OK);
 }
 
 void

@@ -68,9 +68,9 @@ void dokanfs_shutdown (void);
    set, WM_APP_DOKAN_MOUNTED is posted once the volume is live.
    Returns NULL and sets ERROR on failure.  */
 dokan_mount *dokanfs_mount (const std::string &device,
-			    const std::string &fs,
-			    unsigned long long size, wchar_t letter,
-			    bool open_explorer, std::wstring *error);
+	const std::string &fs,
+	unsigned long long size, wchar_t letter,
+	bool open_explorer, std::wstring *error);
 
 /* Blocks until the filesystem is closed, then frees the mount.  */
 void dokanfs_unmount (dokan_mount *m);

@@ -393,8 +393,7 @@ text_paint_gutter (HWND dlg)
 }
 
 LRESULT CALLBACK
-text_edit_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp,
-		UINT_PTR, DWORD_PTR)
+text_edit_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
 {
 	LRESULT r = DefSubclassProc (wnd, msg, wp, lp);
 
@@ -534,8 +533,7 @@ text_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		text_layout (dlg);
 		return TRUE;
 	case WM_GETMINMAXINFO:
-		((MINMAXINFO *) lp)->ptMinTrackSize =
-			{ dpi_scale (560), dpi_scale (240) };
+		((MINMAXINFO *) lp)->ptMinTrackSize = { dpi_scale (560), dpi_scale (240) };
 		return TRUE;
 	case WM_PAINT:
 		text_paint_gutter (dlg);

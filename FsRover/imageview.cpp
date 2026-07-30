@@ -150,10 +150,8 @@ img_clamp_offset (HWND dlg)
 	RECT rc;
 
 	GetClientRect (dlg, &rc);
-	float lim_x = ((float) g_img_w * g_img_zoom + (float) rc.right) / 2
-		- (float) dpi_scale (32);
-	float lim_y = ((float) g_img_h * g_img_zoom + (float) rc.bottom) / 2
-		- (float) dpi_scale (32);
+	float lim_x = ((float) g_img_w * g_img_zoom + (float) rc.right) / 2 - (float) dpi_scale (32);
+	float lim_y = ((float) g_img_h * g_img_zoom + (float) rc.bottom) / 2 - (float) dpi_scale (32);
 	if (lim_x < 0.0f)
 		lim_x = 0.0f;
 	if (lim_y < 0.0f)

@@ -117,8 +117,7 @@ crypto_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		{
 		case IDC_CRYPTO_USEKEYFILE:
 		{
-			BOOL kf = IsDlgButtonChecked (dlg, IDC_CRYPTO_USEKEYFILE)
-				  == BST_CHECKED;
+			BOOL kf = IsDlgButtonChecked (dlg, IDC_CRYPTO_USEKEYFILE) == BST_CHECKED;
 			EnableWindow (GetDlgItem (dlg, IDC_CRYPTO_PASS), !kf);
 			EnableWindow (GetDlgItem (dlg, IDC_CRYPTO_KEYFILE), kf);
 			EnableWindow (GetDlgItem (dlg, IDC_CRYPTO_BROWSE), kf);
@@ -199,8 +198,7 @@ prompt_unlock (const std::string &devname, const std::string &uuid)
 	g_crypto_uuid = uuid;
 	g_crypto_newdev.clear ();
 
-	INT_PTR r = DialogBoxParamW (GetModuleHandleW (nullptr),
-		MAKEINTRESOURCEW (IDD_CRYPTO), g_main, crypto_dlg_proc, 0);
+	INT_PTR r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_CRYPTO), g_main, crypto_dlg_proc, 0);
 	if (r == 1 && !g_crypto_newdev.empty ())
 	{
 		/* "cryptoN" now exists: rebuild the tree and browse into it.  */
