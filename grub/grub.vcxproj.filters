@@ -381,6 +381,9 @@
     <ClCompile Include="grub-core\fs\zfs\zfs_sha256.c">
       <Filter>grub-core\fs\zfs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\bz2io.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\dmg.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>

@@ -29,9 +29,9 @@
  *      /control/...    maintainer scripts, md5sums, conffiles, ...
  *      /data/...       the files the package installs
  *
- *  Members that are not a tarball this build can decode -- a bzip2 or
- *  plain lzma control/data tarball, signatures such as _gpgorigin --
- *  stay visible as plain files at the root.
+ *  Members that are not a tarball this build can decode -- a plain lzma
+ *  control/data tarball, signatures such as _gpgorigin -- stay visible
+ *  as plain files at the root.
  */
 
 #include <grub/types.h>
