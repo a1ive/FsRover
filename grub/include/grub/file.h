@@ -258,6 +258,26 @@ grub_file_seekable (const grub_file_t file)
   return !file->not_easily_seekable;
 }
 
+/*
+ * Extension of the last component of NAME, dot included, or NULL when it
+ * has none: "(hd0,1)/dir.d/x.tar.br" -> ".br", "(hd0,1)/dir.d/x" -> NULL.
+ * A leading dot does not count, so a file called ".br" has no extension.
+ * Meant for the io filters of formats that carry no magic to go by;
+ * compare the result with grub_strcasecmp().
+ */
+static inline const char *
+grub_file_get_suffix (const char *name)
+{
+  const char *base, *dot;
+
+  if (!name)
+    return NULL;
+  base = grub_strrchr (name, '/');
+  base = base ? base + 1 : name;
+  dot = grub_strrchr (base, '.');
+  return (dot && dot != base) ? dot : NULL;
+}
+
 grub_file_t
 grub_file_offset_open (grub_file_t parent, enum grub_file_type type,
 		       grub_off_t start, grub_off_t size);
