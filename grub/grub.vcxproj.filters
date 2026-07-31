@@ -360,6 +360,9 @@
     <ClCompile Include="grub-core\fs\tar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\tib.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\udf.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -427,6 +430,12 @@
       <Filter>grub-core\io</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\io\sparse.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\tib.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\tibx.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\io\vdi.c">

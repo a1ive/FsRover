@@ -269,6 +269,10 @@
       <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="grub-core\fs\tar.c" />
+    <ClCompile Include="grub-core\fs\tib.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\ubifs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -327,6 +331,13 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\io\sparse.c" />
+    <ClCompile Include="grub-core\io\tib.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\tibx.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\io\vdi.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
