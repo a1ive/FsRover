@@ -296,6 +296,9 @@
     <ClCompile Include="grub-core\fs\zfs\zfs_lz4.c" />
     <ClCompile Include="grub-core\fs\zfs\zfs_lzjb.c" />
     <ClCompile Include="grub-core\fs\zfs\zfs_sha256.c" />
+    <ClCompile Include="grub-core\io\brio.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\io\bz2io.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -341,6 +344,42 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\lib\adler32.c" />
+    <ClCompile Include="grub-core\lib\brotli\common\constants.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\context.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\dictionary.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\platform.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\shared_dictionary.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\transform.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\bit_reader.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\decode.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\huffman.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\prefix.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\state.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\static_init.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\brotli\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\bzip2\bzlib.c" />
     <ClCompile Include="grub-core\lib\bzip2\crctable.c" />
     <ClCompile Include="grub-core\lib\bzip2\decompress.c" />
@@ -558,6 +597,26 @@
     <ClInclude Include="include\grub\zfs\zil.h" />
     <ClInclude Include="include\grub\zfs\zio.h" />
     <ClInclude Include="include\grub\zfs\zio_checksum.h" />
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\decode.h" />
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\encode.h" />
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\port.h" />
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\shared_dictionary.h" />
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\types.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\constants.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\context.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\dictionary.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\dictionary_inc.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\platform.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\shared_dictionary_internal.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\static_init.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\transform.h" />
+    <ClInclude Include="grub-core\lib\brotli\common\version.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\bit_reader.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\huffman.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\prefix.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\prefix_inc.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\state.h" />
+    <ClInclude Include="grub-core\lib\brotli\dec\static_init.h" />
     <ClInclude Include="grub-core\lib\bzip2\bz_version.h" />
     <ClInclude Include="grub-core\lib\bzip2\bzlib.h" />
     <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h" />

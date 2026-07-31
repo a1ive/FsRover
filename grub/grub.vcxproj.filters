@@ -106,6 +106,18 @@
     <Filter Include="grub-core\lib\rar">
       <UniqueIdentifier>{fc1a1375-78fb-423d-963e-65b933e849a3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="grub-core\lib\brotli">
+      <UniqueIdentifier>{1c4d8f60-3ba7-4c19-8f2e-6d0a17b95c34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\brotli\common">
+      <UniqueIdentifier>{2e5f9a71-4cb8-4d2a-9036-7e1b28ca6d45}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\brotli\dec">
+      <UniqueIdentifier>{3f60ab82-5dc9-4e3b-a147-8f2c39db7e56}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="grub-core\lib\brotli\include">
+      <UniqueIdentifier>{4071bc93-6eda-4f4c-b258-903d4aec8f67}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rover\init.c">
@@ -381,6 +393,9 @@
     <ClCompile Include="grub-core\fs\zfs\zfs_sha256.c">
       <Filter>grub-core\fs\zfs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\brio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\bz2io.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
@@ -431,6 +446,42 @@
     </ClCompile>
     <ClCompile Include="grub-core\lib\adler32.c">
       <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\constants.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\context.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\dictionary.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\platform.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\shared_dictionary.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\common\transform.c">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\bit_reader.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\decode.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\huffman.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\prefix.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\state.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\brotli\dec\static_init.c">
+      <Filter>grub-core\lib\brotli\dec</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\lib\bzip2\bzlib.c">
       <Filter>grub-core\lib\bzip2</Filter>
@@ -815,6 +866,66 @@
     </ClInclude>
     <ClInclude Include="include\grub\zfs\zio_checksum.h">
       <Filter>include\grub\zfs</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\decode.h">
+      <Filter>grub-core\lib\brotli\include</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\encode.h">
+      <Filter>grub-core\lib\brotli\include</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\port.h">
+      <Filter>grub-core\lib\brotli\include</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\shared_dictionary.h">
+      <Filter>grub-core\lib\brotli\include</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\include\brotli\types.h">
+      <Filter>grub-core\lib\brotli\include</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\constants.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\context.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\dictionary.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\dictionary_inc.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\platform.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\shared_dictionary_internal.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\static_init.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\transform.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\common\version.h">
+      <Filter>grub-core\lib\brotli\common</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\bit_reader.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\huffman.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\prefix.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\prefix_inc.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\state.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\brotli\dec\static_init.h">
+      <Filter>grub-core\lib\brotli\dec</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\bzip2\bz_version.h">
       <Filter>grub-core\lib\bzip2</Filter>

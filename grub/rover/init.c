@@ -138,6 +138,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (xzio)	\
 	mod (zstdio)	\
 	mod (bz2io)	\
+	mod (brio)	\
 	/* virtual disk image filters (loopdisk mounts) */	\
 	mod (vhd)	\
 	mod (vhdx)	\
