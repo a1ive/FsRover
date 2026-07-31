@@ -274,7 +274,8 @@
     </ClCompile>
     <ClCompile Include="grub-core\fs\udf.c" />
     <ClCompile Include="grub-core\fs\uefi.c">
-      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\ufs.c" />
     <ClCompile Include="grub-core\fs\ufs2.c" />

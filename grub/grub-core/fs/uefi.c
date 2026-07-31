@@ -58,6 +58,8 @@
 #include <LzmaDec.h>
 #include <LzhDecoder.h>
 
+#include <miniz.h>
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define UEFI_GUID_SIZE		16
@@ -74,8 +76,18 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define UEFI_LEVEL_MAX		64
 /* an image we are willing to pull into memory whole */
 #define UEFI_IMAGE_MAX		((grub_uint64_t) 256 << 20)
-/* window scanned for a volume when the image does not start with one */
-#define UEFI_PROBE_SIZE		0x10000
+/* head read for the cheap "does this start with a firmware image" checks */
+#define UEFI_PROBE_SIZE		0x1000
+/*
+ * When nothing recognisable sits at the start, the device is swept for a
+ * volume header: SPI dumps of real boards put their first volume megabytes
+ * in (an MSI sample has it at 16 MiB), so a small window is not enough.
+ * The sweep is bounded by UEFI_SCAN_MAX and only runs at all for devices
+ * small enough to be a firmware image in the first place.
+ */
+#define UEFI_SCAN_MAX		((grub_uint64_t) 64 << 20)
+#define UEFI_SCAN_CHUNK		(1u << 20)
+#define UEFI_SCAN_STRIDE	0x1000
 /* cache key: leading bytes compared before a cached mount is reused */
 #define UEFI_PROBE_KEY		512
 #define UEFI_FVS_MAX		256
@@ -144,11 +156,39 @@ static const grub_uint8_t uefi_guids_fs[][UEFI_GUID_SIZE] =
 	  0xB6, 0xBA, 0x64, 0xF8, 0xBF, 0x90, 0x1F, 0x5A }
 };
 
-static const grub_uint8_t uefi_guid_lzma[UEFI_GUID_SIZE] =
+/*
+ * GUID-defined section GUIDs whose payload is something we can decode.
+ * UefiHandler.cpp only knows the first LZMA one; the rest are taken from
+ * UEFITool common\ffs.cpp, which is what real AMI/AMD images need.
+ */
+static const grub_uint8_t uefi_guids_lzma[][UEFI_GUID_SIZE] =
 {
-	0x98, 0x58, 0x4E, 0xEE, 0x14, 0x39, 0x59, 0x42,
-	0x9D, 0x6E, 0xDC, 0x7B, 0xD7, 0x94, 0x03, 0xCF
+	/* EE4E5898-3914-4259-9D6E-DC7BD79403CF, the common one */
+	{ 0x98, 0x58, 0x4E, 0xEE, 0x14, 0x39, 0x59, 0x42,
+	  0x9D, 0x6E, 0xDC, 0x7B, 0xD7, 0x94, 0x03, 0xCF },
+	/* 0ED85E23-F253-413F-A03C-901987B04397, HP */
+	{ 0x23, 0x5E, 0xD8, 0x0E, 0x53, 0xF2, 0x3F, 0x41,
+	  0xA0, 0x3C, 0x90, 0x19, 0x87, 0xB0, 0x43, 0x97 },
+	/* BD9921EA-ED91-404A-8B2F-B4D724747C8C, Microsoft */
+	{ 0xEA, 0x21, 0x99, 0xBD, 0x91, 0xED, 0x4A, 0x40,
+	  0x8B, 0x2F, 0xB4, 0xD7, 0x24, 0x74, 0x7C, 0x8C }
 };
+
+/* A31280AD-481E-41B6-95E8-127F4C984779: a plain EFI/Tiano stream */
+static const grub_uint8_t uefi_guid_tiano[UEFI_GUID_SIZE] =
+{
+	0xAD, 0x80, 0x12, 0xA3, 0x1E, 0x48, 0xB6, 0x41,
+	0x95, 0xE8, 0x12, 0x7F, 0x4C, 0x98, 0x47, 0x79
+};
+
+/* CE3233F5-2CD6-4D87-9152-4A238BB6D1C4: AMD's 0x100 byte header + zlib */
+static const grub_uint8_t uefi_guid_zlib_amd[UEFI_GUID_SIZE] =
+{
+	0xF5, 0x33, 0x32, 0xCE, 0xD6, 0x2C, 0x87, 0x4D,
+	0x91, 0x52, 0x4A, 0x23, 0x8B, 0xB6, 0xD1, 0xC4
+};
+
+#define UEFI_AMD_ZLIB_HDR	0x100
 
 #define UEFI_GUID_INDEX_CRC	0
 
@@ -455,14 +495,13 @@ uefi_lzma_free (ISzAllocPtr p, void *address)
 
 static const ISzAlloc uefi_allocator = { uefi_lzma_alloc, uefi_lzma_free };
 
-/* returns the new buffer index, or -1 */
+/* takes ownership of `data`; returns the new buffer index, or -1 */
 static int
-uefi_add_buf (struct grub_uefi_data *d, grub_size_t size)
+uefi_attach_buf (struct grub_uefi_data *d, grub_uint8_t *data,
+		 grub_size_t size)
 {
 	struct uefi_buf *buf;
 
-	if (size > UEFI_BUFS_TOTAL_MAX - d->total_bufs)
-		return -1;
 	if (d->num_bufs == d->cap_bufs)
 	{
 		const unsigned cap = d->cap_bufs ? d->cap_bufs * 2 : 8;
@@ -475,12 +514,28 @@ uefi_add_buf (struct grub_uefi_data *d, grub_size_t size)
 		d->cap_bufs = cap;
 	}
 	buf = &d->bufs[d->num_bufs];
-	buf->data = grub_malloc (size ? size : 1);
-	if (!buf->data)
-		return -1;
+	buf->data = data;
 	buf->size = size;
 	d->total_bufs += size;
 	return (int) d->num_bufs++;
+}
+
+/* returns the new buffer index, or -1 */
+static int
+uefi_add_buf (struct grub_uefi_data *d, grub_size_t size)
+{
+	grub_uint8_t *data;
+	int index;
+
+	if (size > UEFI_BUFS_TOTAL_MAX - d->total_bufs)
+		return -1;
+	data = grub_malloc (size ? size : 1);
+	if (!data)
+		return -1;
+	index = uefi_attach_buf (d, data, size);
+	if (index < 0)
+		grub_free (data);
+	return index;
 }
 
 /* returns the new item index, or -1 */
@@ -552,6 +607,17 @@ static int
 uefi_guids_eq (const grub_uint8_t *a, const grub_uint8_t *b)
 {
 	return grub_memcmp (a, b, UEFI_GUID_SIZE) == 0;
+}
+
+static int
+uefi_guid_is_lzma (const grub_uint8_t *p)
+{
+	unsigned i;
+
+	for (i = 0; i < ARRAY_SIZE (uefi_guids_lzma); i++)
+		if (uefi_guids_eq (p, uefi_guids_lzma[i]))
+			return 1;
+	return 0;
 }
 
 static int
@@ -926,6 +992,97 @@ uefi_decode_lzma (struct grub_uefi_data *d, const grub_uint8_t *data,
 }
 
 /*
+ * AMD's GUID-defined section: a 0x100 byte header (zeros around a 32 bit
+ * compressed size) followed by a zlib stream whose unpacked size is not
+ * recorded anywhere, so the output buffer is grown as inflate needs it.
+ */
+static int
+uefi_decode_zlib (struct grub_uefi_data *d, const grub_uint8_t *data,
+		  grub_size_t in_size, int *buf_index)
+{
+	tinfl_decompressor *infl;
+	grub_uint8_t *out = 0;
+	grub_size_t cap, out_pos = 0, in_pos = 0;
+	int ret = UEFI_FALSE;
+	int index;
+
+	infl = grub_malloc (sizeof (*infl));
+	if (!infl)
+		return UEFI_FATAL;
+	tinfl_init (infl);
+
+	cap = in_size < (1 << 14) ? (1 << 16) : in_size * 4;
+	if (cap > UEFI_BUFS_TOTAL_MAX - d->total_bufs)
+		cap = UEFI_BUFS_TOTAL_MAX - d->total_bufs;
+	out = grub_malloc (cap ? cap : 1);
+	if (!out)
+	{
+		grub_free (infl);
+		return UEFI_FATAL;
+	}
+
+	for (;;)
+	{
+		grub_size_t in_avail = in_size - in_pos;
+		grub_size_t out_avail = cap - out_pos;
+		tinfl_status st;
+
+		st = tinfl_decompress (infl, data + in_pos, &in_avail, out,
+				       out + out_pos, &out_avail,
+				       TINFL_FLAG_PARSE_ZLIB_HEADER
+				       | TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+		in_pos += in_avail;
+		out_pos += out_avail;
+
+		if (st == TINFL_STATUS_DONE)
+			break;
+		if (st != TINFL_STATUS_HAS_MORE_OUTPUT)
+			goto out_free;
+		if (cap >= UEFI_BUFS_TOTAL_MAX - d->total_bufs)
+		{
+			ret = UEFI_FATAL;
+			goto out_free;
+		}
+		{
+			grub_size_t want = cap * 2;
+			grub_uint8_t *n;
+
+			if (want > UEFI_BUFS_TOTAL_MAX - d->total_bufs)
+				want = UEFI_BUFS_TOTAL_MAX - d->total_bufs;
+			n = grub_realloc (out, want);
+			if (!n)
+			{
+				ret = UEFI_FATAL;
+				goto out_free;
+			}
+			out = n;
+			cap = want;
+		}
+	}
+
+	{
+		grub_uint8_t *n = grub_realloc (out, out_pos ? out_pos : 1);
+
+		if (n)
+			out = n;
+	}
+	index = uefi_attach_buf (d, out, out_pos);
+	if (index < 0)
+	{
+		ret = UEFI_FATAL;
+		goto out_free;
+	}
+	grub_free (infl);
+	*buf_index = index;
+	return UEFI_OK;
+
+out_free:
+	grub_free (out);
+	grub_free (infl);
+	return ret;
+}
+
+/*
  * EFI 1.1 built LZH with a 16 KiB dictionary (and a 4 bit distance table
  * width), Tiano uses 512 KiB; try the modern one first, exactly as
  * UefiHandler.cpp does.
@@ -1264,13 +1421,57 @@ uefi_parse_sections (struct grub_uefi_data *d, unsigned buf_index,
 			item.size = new_size;
 			item.offset = new_offset;
 
-			if (uefi_guids_eq (p + hdr, uefi_guid_lzma))
+			if (uefi_guid_is_lzma (p + hdr))
 			{
 				int index;
 
 				ret = uefi_decode_lzma (d,
 							bufdata + new_offset,
 							new_size, &index);
+				if (ret != UEFI_OK)
+					goto out_ret;
+				new_buf = (unsigned) index;
+				new_offset = 0;
+				new_size = (grub_uint32_t)
+					   d->bufs[index].size;
+			}
+			else if (uefi_guids_eq (p + hdr, uefi_guid_tiano))
+			{
+				const grub_uint8_t *body = bufdata + new_offset;
+				grub_uint32_t pack_size, unpack_size;
+				int index;
+
+				/* a plain EFI/Tiano stream behind its
+				   8 byte packed/unpacked size header */
+				if (new_size < 8)
+					goto bad;
+				pack_size = uefi_get32 (body);
+				unpack_size = uefi_get32 (body + 4);
+				if (new_size - 8 != pack_size || pack_size < 1)
+					goto bad;
+				pack_size--;
+				if (body[8 + pack_size] != 0)
+					goto bad;
+
+				ret = uefi_decode_lzh (d, body + 8, pack_size,
+						       unpack_size, &index);
+				if (ret != UEFI_OK)
+					goto out_ret;
+				new_buf = (unsigned) index;
+				new_offset = 0;
+				new_size = unpack_size;
+			}
+			else if (uefi_guids_eq (p + hdr, uefi_guid_zlib_amd))
+			{
+				int index;
+
+				if (new_size < UEFI_AMD_ZLIB_HDR)
+					goto bad;
+				ret = uefi_decode_zlib (d, bufdata + new_offset
+							+ UEFI_AMD_ZLIB_HDR,
+							new_size
+							- UEFI_AMD_ZLIB_HDR,
+							&index);
 				if (ret != UEFI_OK)
 					goto out_ret;
 				new_buf = (unsigned) index;
@@ -2277,9 +2478,62 @@ uefi_cache_drop (void)
 	uefi_cache_size = 0;
 }
 
+/*
+ * Sweep the device for an FFS volume header on a 4 KiB boundary, reading in
+ * megabyte chunks.  Stops at the first hit; a read error just ends the sweep
+ * without leaving an error behind, since failing here only means "this is
+ * not a firmware image" and must not abort the filesystem probe chain.
+ */
+static int
+uefi_probe_sweep (grub_disk_t disk, grub_uint64_t total)
+{
+	grub_uint8_t *buf;
+	grub_uint64_t off;
+	grub_uint64_t limit = total < UEFI_SCAN_MAX ? total : UEFI_SCAN_MAX;
+	int found = 0;
+
+	buf = grub_malloc (UEFI_SCAN_CHUNK);
+	if (!buf)
+		return 0;
+
+	for (off = 0; off + UEFI_FV_HEADER_SIZE <= limit;
+	     off += UEFI_SCAN_CHUNK)
+	{
+		grub_size_t n = UEFI_SCAN_CHUNK;
+		grub_size_t pos;
+
+		if ((grub_uint64_t) n > limit - off)
+			n = (grub_size_t) (limit - off);
+		if (grub_disk_read (disk, 0, off, n, buf))
+			break;
+
+		for (pos = 0; pos + UEFI_FV_HEADER_SIZE <= n;
+		     pos += UEFI_SCAN_STRIDE)
+		{
+			const grub_uint8_t *p = buf + pos;
+			struct uefi_fv_header h;
+
+			if (uefi_is_ffs (p)
+			    && uefi_fv_header_parse (p, &h)
+			    && h.header_len <= n - pos
+			    && h.vol_size <= total - (off + pos)
+			    && uefi_fv_checksum_ok (p, h.header_len))
+			{
+				found = 1;
+				goto out;
+			}
+		}
+	}
+
+out:
+	grub_free (buf);
+	grub_errno = GRUB_ERR_NONE;
+	return found;
+}
+
 /* is there anything at all that looks like a firmware image here? */
 static int
-uefi_probe (const grub_uint8_t *head, grub_size_t head_size,
+uefi_probe (grub_disk_t disk, const grub_uint8_t *head, grub_size_t head_size,
 	    grub_uint64_t total)
 {
 	struct uefi_fvloc loc;
@@ -2294,8 +2548,13 @@ uefi_probe (const grub_uint8_t *head, grub_size_t head_size,
 		return 1;
 	if (head_size < UEFI_FV_HEADER_SIZE)
 		return 0;
-	return uefi_scan_fvs (head, 0, (grub_uint32_t) head_size, total, 1,
-			      &loc, 1) != 0;
+	if (uefi_scan_fvs (head, 0, (grub_uint32_t) head_size, total, 1,
+			   &loc, 1) != 0)
+		return 1;
+	/* nothing at the start: only sweep what could be a firmware image */
+	if (total > UEFI_IMAGE_MAX)
+		return 0;
+	return uefi_probe_sweep (disk, total);
 }
 
 static struct grub_uefi_data *
@@ -2321,9 +2580,9 @@ grub_uefi_mount (grub_disk_t disk)
 		return 0;
 	if (grub_disk_read (disk, 0, 0, head_size, head))
 		goto not_ours;
-	if (!uefi_probe (head, head_size, total))
-		goto not_ours;
 
+	/* the cache is consulted before probing: a hit means the sweep,
+	   which may have to read the whole device, is skipped entirely */
 	if (uefi_cache_data && uefi_cache_name
 	    && grub_strcmp (uefi_cache_name, disk->name) == 0
 	    && uefi_cache_size == total
@@ -2334,6 +2593,9 @@ grub_uefi_mount (grub_disk_t disk)
 		grub_free (head);
 		return uefi_cache_data;
 	}
+
+	if (!uefi_probe (disk, head, head_size, total))
+		goto not_ours;
 
 	if (total > UEFI_IMAGE_MAX)
 	{
@@ -2387,8 +2649,13 @@ fail:
 
 not_ours:
 	grub_free (head);
-	if (!grub_errno)
-		grub_error (GRUB_ERR_BAD_FS, "not a uefi firmware image");
+	/*
+	 * Always report BAD_FS here: grub_fs_probe() stops trying further
+	 * filesystems on any other error, so an unreadable device must not
+	 * be turned into "no filesystem at all" by this driver.
+	 */
+	grub_errno = GRUB_ERR_NONE;
+	grub_error (GRUB_ERR_BAD_FS, "not a uefi firmware image");
 	return 0;
 }
 
