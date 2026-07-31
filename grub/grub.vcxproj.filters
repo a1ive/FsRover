@@ -396,6 +396,9 @@
     <ClCompile Include="grub-core\io\brio.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\lzmaio.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\bz2io.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
@@ -733,21 +736,6 @@
       <Filter>include\grub\i386</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\lib\crc.h">
-      <Filter>include\grub\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="include\grub\lib\LzFind.h">
-      <Filter>include\grub\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="include\grub\lib\LzHash.h">
-      <Filter>include\grub\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="include\grub\lib\LzmaDec.h">
-      <Filter>include\grub\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="include\grub\lib\LzmaEnc.h">
-      <Filter>include\grub\lib</Filter>
-    </ClInclude>
-    <ClInclude Include="include\grub\lib\LzmaTypes.h">
       <Filter>include\grub\lib</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\list.h">

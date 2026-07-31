@@ -316,6 +316,9 @@
     <ClCompile Include="grub-core\io\lz4io.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\io\lzmaio.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\io\lzopio.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -553,11 +556,6 @@
     <ClInclude Include="include\grub\i18n.h" />
     <ClInclude Include="include\grub\i386\types.h" />
     <ClInclude Include="include\grub\lib\crc.h" />
-    <ClInclude Include="include\grub\lib\LzFind.h" />
-    <ClInclude Include="include\grub\lib\LzHash.h" />
-    <ClInclude Include="include\grub\lib\LzmaDec.h" />
-    <ClInclude Include="include\grub\lib\LzmaEnc.h" />
-    <ClInclude Include="include\grub\lib\LzmaTypes.h" />
     <ClInclude Include="include\grub\list.h" />
     <ClInclude Include="include\grub\lockdown.h" />
     <ClInclude Include="include\grub\lvm.h" />

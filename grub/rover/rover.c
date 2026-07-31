@@ -769,7 +769,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 		   names mirror the grub_file_filter_id_t slot order.  */
 		static const char *const names[] =
 		{
-			"gzio", "xzio", "lzopio", "lz4io", "zstdio", "bz2io", "brio",
+			"gzio", "xzio", "lzopio", "lz4io", "zstdio", "bz2io", "brio", "lzmaio",
 			"vhd", "vhdx", "vdi", "qcow", "vmdk", "dmg", "isz",
 			"sparse", "parallels", "ffu",
 		};
