@@ -247,6 +247,10 @@
     <ClCompile Include="grub-core\fs\ntfscomp.c" />
     <ClCompile Include="grub-core\fs\odc.c" />
     <ClCompile Include="grub-core\fs\pkghelp.c" />
+    <ClCompile Include="grub-core\fs\pmf.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\qnx4.c" />
     <ClCompile Include="grub-core\fs\qnx6.c" />
     <ClCompile Include="grub-core\fs\rar.c">
@@ -327,6 +331,14 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\io\parallels.c" />
+    <ClCompile Include="grub-core\io\pmf.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\pmfx.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\io\qcow.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -420,6 +432,10 @@
     <ClCompile Include="grub-core\disk\geli.c" />
     <ClCompile Include="grub-core\fs\proc.c" />
     <ClCompile Include="grub-core\lib\datetime.c" />
+    <ClCompile Include="grub-core\lib\dgcomp.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\libzbitmap\libzbitmap.c" />
     <ClCompile Include="grub-core\lib\lz4\lz4.c" />
     <ClCompile Include="grub-core\lib\lzfse\lzfse_decode.c" />
@@ -627,6 +643,7 @@
     <ClInclude Include="grub-core\lib\brotli\dec\state.h" />
     <ClInclude Include="grub-core\lib\brotli\dec\static_init.h" />
     <ClInclude Include="grub-core\lib\bzip2\bz_version.h" />
+    <ClInclude Include="include\grub\dgcomp.h" />
     <ClInclude Include="grub-core\lib\bzip2\bzlib.h" />
     <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h" />
     <ClInclude Include="grub-core\lib\lz4\lz4.h" />

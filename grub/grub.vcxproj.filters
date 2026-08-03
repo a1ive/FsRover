@@ -357,6 +357,9 @@
     <ClCompile Include="grub-core\fs\squash4.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\pmf.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\tar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -430,6 +433,12 @@
       <Filter>grub-core\io</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\io\sparse.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\pmf.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\pmfx.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\io\tib.c">
@@ -526,6 +535,9 @@
       <Filter>grub-core\lib</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\lib\datetime.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\dgcomp.c">
       <Filter>grub-core\lib</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\lib\minilzo\minilzo.c">
@@ -706,6 +718,9 @@
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\exfat.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\dgcomp.h">
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\fat.h">

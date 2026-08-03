@@ -108,6 +108,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (ntfs)	\
 	mod (ntfscomp)	\
 	mod (odc)	\
+	mod (pmffs)	\
 	mod (qnx4)	\
 	mod (qnx6)	\
 	mod (rar)	\
@@ -153,7 +154,9 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (parallels)	\
 	mod (ffu)	\
 	mod (tib)	\
-	mod (tibx)
+	mod (tibx)	\
+	mod (pmf)	\
+	mod (pmfx)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\
