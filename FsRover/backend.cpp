@@ -285,6 +285,22 @@ post_progress (extract_ctx &ctx, int percent)
 		delete p;
 }
 
+/* Progress for the tasks that work on a single item (image export,
+   hashing): one "file" of one, so only the percentage moves.  */
+void
+post_item_progress (UINT seq, const std::string &name, int percent)
+{
+	backend_progress *p = new backend_progress;
+
+	p->seq = seq;
+	p->percent = percent;
+	p->file_index = 1;
+	p->file_total = 1;
+	p->name = name;
+	if (!PostMessageW (g_notify, WM_APP_TASK_PROGRESS, seq, (LPARAM) p))
+		delete p;
+}
+
 void
 extract_progress_hook (unsigned long long done, unsigned long long total, void *data)
 {
@@ -533,6 +549,99 @@ fail:
 }
 
 /*
+ * Raw image export: the device read through grub's "(dev)0+" blocklist
+ * -- the whole span of the device, byte for byte -- into one .img file.
+ *
+ * The blocklist sizes itself from the parent disk, so on a partition
+ * its size covers the entire disk while reads past the partition end
+ * fail; task.limit carries the device size the GUI already knows and
+ * is what actually bounds the copy (same arrangement as read_chunk).
+ */
+void
+run_export_image (const backend_task &task, UINT seq, backend_result *res)
+{
+	std::string src = "(" + task.path + ")0+";
+	std::vector<char> buf ((size_t) 1 << 20);
+	rover_file *f;
+	HANDLE h;
+	UINT64 total;
+	ULONGLONG last_tick;
+
+	f = rover_file_open (src.c_str ());
+	if (!f)
+	{
+		set_error (res, "cannot open device");
+		return;
+	}
+	total = rover_file_size (f);
+	if (task.limit < total)
+		total = task.limit;
+
+	h = CreateFileW (task.dest.c_str (), GENERIC_WRITE, 0, nullptr,
+			 CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h == INVALID_HANDLE_VALUE)
+	{
+		rover_file_close (f);
+		res->error = "cannot create image file";
+		return;
+	}
+
+	last_tick = GetTickCount64 ();
+	post_item_progress (seq, task.path, 0);
+	while (res->stat_bytes < total)
+	{
+		if (g_cancel.load (std::memory_order_relaxed))
+			break;
+		service_requests ();
+		UINT64 remain = total - res->stat_bytes;
+		size_t want = buf.size () < remain ? buf.size () : (size_t) remain;
+		long long r = rover_file_read (f, buf.data (), want);
+		if (r < 0)
+		{
+			set_error (res, "read error");
+			break;
+		}
+		/* Short of the announced size: the device shrank or lied,
+		   so the image would be truncated -- say so.  */
+		if (r == 0)
+		{
+			res->error = "device ended before the expected size";
+			break;
+		}
+		DWORD w = 0;
+		if (!WriteFile (h, buf.data (), (DWORD) r, &w, nullptr)
+		    || w != (DWORD) r)
+		{
+			res->error = "write failed";
+			break;
+		}
+		res->stat_bytes += (UINT64) r;
+
+		ULONGLONG now = GetTickCount64 ();
+		if (now - last_tick >= 100)
+		{
+			last_tick = now;
+			post_item_progress (seq, task.path,
+				total ? (int) (res->stat_bytes * 100 / total) : 100);
+		}
+	}
+
+	CloseHandle (h);
+	rover_file_close (f);
+	if (res->error.empty () && g_cancel.load (std::memory_order_relaxed))
+		res->error = "export cancelled";
+	/* A partial raw image is indistinguishable from a complete one
+	   once the app is gone, and there is no resume; drop it.  */
+	if (!res->error.empty ())
+	{
+		DeleteFileW (task.dest.c_str ());
+		res->stat_bytes = 0;
+	}
+	else
+		res->stat_files = 1;
+}
+
+/*
  * File properties (dialog): libmagic description and hashes.  Both
  * read through rover, so they live on this thread like everything
  * else; hashing itself (CNG + CRC tables) has no grub dependency.
@@ -659,20 +768,6 @@ crc64_fill (UINT64 table[256])
 }
 
 void
-post_hash_progress (UINT seq, const std::string &path, int percent)
-{
-	backend_progress *p = new backend_progress;
-
-	p->seq = seq;
-	p->percent = percent;
-	p->file_index = 1;
-	p->file_total = 1;
-	p->name = path;
-	if (!PostMessageW (g_notify, WM_APP_TASK_PROGRESS, seq, (LPARAM) p))
-		delete p;
-}
-
-void
 run_hash_file (const backend_task &task, UINT seq, backend_result *res)
 {
 	/* Indexed by BACKEND_HASH_* bit number; CRCs have no CNG id.  */
@@ -751,7 +846,7 @@ run_hash_file (const backend_task &task, UINT seq, backend_result *res)
 		if (now - last_tick >= 100)
 		{
 			last_tick = now;
-			post_hash_progress (seq, task.path, total ? (int) (done * 100 / total) : 0);
+			post_item_progress (seq, task.path, total ? (int) (done * 100 / total) : 0);
 		}
 	}
 	rover_file_close (f);
@@ -780,7 +875,7 @@ run_hash_file (const backend_task &task, UINT seq, backend_result *res)
 		snprintf (text, sizeof (text), "%016llx", (unsigned long long) (crc64 ^ ~0ULL));
 		res->hash[3] = text;
 	}
-	post_hash_progress (seq, task.path, 100);
+	post_item_progress (seq, task.path, 100);
 }
 
 /* Hex/text viewers: read LENGTH bytes at OFFSET.  A request past EOF
@@ -901,6 +996,10 @@ run_task (queued_task &item)
 		break;
 	case backend_task_type::extract:
 		run_extract (item.task, item.seq, res);
+		break;
+	case backend_task_type::export_image:
+		res->path = item.task.path;
+		run_export_image (item.task, item.seq, res);
 		break;
 	case backend_task_type::loopback_add:
 	{

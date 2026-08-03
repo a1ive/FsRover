@@ -53,6 +53,7 @@ enum class backend_task_type
 	enum_disks,	/* grub devices -> result.disks */
 	list_dir,	/* path -> result.entries */
 	extract,	/* paths -> dest, recursive for directories */
+	export_image,	/* device name + limit -> dest, raw .img copy */
 	loopback_add,	/* path (image file) -> result.path = "loopN" */
 	loopback_del,	/* path = device name */
 	file_props,	/* path -> result.text (libmagic description) */
@@ -73,13 +74,15 @@ constexpr int BACKEND_HASH_COUNT = 6;
 struct backend_task
 {
 	backend_task_type type;
-	std::string path;	/* list_dir: "(hd0,gpt2)/dir" */
+	std::string path;	/* list_dir: "(hd0,gpt2)/dir";
+				   export_image: "hd0,gpt2", no parens */
 	std::vector<std::string> paths;	/* extract: sources */
-	std::wstring dest;	/* extract: destination directory */
+	std::wstring dest;	/* extract: destination directory;
+				   export_image: destination image file */
 	UINT hash_mask = 0;	/* hash_file: BACKEND_HASH_* bits */
 	UINT64 offset = 0;	/* read_chunk: file position */
 	UINT length = 0;	/* read_chunk: bytes wanted */
-	UINT64 limit = ~0ULL;	/* read_chunk: optional logical EOF */
+	UINT64 limit = ~0ULL;	/* read_chunk, export_image: logical EOF */
 	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes */
 	bool decompress = false;	/* loopback_add: decode gzip/xz/... transparently */
 	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
@@ -142,7 +145,7 @@ struct backend_result
 	std::vector<backend_diskent> disks;	/* enum_disks */
 	std::vector<backend_dirent> entries;	/* list_dir, dirs first */
 	UINT64 stat_files = 0;	/* extract: files written */
-	UINT64 stat_bytes = 0;	/* extract: bytes written */
+	UINT64 stat_bytes = 0;	/* extract, export_image: bytes written */
 	UINT64 stat_links = 0;	/* extract: symlinks skipped */
 	std::string text;	/* file_props: libmagic description */
 	std::string hash[BACKEND_HASH_COUNT];	/* hash_file: lowercase hex */

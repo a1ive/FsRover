@@ -298,6 +298,12 @@ BEGIN
 	IDS_MENU_TIMESTAMPS	"Preserve &Timestamps"
 	IDS_BTN_BACK		"←"
 	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"Export raw image"
+	IDS_PICK_IMAGE		"Save raw image"
+	IDS_FILTER_IMAGE	"Raw disk image (*.img)"
+	IDS_STATUS_EXPORTING	"Exporting image..."
+	IDS_FMT_EXPORT_PROG	"Exporting %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"Exported %s, %s"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -463,6 +469,12 @@ BEGIN
 	IDS_MENU_TIMESTAMPS	"保留时间戳(&T)"
 	IDS_BTN_BACK		"←"
 	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"导出磁盘镜像"
+	IDS_PICK_IMAGE		"保存磁盘镜像"
+	IDS_FILTER_IMAGE	"原始磁盘镜像 (*.img)"
+	IDS_STATUS_EXPORTING	"正在导出镜像..."
+	IDS_FMT_EXPORT_PROG	"正在导出 %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"已导出 %s，%s"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -625,6 +637,12 @@ BEGIN
 	IDS_MENU_TIMESTAMPS	"保留時間戳記(&T)"
 	IDS_BTN_BACK		"←"
 	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"匯出磁碟映像"
+	IDS_PICK_IMAGE		"儲存磁碟映像"
+	IDS_FILTER_IMAGE	"原始磁碟映像 (*.img)"
+	IDS_STATUS_EXPORTING	"正在匯出映像..."
+	IDS_FMT_EXPORT_PROG	"正在匯出 %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"已匯出 %s，%s"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -787,6 +805,12 @@ BEGIN
 	IDS_MENU_TIMESTAMPS	"タイムスタンプを保持(&T)"
 	IDS_BTN_BACK		"←"
 	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"ディスクイメージを書き出し"
+	IDS_PICK_IMAGE		"ディスクイメージを保存"
+	IDS_FILTER_IMAGE	"RAW ディスクイメージ (*.img)"
+	IDS_STATUS_EXPORTING	"イメージを書き出しています..."
+	IDS_FMT_EXPORT_PROG	"書き出し中 %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"%s を書き出しました (%s)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

@@ -27,6 +27,7 @@
 #include <shlobj.h>
 #include <shellapi.h>
 #include <uxtheme.h>
+#include <wchar.h>
 #include <wctype.h>
 
 #include <map>
@@ -93,6 +94,7 @@ constexpr int IDM_COPY_PATH = 9;
 constexpr int IDM_MOUNT_DECOMP = 10;
 constexpr int IDM_TEXT = 11;
 constexpr int IDM_IMAGE = 12;
+constexpr int IDM_EXPORT = 13;
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -189,7 +191,8 @@ std::map<std::wstring, int> g_icon_cache;	/* list_icon() memo, by key */
 std::string g_path;	/* listed path, UTF-8, empty = nothing shown */
 UINT g_seq_disks;	/* pending seq per task type; older results */
 UINT g_seq_list;	/* are stale and dropped */
-UINT g_seq_extract;
+UINT g_seq_extract;	/* also the raw image export: one long job at a time */
+bool g_export_job;	/* the running job is an export, not an extraction */
 
 std::set<std::string> g_mounted;	/* loopback devices we created */
 HFONT g_font;	/* message font, shared by all controls */
@@ -535,6 +538,42 @@ fail:
 	return out;
 }
 
+/* Save dialog for the raw image export.  DEFNAME seeds the name; the
+   ".img" extension is appended when the user types none.  */
+std::wstring
+pick_image_file (const std::wstring &defname)
+{
+	IFileSaveDialog *dlg = nullptr;
+	IShellItem *item = nullptr;
+	wchar_t *path = nullptr;
+	FILEOPENDIALOGOPTIONS opts = 0;
+	std::wstring out;
+	std::wstring title = res_str (IDS_PICK_IMAGE);
+	std::wstring filter = res_str (IDS_FILTER_IMAGE);
+	COMDLG_FILTERSPEC types[] = { { filter.c_str (), L"*.img" } };
+
+	if (FAILED (CoCreateInstance (CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
+		return {};
+	if (FAILED (dlg->GetOptions (&opts))
+		|| FAILED (dlg->SetOptions (opts | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST))
+		|| FAILED (dlg->SetTitle (title.c_str ()))
+		|| FAILED (dlg->SetFileTypes (ARRAYSIZE (types), types))
+		|| FAILED (dlg->SetDefaultExtension (L"img"))
+		|| FAILED (dlg->SetFileName (defname.c_str ()))
+		|| FAILED (dlg->Show (g_main))
+		|| FAILED (dlg->GetResult (&item))
+		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
+		goto fail;
+
+	out = path;
+	CoTaskMemFree (path);
+fail:
+	if (item)
+		item->Release ();
+	dlg->Release ();
+	return out;
+}
+
 std::vector<std::string>
 selected_paths (void)
 {
@@ -545,6 +584,26 @@ selected_paths (void)
 		if ((size_t) i < g_entries.size ())
 			out.push_back (join_path (g_path, g_entries[(size_t) i].name));
 	return out;
+}
+
+/* Claim the long-job slot for the task just posted: the Extract button
+   turns into Cancel and the status bar grows a progress bar.  */
+void
+begin_job (UINT seq, bool is_export, UINT status_id)
+{
+	g_seq_extract = seq;
+	g_extracting = true;
+	g_export_job = is_export;
+	SetWindowTextW (g_btn_extract, res_str (IDS_BTN_CANCEL).c_str ());
+	set_button_icon (g_btn_extract, g_himl_cancel);
+	/* Refresh (File menu, grayed in on_menu_popup) and the navigation
+	   buttons would only queue list tasks behind the running job
+	   and overwrite the progress line; the context menus gray their
+	   backend items for the same reason.  */
+	update_nav_buttons ();
+	SendMessageW (g_progress, PBM_SETPOS, 0, 0);
+	ShowWindow (g_progress, SW_SHOW);
+	set_status (status_id);
 }
 
 void
@@ -561,18 +620,42 @@ start_extract (std::vector<std::string> &&paths)
 	task.paths = std::move (paths);
 	task.dest = std::move (dest);
 	task.preserve_times = g_preserve_times;
-	g_seq_extract = backend_post (std::move (task));
-	g_extracting = true;
-	SetWindowTextW (g_btn_extract, res_str (IDS_BTN_CANCEL).c_str ());
-	set_button_icon (g_btn_extract, g_himl_cancel);
-	/* Refresh (File menu, grayed in on_menu_popup) and the navigation
-	   buttons would only queue list tasks behind the running extraction
-	   and overwrite the progress line; the context menus gray their
-	   backend items for the same reason.  */
-	update_nav_buttons ();
-	SendMessageW (g_progress, PBM_SETPOS, 0, 0);
-	ShowWindow (g_progress, SW_SHOW);
-	set_status (IDS_STATUS_EXTRACTING);
+	begin_job (backend_post (std::move (task)), false, IDS_STATUS_EXTRACTING);
+}
+
+/* "lvm/vg-root" -> "lvm_vg-root.img": a device name goes straight into
+   a file name, so the path separators and the other characters Win32
+   reserves cannot survive.  */
+std::wstring
+image_default_name (const std::string &device)
+{
+	std::wstring out = widen (device);
+
+	for (wchar_t &c : out)
+		if (c < 32 || wcschr (L"<>:\"/\\|?*", c))
+			c = L'_';
+	return out + L".img";
+}
+
+/* Raw image export.  It shares the extract job slot (progress bar and
+   Cancel button); only one long backend job runs at a time.  */
+void
+start_export (const backend_diskent &d)
+{
+	if (g_extracting)
+		return;
+	std::wstring dest = pick_image_file (image_default_name (d.name));
+	if (dest.empty ())
+		return;
+
+	backend_task task;
+	task.type = backend_task_type::export_image;
+	task.path = d.name;
+	task.dest = std::move (dest);
+	/* The device size the tree already knows: on a partition it is
+	   what bounds the copy, the blocklist alone would not.  */
+	task.limit = d.size;
+	begin_job (backend_post (std::move (task)), true, IDS_STATUS_EXPORTING);
 }
 
 void
@@ -849,9 +932,10 @@ on_tree_rclick (void)
 	dokan_mount *dm = dokanfs_find_device (d.name);
 	bool can_dokan = dokanfs_available () && !d.fs.empty () && !dm;
 	bool is_loop = g_mounted.count (d.name) != 0;
-	/* Raw hex view needs a known device size (the "0+" blocklist spans
-	   the whole device); pseudo-devices report an unknown size.  */
-	bool can_hex = d.size != BACKEND_SIZE_UNKNOWN;
+	/* Both raw reads (hex view, image export) go through the "0+"
+	   blocklist, which spans the whole device, so they need a known
+	   device size; pseudo-devices report none.  */
+	bool can_raw = d.size != BACKEND_SIZE_UNKNOWN;
 	UINT busy = g_extracting ? MF_GRAYED : 0u;
 
 	HMENU menu = CreatePopupMenu ();
@@ -861,27 +945,46 @@ on_tree_rclick (void)
 	if (is_loop)
 		AppendMenuW (menu, MF_STRING | busy, IDM_UNMOUNT, res_str (IDS_MENU_UNMOUNT).c_str ());
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (menu, MF_STRING | busy | (can_hex ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
+	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
+	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
 	/* Properties reads only the cached diskent, so it stays available
 	   during an extraction (unlike the backend-touching items above).  */
 	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
 	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
 	DestroyMenu (menu);
-	if (cmd == IDM_DOKAN_MOUNT && can_dokan)
-		do_dokan_mount (d);
-	else if (cmd == IDM_HEX && can_hex)
-		show_hex ("(" + d.name + ")0+", widen ("(" + d.name + ")"), d.size);
-	else if (cmd == IDM_PROPS)
-		show_disk_props (d, g_disks);
-	else if (cmd == IDM_DOKAN_UNMOUNT && dm)
-		do_dokan_unmount (dm);
-	else if (cmd == IDM_UNMOUNT && is_loop)
+	/* TrackPopupMenu never returns a grayed or absent item, so the
+	   guards below only restate what the menu already enforces.  */
+	switch (cmd)
 	{
-		backend_task task;
-		task.type = backend_task_type::loopback_del;
-		task.path = d.name;
-		backend_post (std::move (task));
-		set_status (IDS_STATUS_UNMOUNTING);
+	case IDM_DOKAN_MOUNT:
+		if (can_dokan)
+			do_dokan_mount (d);
+		break;
+	case IDM_DOKAN_UNMOUNT:
+		if (dm)
+			do_dokan_unmount (dm);
+		break;
+	case IDM_UNMOUNT:
+		if (is_loop)
+		{
+			backend_task task;
+			task.type = backend_task_type::loopback_del;
+			task.path = d.name;
+			backend_post (std::move (task));
+			set_status (IDS_STATUS_UNMOUNTING);
+		}
+		break;
+	case IDM_HEX:
+		if (can_raw)
+			show_hex ("(" + d.name + ")0+", widen ("(" + d.name + ")"), d.size);
+		break;
+	case IDM_EXPORT:
+		if (can_raw)
+			start_export (d);
+		break;
+	case IDM_PROPS:
+		show_disk_props (d, g_disks);
+		break;
 	}
 }
 
@@ -1063,9 +1166,11 @@ on_task_done (backend_result *raw)
 			return;
 		break;
 	case backend_task_type::extract:
+	case backend_task_type::export_image:
 		if (res->seq != g_seq_extract)
 			return;
 		g_extracting = false;
+		g_export_job = false;
 		SetWindowTextW (g_btn_extract, res_str (IDS_BTN_EXTRACT).c_str ());
 		set_button_icon (g_btn_extract, g_himl_extract);
 		update_nav_buttons ();
@@ -1128,6 +1233,14 @@ on_task_done (backend_result *raw)
 		set_status (text);
 		break;
 	}
+	case backend_task_type::export_image:
+	{
+		wchar_t text[192];
+		swprintf (text, 192, res_str (IDS_FMT_EXPORT_DONE).c_str (),
+			widen (res->path).c_str (), format_size (res->stat_bytes).c_str ());
+		set_status (text);
+		break;
+	}
 	case backend_task_type::loopback_add:
 	{
 		g_mounted.insert (res->path);
@@ -1171,8 +1284,12 @@ on_task_progress (backend_progress *raw)
 	SendMessageW (g_progress, PBM_SETPOS, (WPARAM) p->percent, 0);
 
 	wchar_t text[512];
-	_snwprintf_s (text, 512, _TRUNCATE, res_str (IDS_FMT_EXTRACT_PROG).c_str (),
-		p->file_index, p->file_total, widen (p->name).c_str (), p->percent);
+	if (g_export_job)
+		_snwprintf_s (text, 512, _TRUNCATE, res_str (IDS_FMT_EXPORT_PROG).c_str (),
+			widen (p->name).c_str (), p->percent);
+	else
+		_snwprintf_s (text, 512, _TRUNCATE, res_str (IDS_FMT_EXTRACT_PROG).c_str (),
+			p->file_index, p->file_total, widen (p->name).c_str (), p->percent);
 	set_status (text);
 }
 
