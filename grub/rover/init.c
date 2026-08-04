@@ -156,7 +156,8 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (tib)	\
 	mod (tibx)	\
 	mod (pmf)	\
-	mod (pmfx)
+	mod (pmfx)	\
+	mod (ntfsclone)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\

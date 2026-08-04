@@ -317,6 +317,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\wimboot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\io\gzio.c" />
+    <ClCompile Include="grub-core\io\ntfsclone.c" />
     <ClCompile Include="grub-core\io\offset.c" />
     <ClCompile Include="grub-core\io\isz.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
