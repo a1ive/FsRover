@@ -105,6 +105,29 @@ is_elevated (void)
 	return cached > 0;
 }
 
+/* Whether this is a 32-bit process on 64-bit Windows.  The bundled
+   Dokan runtime is built for this executable's architecture and a
+   WoW64 process cannot install one the system could use: its System32
+   writes are redirected to SysWOW64, and the kernel would not load an
+   x86 driver anyway.  A 64-bit build is never under WoW64.  */
+bool
+is_wow64 (void)
+{
+#ifdef _WIN64
+	return false;
+#else
+	using IsWow64Process_t = BOOL (WINAPI *) (HANDLE, PBOOL);
+	HMODULE k32 = GetModuleHandleW (L"kernel32.dll");
+	IsWow64Process_t fn = k32 ? reinterpret_cast<IsWow64Process_t>
+		(GetProcAddress (k32, "IsWow64Process")) : nullptr;
+	BOOL wow = FALSE;
+
+	if (fn)
+		fn (GetCurrentProcess (), &wow);
+	return wow != FALSE;
+#endif
+}
+
 HICON
 load_system_icon (const wchar_t* dll, int id, int size)
 {

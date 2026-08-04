@@ -312,6 +312,7 @@ BEGIN
 	IDS_MENU_RUNAS		"&Run as Administrator"
 	IDS_ELEVATE_FAILED	"Could not restart as administrator."
 	IDS_DOKAN_NEED_ADMIN	"Dokan requires administrator rights"
+	IDS_DOKAN_WOW64		"Installing Dokan needs the 64-bit build of FsRover"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -491,6 +492,7 @@ BEGIN
 	IDS_MENU_RUNAS		"以管理员身份运行(&R)"
 	IDS_ELEVATE_FAILED	"无法以管理员身份重新启动。"
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要管理员权限"
+	IDS_DOKAN_WOW64		"安装 Dokan 需要 64 位版本的 FsRover"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -667,6 +669,7 @@ BEGIN
 	IDS_MENU_RUNAS		"以系統管理員身分執行(&R)"
 	IDS_ELEVATE_FAILED	"無法以系統管理員身分重新啟動。"
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要系統管理員權限"
+	IDS_DOKAN_WOW64		"安裝 Dokan 需要 64 位元版本的 FsRover"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -843,6 +846,7 @@ BEGIN
 	IDS_MENU_RUNAS		"管理者として実行(&R)"
 	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
 	IDS_DOKAN_NEED_ADMIN	"Dokan の使用には管理者権限が必要です"
+	IDS_DOKAN_WOW64		"Dokan のインストールには 64 ビット版の FsRover が必要です"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

@@ -1593,15 +1593,19 @@ on_menu_popup (HMENU menu)
 		DeleteMenu (menu, 0, MF_BYPOSITION);
 	if (!dokanfs_available ())
 	{
-		/* Elevated: the driver is simply absent, so offer to install
-		   the bundled runtime instead of just greying the feature
-		   out.  Otherwise the token is what is missing -- the driver
-		   refuses a plain user and installing one writes System32 --
-		   and saying so beats an install that cannot work.  */
-		if (is_elevated ())
-			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
-		else
+		/* With the driver absent and nothing in the way, offer to
+		   install the bundled runtime instead of just greying the
+		   feature out.  What can be in the way is named in the order
+		   the user can act on it: a 32-bit build on 64-bit Windows
+		   bundles a runtime the system cannot use and elevating
+		   would not change that, while a missing token is one menu
+		   item away.  */
+		if (is_wow64 ())
+			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_WOW64).c_str ());
+		else if (!is_elevated ())
 			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
+		else
+			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
 		return;
 	}
 	if (!dokanfs_count ())

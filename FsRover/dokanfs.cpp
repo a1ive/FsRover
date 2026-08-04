@@ -514,6 +514,17 @@ dokanfs_install (std::wstring *error)
 	if (g_ok)
 		return true;
 
+	/* The bundled runtime matches this executable's architecture, so a
+	   WoW64 process would install a driver the kernel cannot load --
+	   and its System32 writes would land in SysWOW64 to begin with.
+	   The menu does not offer the install there; refuse it outright
+	   too, rather than leaving stray files behind.  */
+	if (is_wow64 ())
+	{
+		*error = res_str (IDS_DOKAN_WOW64);
+		return false;
+	}
+
 	wchar_t sysdir[MAX_PATH];
 	UINT n = GetSystemDirectoryW (sysdir, MAX_PATH);
 	if (n == 0 || n >= MAX_PATH)
