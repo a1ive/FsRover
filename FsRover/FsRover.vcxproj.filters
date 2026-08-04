@@ -14,6 +14,9 @@
     <Filter Include="SRC\dokan">
       <UniqueIdentifier>{23a3fe4b-0770-4676-8dd6-b967cec20ebb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SRC\md4c">
+      <UniqueIdentifier>{6f2a8a1c-6b1e-4d4f-9a5b-0d7f2a1c8e34}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp">
@@ -40,6 +43,18 @@
     <ClCompile Include="main.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="mdrtf.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="mdview.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="md4c\entity.c">
+      <Filter>SRC\md4c</Filter>
+    </ClCompile>
+    <ClCompile Include="md4c\md4c.c">
+      <Filter>SRC\md4c</Filter>
+    </ClCompile>
     <ClCompile Include="propsdlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -62,6 +77,15 @@
     </ClInclude>
     <ClInclude Include="gui.h">
       <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="mdrtf.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="md4c\entity.h">
+      <Filter>SRC\md4c</Filter>
+    </ClInclude>
+    <ClInclude Include="md4c\md4c.h">
+      <Filter>SRC\md4c</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>RC</Filter>
@@ -98,6 +122,9 @@
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="FsRover.manifest" />
+    <None Include="md4c\LICENSE.md">
+      <Filter>SRC\md4c</Filter>
+    </None>
     <None Include="..\README.md">
       <Filter>GitHub</Filter>
     </None>

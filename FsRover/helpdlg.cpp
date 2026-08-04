@@ -53,6 +53,7 @@ const wchar_t k_credits[] =
 	L"Dokany - <https://github.com/dokan-dev/dokany>\r\n"
 	L"file - <http://www.darwinsys.com/file>\r\n"
 	L"stb_image - <https://github.com/nothings/stb>\r\n"
+	L"MD4C - <https://github.com/mity/md4c>\r\n"
 	L"lz4 - <http://www.lz4.org/>\r\n"
 	L"Zstandard - <http://www.zstd.net/>\r\n"
 	L"bzip2 - <https://www.sourceware.org/bzip2>\r\n"

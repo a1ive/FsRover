@@ -62,6 +62,9 @@
 /* Disk/partition properties: buttons only, the sheet itself is painted.  */
 #define IDD_DISKPROPS		109
 
+/* Markdown preview: one read-only RichEdit filling the client area.  */
+#define IDD_MD			110
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303
@@ -69,6 +72,8 @@
 #define IDC_TEXT_LINENUM	1305
 #define IDC_TEXT_FONT		1306
 #define IDC_TEXT_INFO		1307
+
+#define IDC_MD_EDIT		1801
 
 #define IDC_HEX_LIST		1101
 #define IDC_HEX_OFFSET_LABEL	1102
@@ -241,5 +246,9 @@
 #define IDS_ELEVATE_FAILED	128
 #define IDS_DOKAN_NEED_ADMIN	129
 #define IDS_DOKAN_WOW64		130
+#define IDS_MENU_MARKDOWN	131
+#define IDS_MD_TITLE		132
+#define IDS_MD_ASK_LINK		133
+#define IDS_FMT_MD_TRUNC	134
 
 #endif /* ! FSROVER_RESOURCE_H */

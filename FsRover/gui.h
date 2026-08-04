@@ -102,6 +102,28 @@ bool is_image_name (const std::string &name);
 void show_image (const std::string &path);
 void img_on_chunk (backend_result *res);
 
+/* mdview.cpp */
+extern HWND g_md;	/* modal markdown viewer, null when closed */
+
+/* A page the markdown viewer can show: window caption plus the UTF-8
+   markdown itself.  Keeping the two apart from where they were read
+   lets one viewer serve both browsed files and the pages shipped with
+   the program.  */
+struct md_document
+{
+	std::wstring title;
+	std::string text;
+};
+
+bool is_markdown_name (const std::string &name);
+void show_markdown (const std::string &path);	/* file in the browsed fs */
+void show_markdown_doc (const md_document &doc);	/* already in memory */
+void md_on_chunk (backend_result *res);
+/* Sources for pages shipped with the program; see mdview.cpp.  */
+bool md_load_resource (UINT id, md_document *doc);
+bool md_load_file (const std::wstring &path, md_document *doc);
+bool md_load_help (const wchar_t *name, UINT res_id, md_document *doc);
+
 /* helpdlg.cpp */
 extern HWND g_about;	/* modal About dialog, null when closed */
 extern HWND g_support;	/* modal supported-features dialog */

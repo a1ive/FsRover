@@ -165,6 +165,10 @@
     <ClCompile Include="hexview.cpp" />
     <ClCompile Include="imageview.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="md4c\entity.c" />
+    <ClCompile Include="md4c\md4c.c" />
+    <ClCompile Include="mdrtf.cpp" />
+    <ClCompile Include="mdview.cpp" />
     <ClCompile Include="propsdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />
@@ -177,6 +181,9 @@
     <ClInclude Include="dokan\public.h" />
     <ClInclude Include="dokanfs.h" />
     <ClInclude Include="gui.h" />
+    <ClInclude Include="md4c\entity.h" />
+    <ClInclude Include="md4c\md4c.h" />
+    <ClInclude Include="mdrtf.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="strconv.h" />
@@ -201,6 +208,7 @@
     <None Include="..\README.md" />
     <None Include="packages.config" />
     <None Include="FsRover.manifest" />
+    <None Include="md4c\LICENSE.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -72,6 +72,18 @@ BEGIN
 	CONTROL		"", IDC_TEXT_EDIT, "RICHEDIT50W", ES_MULTILINE | ES_READONLY | ES_NOHIDESEL | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP, 0, 20, 480, 280, WS_EX_CLIENTEDGE
 END
 
+// Markdown preview: one read-only RichEdit filling the client area
+// (Msftedit.dll is loaded before the dialog is created).  The document
+// arrives as RTF through EM_STREAMIN and the caption is set at runtime,
+// so a single language-neutral template serves every UI language.
+IDD_MD DIALOGEX 0, 0, 480, 320
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "Markdown preview"
+FONT 9, "Segoe UI"
+BEGIN
+	CONTROL		"", IDC_MD_EDIT, "RICHEDIT50W", ES_MULTILINE | ES_READONLY | ES_NOHIDESEL | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP, 0, 0, 480, 320
+END
+
 // Image viewer: no controls, the whole client area is rendered with
 // Direct2D (d2d1.dll is loaded at runtime).  All text lives in the
 // caption, so a single language-neutral template serves every UI
@@ -313,6 +325,10 @@ BEGIN
 	IDS_ELEVATE_FAILED	"Could not restart as administrator."
 	IDS_DOKAN_NEED_ADMIN	"Dokan requires administrator rights"
 	IDS_DOKAN_WOW64		"Installing Dokan needs the 64-bit build of FsRover"
+	IDS_MENU_MARKDOWN	"Markdown preview"
+	IDS_MD_TITLE		"Markdown preview"
+	IDS_MD_ASK_LINK		"Open this link in your browser?"
+	IDS_FMT_MD_TRUNC	"Only the first %s of %s is shown."
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -493,6 +509,10 @@ BEGIN
 	IDS_ELEVATE_FAILED	"无法以管理员身份重新启动。"
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要管理员权限"
 	IDS_DOKAN_WOW64		"安装 Dokan 需要 64 位版本的 FsRover"
+	IDS_MENU_MARKDOWN	"Markdown 预览"
+	IDS_MD_TITLE		"Markdown 预览"
+	IDS_MD_ASK_LINK		"是否在浏览器中打开此链接？"
+	IDS_FMT_MD_TRUNC	"仅显示前 %s，共 %s。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -670,6 +690,10 @@ BEGIN
 	IDS_ELEVATE_FAILED	"無法以系統管理員身分重新啟動。"
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要系統管理員權限"
 	IDS_DOKAN_WOW64		"安裝 Dokan 需要 64 位元版本的 FsRover"
+	IDS_MENU_MARKDOWN	"Markdown 預覽"
+	IDS_MD_TITLE		"Markdown 預覽"
+	IDS_MD_ASK_LINK		"是否在瀏覽器中開啟此連結？"
+	IDS_FMT_MD_TRUNC	"僅顯示前 %s，共 %s。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -847,6 +871,10 @@ BEGIN
 	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
 	IDS_DOKAN_NEED_ADMIN	"Dokan の使用には管理者権限が必要です"
 	IDS_DOKAN_WOW64		"Dokan のインストールには 64 ビット版の FsRover が必要です"
+	IDS_MENU_MARKDOWN	"Markdown プレビュー"
+	IDS_MD_TITLE		"Markdown プレビュー"
+	IDS_MD_ASK_LINK		"このリンクをブラウザーで開きますか？"
+	IDS_FMT_MD_TRUNC	"先頭 %s のみ表示しています (全体 %s)。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

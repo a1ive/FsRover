@@ -98,6 +98,7 @@ constexpr int IDM_MOUNT_DECOMP = 10;
 constexpr int IDM_TEXT = 11;
 constexpr int IDM_IMAGE = 12;
 constexpr int IDM_EXPORT = 13;
+constexpr int IDM_MARKDOWN = 14;
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -790,6 +791,8 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_MOUNT_DECOMP, res_str (IDS_MENU_MOUNT_DECOMP).c_str ());
 	if (file_item >= 0 && is_image_name (g_entries[(size_t) file_item].name))
 		AppendMenuW (menu, MF_STRING | busy, IDM_IMAGE, res_str (IDS_MENU_IMAGE).c_str ());
+	if (file_item >= 0 && is_markdown_name (g_entries[(size_t) file_item].name))
+		AppendMenuW (menu, MF_STRING | busy, IDM_MARKDOWN, res_str (IDS_MENU_MARKDOWN).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_TEXT, res_str (IDS_MENU_TEXT).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
@@ -811,6 +814,8 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	}
 	else if (cmd == IDM_IMAGE && file_item >= 0)
 		show_image (join_path (g_path, g_entries[(size_t) file_item].name));
+	else if (cmd == IDM_MARKDOWN && file_item >= 0)
+		show_markdown (join_path (g_path, g_entries[(size_t) file_item].name));
 	else if (cmd == IDM_TEXT && file_item >= 0)
 		show_text (join_path (g_path, g_entries[(size_t) file_item].name));
 	else if (cmd == IDM_HEX && file_item >= 0)
@@ -1291,6 +1296,7 @@ on_task_done (backend_result *raw)
 		hex_on_chunk (res.get ());
 		text_on_chunk (res.get ());
 		img_on_chunk (res.get ());
+		md_on_chunk (res.get ());
 		return;
 	case backend_task_type::crypto_unlock:
 		crypto_unlock_done (res.get ());
