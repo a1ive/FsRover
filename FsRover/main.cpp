@@ -76,6 +76,7 @@ constexpr int IDM_FILE_EXIT = 201;
 constexpr int IDM_FILE_TIMESTAMPS = 202;
 constexpr int IDM_FILE_OPEN_IMAGE = 203;
 constexpr int IDM_FILE_OPEN_IMAGE_DECOMP = 204;
+constexpr int IDM_FILE_RUNAS = 205;
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_HELP_SUPPORT = 220;
@@ -935,8 +936,8 @@ do_dokan_unmount (dokan_mount *m)
 }
 
 /* Install the app-embedded Dokan runtime (Dokan menu, shown only while
-   the driver is absent).  Runs in-process -- the app is elevated -- so
-   it writes to System32 and starts a kernel service directly; a wait
+   the driver is absent and this process is elevated).  Runs in-process,
+   writing to System32 and starting a kernel service directly; a wait
    cursor covers the brief pause and the outcome is reported explicitly,
    since installing a driver is worth confirming.  */
 void
@@ -963,6 +964,39 @@ do_dokan_install (void)
 		set_status (text);
 		MessageBoxW (g_main, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 	}
+}
+
+/* Restart elevated (File menu, shown only while this process is not).
+   A running process cannot gain privileges, so the physical drives and
+   the Dokan install only appear in the new instance; this one hands
+   over as soon as the elevated one has been started.  */
+void
+run_as_admin (void)
+{
+	wchar_t exe[MAX_PATH];
+	SHELLEXECUTEINFOW info = { sizeof (info) };
+
+	if (!GetModuleFileNameW (nullptr, exe, ARRAYSIZE (exe)))
+		return;
+
+	/* Nothing to hand over: this is only reachable without elevation,
+	   and a drive letter cannot be mounted from there.
+
+	   NOASYNC: the shell must be done with the request before this
+	   process leaves.  */
+	info.fMask = SEE_MASK_NOASYNC;
+	info.hwnd = g_main;
+	info.lpVerb = L"runas";
+	info.lpFile = exe;
+	info.nShow = SW_SHOWNORMAL;
+	if (!ShellExecuteExW (&info))
+	{
+		/* Dismissing the UAC prompt is a decision, not a failure.  */
+		if (GetLastError () != ERROR_CANCELLED)
+			set_status (IDS_ELEVATE_FAILED);
+		return;
+	}
+	DestroyWindow (g_main);
 }
 
 void
@@ -1510,6 +1544,10 @@ create_menu_bar (HWND wnd)
 	/* Check mark set by on_menu_popup from g_preserve_times.  */
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
+	/* Elevation cannot change while the process runs, so the re-launch
+	   is either offered for good or never.  */
+	if (!is_elevated ())
+		AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_RUNAS, res_str (IDS_MENU_RUNAS).c_str ());
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
 
 	HMENU sel = CreatePopupMenu ();
@@ -1555,9 +1593,15 @@ on_menu_popup (HMENU menu)
 		DeleteMenu (menu, 0, MF_BYPOSITION);
 	if (!dokanfs_available ())
 	{
-		/* No driver yet: offer to install the bundled runtime
-		   instead of just greying the feature out.  */
-		AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
+		/* Elevated: the driver is simply absent, so offer to install
+		   the bundled runtime instead of just greying the feature
+		   out.  Otherwise the token is what is missing -- the driver
+		   refuses a plain user and installing one writes System32 --
+		   and saying so beats an install that cannot work.  */
+		if (is_elevated ())
+			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
+		else
+			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
 		return;
 	}
 	if (!dokanfs_count ())
@@ -1686,6 +1730,9 @@ on_command (int id)
 	case IDM_FILE_TIMESTAMPS:
 		/* A running extraction keeps the setting it started with.  */
 		g_preserve_times = !g_preserve_times;
+		break;
+	case IDM_FILE_RUNAS:
+		run_as_admin ();
 		break;
 	case IDM_FILE_EXIT:
 		SendMessageW (g_main, WM_CLOSE, 0, 0);

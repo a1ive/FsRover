@@ -309,6 +309,9 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"Select disk image"
 	IDS_FILTER_OPEN_IMAGE	"Disk images and archives"
 	IDS_FILTER_ALL		"All files (*.*)"
+	IDS_MENU_RUNAS		"&Run as Administrator"
+	IDS_ELEVATE_FAILED	"Could not restart as administrator."
+	IDS_DOKAN_NEED_ADMIN	"Dokan requires administrator rights"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -485,6 +488,9 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"选择镜像文件"
 	IDS_FILTER_OPEN_IMAGE	"磁盘镜像和压缩包"
 	IDS_FILTER_ALL		"所有文件 (*.*)"
+	IDS_MENU_RUNAS		"以管理员身份运行(&R)"
+	IDS_ELEVATE_FAILED	"无法以管理员身份重新启动。"
+	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要管理员权限"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -658,6 +664,9 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"選擇映像檔"
 	IDS_FILTER_OPEN_IMAGE	"磁碟映像與壓縮檔"
 	IDS_FILTER_ALL		"所有檔案 (*.*)"
+	IDS_MENU_RUNAS		"以系統管理員身分執行(&R)"
+	IDS_ELEVATE_FAILED	"無法以系統管理員身分重新啟動。"
+	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要系統管理員權限"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -831,6 +840,9 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"ディスクイメージを選択"
 	IDS_FILTER_OPEN_IMAGE	"ディスクイメージ / アーカイブ"
 	IDS_FILTER_ALL		"すべてのファイル (*.*)"
+	IDS_MENU_RUNAS		"管理者として実行(&R)"
+	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
+	IDS_DOKAN_NEED_ADMIN	"Dokan の使用には管理者権限が必要です"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

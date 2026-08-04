@@ -18,11 +18,12 @@
 
 /*
  * Dokan drive-letter mounts of grub devices.  dokan2.dll is loaded
- * dynamically: when the library or its driver is absent everything
+ * dynamically: when the library or its driver is absent -- or when the
+ * process is not elevated, which the driver requires -- everything
  * degrades to dokanfs_available() == false and the GUI offers Install
- * Dokan instead.  The runtime (dll + driver) is embedded in
- * our resources for the build architecture; dokanfs_install() writes it
- * to the system and starts the driver (the process runs elevated).  All
+ * Dokan (elevated) or says what is missing.  The runtime (dll + driver)
+ * is embedded in our resources for the build architecture;
+ * dokanfs_install() writes it to the system and starts the driver.  All
  * functions are GUI-thread only; the filesystem callbacks marshal their
  * rover calls onto the backend thread via backend_call().
  */
@@ -56,8 +57,10 @@ bool dokanfs_available (void);
 /* Install the app-embedded Dokan runtime (library + kernel driver) to
    the system, start the driver service and
    re-probe.  On success dokanfs_available() becomes true and true is
-   returned; otherwise false with *ERROR set.  The process already runs
-   elevated (RequireAdministrator), so no re-launch is needed.  */
+   returned; otherwise false with *ERROR set.  Writing System32 and
+   creating a kernel service needs an elevated token: the app runs
+   asInvoker, so the GUI only offers this while is_elevated() and points
+   at its File menu re-launch otherwise.  */
 bool dokanfs_install (std::wstring *error);
 
 /* Unmount everything and unload the library.  */

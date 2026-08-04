@@ -20,6 +20,12 @@
  * grub disk backend for Windows physical drives ("hdN" maps to
  * \\.\PhysicalDriveN) and optical drives ("cdN" maps to \\.\CdRomN).
  * Read-only by design.
+ *
+ * Raw drive access needs an elevated token, and without one every open
+ * would fail with a Windows access error, so the backend stays
+ * unregistered instead: no physical device shows up at all, and the GUI
+ * offers to restart as administrator.  Everything else (host images,
+ * loopback mounts) works as an ordinary user.
  */
 
 #include <grub/disk.h>
@@ -283,6 +289,25 @@ windisk_write (struct grub_disk *disk, grub_disk_addr_t sector, grub_size_t size
 	return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "windisk writes are not supported");
 }
 
+/* Whether this process holds an elevated token.  */
+static int
+windisk_elevated (void)
+{
+	HANDLE token;
+	TOKEN_ELEVATION elevation;
+	DWORD len = 0;
+	BOOL ok = FALSE;
+
+	if (!OpenProcessToken (GetCurrentProcess (), TOKEN_QUERY, &token))
+		return 0;
+	if (GetTokenInformation (token, TokenElevation, &elevation, sizeof (elevation), &len))
+		ok = elevation.TokenIsElevated;
+	CloseHandle (token);
+	return ok ? 1 : 0;
+}
+
+static int windisk_registered;
+
 static struct grub_disk_dev grub_windisk_dev =
 {
 	.name = "windisk",
@@ -297,10 +322,16 @@ static struct grub_disk_dev grub_windisk_dev =
 
 GRUB_MOD_INIT (windisk)
 {
+	if (!windisk_elevated ())
+		return;
 	grub_disk_dev_register (&grub_windisk_dev);
+	windisk_registered = 1;
 }
 
 GRUB_MOD_FINI (windisk)
 {
+	if (!windisk_registered)
+		return;
 	grub_disk_dev_unregister (&grub_windisk_dev);
+	windisk_registered = 0;
 }

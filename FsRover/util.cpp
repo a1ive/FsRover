@@ -78,6 +78,33 @@ init_language (void)
 	SetThreadUILanguage (lang);
 }
 
+/* Whether this process holds an elevated token.  Physical drives
+   (windisk, which does not even register without one) and the Dokan
+   driver install need it; the File menu offers a re-launch when it is
+   missing.  A process cannot gain or lose elevation while it runs, so
+   the answer is resolved once.  */
+bool
+is_elevated (void)
+{
+	static int cached = -1;
+
+	if (cached < 0)
+	{
+		HANDLE token = nullptr;
+		TOKEN_ELEVATION elevation = {};
+		DWORD len = 0;
+
+		cached = 0;
+		if (OpenProcessToken (GetCurrentProcess (), TOKEN_QUERY, &token))
+		{
+			if (GetTokenInformation (token, TokenElevation, &elevation, sizeof (elevation), &len))
+				cached = elevation.TokenIsElevated ? 1 : 0;
+			CloseHandle (token);
+		}
+	}
+	return cached > 0;
+}
+
 HICON
 load_system_icon (const wchar_t* dll, int id, int size)
 {

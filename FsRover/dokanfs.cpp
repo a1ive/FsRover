@@ -40,6 +40,7 @@
 
 #include "backend.h"
 #include "dokanfs.h"
+#include "gui.h"
 #include "resource.h"
 #include "strconv.h"
 
@@ -388,6 +389,10 @@ device_serial (const std::string &device)
 bool
 dokan_load (void)
 {
+	/* The driver only accepts an elevated caller.  */
+	if (!is_elevated ())
+		return false;
+
 	g_dll = LoadLibraryW (L"dokan2.dll");
 	if (!g_dll)
 		return false;

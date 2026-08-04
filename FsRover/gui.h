@@ -51,6 +51,7 @@ extern UINT g_dpi;	/* main-window DPI; drives all layout scaling */
 std::wstring window_text (HWND wnd);
 std::wstring res_str (UINT id);
 void init_language (void);
+bool is_elevated (void);	/* elevated token: physical disks, driver install */
 HICON load_system_icon (const wchar_t *dll, int id, int size);
 HIMAGELIST icon_list (const wchar_t *dll, const int *ids, int count, int size);
 HIMAGELIST button_icons (const wchar_t *dll, int id, int size);
