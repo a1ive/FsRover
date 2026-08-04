@@ -182,6 +182,7 @@
     <ClCompile Include="grub-core\disk\raid5_recover.c" />
     <ClCompile Include="grub-core\disk\raid6_recover.c" />
     <ClCompile Include="grub-core\disk\windisk.c" />
+    <ClCompile Include="grub-core\disk\winfile.c" />
     <ClCompile Include="grub-core\partmap\acorn.c" />
     <ClCompile Include="grub-core\partmap\amiga.c" />
     <ClCompile Include="grub-core\partmap\apple.c" />

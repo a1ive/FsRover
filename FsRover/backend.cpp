@@ -67,6 +67,7 @@ bool g_stop;	/* guarded by g_lock */
 UINT g_seq;	/* guarded by g_lock */
 std::atomic<bool> g_cancel;
 UINT g_loop_seq;	/* backend thread only: next "loopN" suffix */
+UINT g_img_seq;	/* backend thread only: next "imgN" suffix */
 
 /* Backend thread: run every pending backend_call().  Called between
    tasks and at chunk boundaries inside long ones, so dokan requests
@@ -114,7 +115,8 @@ static_assert (BACKEND_DEV_OTHER == ROVER_DEV_OTHER
 	&& BACKEND_DEV_LOOPBACK == ROVER_DEV_LOOPBACK
 	&& BACKEND_DEV_DISKFILTER == ROVER_DEV_DISKFILTER
 	&& BACKEND_DEV_CRYPTODISK == ROVER_DEV_CRYPTODISK
-	&& BACKEND_DEV_PROCFS == ROVER_DEV_PROCFS,
+	&& BACKEND_DEV_PROCFS == ROVER_DEV_PROCFS
+	&& BACKEND_DEV_WINFILE == ROVER_DEV_WINFILE,
 	"BACKEND_DEV_* must match ROVER_DEV_*");
 
 int
@@ -1016,6 +1018,27 @@ run_task (queued_task &item)
 	case backend_task_type::loopback_del:
 		res->path = item.task.path;
 		if (rover_loopback_del (item.task.path.c_str ()))
+			set_error (res, "cannot unmount device");
+		break;
+	case backend_task_type::winfile_add:
+	{
+		/* The image lives on the Windows filesystem, which has no
+		   grub device: the path crosses as UTF-8 and winfile.c
+		   opens it with the Win32 API.  */
+		std::string dev = "img" + std::to_string (g_img_seq);
+		if (rover_winfile_add (dev.c_str (), narrow (item.task.dest).c_str (),
+			item.task.decompress ? 1 : 0))
+			set_error (res, "cannot mount image");
+		else
+		{
+			g_img_seq++;
+			res->path = dev;
+		}
+		break;
+	}
+	case backend_task_type::winfile_del:
+		res->path = item.task.path;
+		if (rover_winfile_del (item.task.path.c_str ()))
 			set_error (res, "cannot unmount device");
 		break;
 	case backend_task_type::file_props:

@@ -304,6 +304,11 @@ BEGIN
 	IDS_STATUS_EXPORTING	"Exporting image..."
 	IDS_FMT_EXPORT_PROG	"Exporting %s -- %d%%"
 	IDS_FMT_EXPORT_DONE	"Exported %s, %s"
+	IDS_MENU_OPEN_IMAGE	"&Open Image..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"Open Image (&decompress)..."
+	IDS_PICK_OPEN_IMAGE	"Select disk image"
+	IDS_FILTER_OPEN_IMAGE	"Disk images and archives"
+	IDS_FILTER_ALL		"All files (*.*)"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -475,6 +480,11 @@ BEGIN
 	IDS_STATUS_EXPORTING	"正在导出镜像..."
 	IDS_FMT_EXPORT_PROG	"正在导出 %s -- %d%%"
 	IDS_FMT_EXPORT_DONE	"已导出 %s，%s"
+	IDS_MENU_OPEN_IMAGE	"打开镜像(&O)..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"打开镜像(透明解压)(&D)..."
+	IDS_PICK_OPEN_IMAGE	"选择镜像文件"
+	IDS_FILTER_OPEN_IMAGE	"磁盘镜像和压缩包"
+	IDS_FILTER_ALL		"所有文件 (*.*)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -643,6 +653,11 @@ BEGIN
 	IDS_STATUS_EXPORTING	"正在匯出映像..."
 	IDS_FMT_EXPORT_PROG	"正在匯出 %s -- %d%%"
 	IDS_FMT_EXPORT_DONE	"已匯出 %s，%s"
+	IDS_MENU_OPEN_IMAGE	"開啟映像(&O)..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"開啟映像(透明解壓縮)(&D)..."
+	IDS_PICK_OPEN_IMAGE	"選擇映像檔"
+	IDS_FILTER_OPEN_IMAGE	"磁碟映像與壓縮檔"
+	IDS_FILTER_ALL		"所有檔案 (*.*)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -811,6 +826,11 @@ BEGIN
 	IDS_STATUS_EXPORTING	"イメージを書き出しています..."
 	IDS_FMT_EXPORT_PROG	"書き出し中 %s -- %d%%"
 	IDS_FMT_EXPORT_DONE	"%s を書き出しました (%s)"
+	IDS_MENU_OPEN_IMAGE	"イメージを開く(&O)..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"イメージを開く (透過解凍)(&D)..."
+	IDS_PICK_OPEN_IMAGE	"ディスクイメージを選択"
+	IDS_FILTER_OPEN_IMAGE	"ディスクイメージ / アーカイブ"
+	IDS_FILTER_ALL		"すべてのファイル (*.*)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

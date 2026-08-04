@@ -74,6 +74,8 @@ constexpr int IDC_FWD = 104;
 constexpr int IDM_FILE_REFRESH = 200;
 constexpr int IDM_FILE_EXIT = 201;
 constexpr int IDM_FILE_TIMESTAMPS = 202;
+constexpr int IDM_FILE_OPEN_IMAGE = 203;
+constexpr int IDM_FILE_OPEN_IMAGE_DECOMP = 204;
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_HELP_SUPPORT = 220;
@@ -120,6 +122,7 @@ constexpr int IR_ICON_FLOPPY = 28;
 constexpr int IR_ICON_CD = 30;
 constexpr int IR_ICON_DISK = 32;
 constexpr int IR_ICON_CHIP = 34;
+constexpr int IR_ICON_WINFILE = 67;
 constexpr int IR_ICON_BACK = 148;
 constexpr int IR_ICON_ZIP = 174;
 constexpr int IR_ICON_LOCK = 1031;
@@ -138,9 +141,11 @@ constexpr int IMG_LVM = 4;
 constexpr int IMG_FW = 5;
 constexpr int IMG_LOCK = 6;
 constexpr int IMG_UNLOCK = 7;
+constexpr int IMG_WINFILE = 8;
 constexpr int TREE_ICON_IDS[] =
 	{ IR_ICON_DISK, IR_ICON_FLOPPY, IR_ICON_CD, IR_ICON_ZIP,
-	  IR_ICON_BACK, IR_ICON_CHIP, IR_ICON_LOCK, IR_ICON_UNLOCK };
+	  IR_ICON_BACK, IR_ICON_CHIP, IR_ICON_LOCK, IR_ICON_UNLOCK,
+	  IR_ICON_WINFILE };
 
 /* The file list uses per-extension shell icons copied into a DPI-sized
    image list; indexes come from list_icon() below, not a fixed order.  */
@@ -306,6 +311,8 @@ device_icon (const backend_diskent &d)
 		return IMG_FW;
 	case BACKEND_DEV_CRYPTODISK:
 		return IMG_UNLOCK;
+	case BACKEND_DEV_WINFILE:
+		return IMG_WINFILE;
 	}
 	if (d.name.rfind ("cd", 0) == 0)
 		return IMG_CD;
@@ -572,6 +579,62 @@ fail:
 		item->Release ();
 	dlg->Release ();
 	return out;
+}
+
+/* Open dialog for the File menu's "open image": any Windows file can be mounted.  */
+std::wstring
+pick_open_image (void)
+{
+	IFileOpenDialog *dlg = nullptr;
+	IShellItem *item = nullptr;
+	wchar_t *path = nullptr;
+	FILEOPENDIALOGOPTIONS opts = 0;
+	std::wstring out;
+	std::wstring title = res_str (IDS_PICK_OPEN_IMAGE);
+	std::wstring filter = res_str (IDS_FILTER_OPEN_IMAGE);
+	std::wstring filter_all = res_str (IDS_FILTER_ALL);
+	COMDLG_FILTERSPEC types[] =
+	{
+		{ filter.c_str (), L"*.img;*.ima;*.iso;*.vhd;*.vhdx;*.vdi;*.qcow;*.qcow2;*.vmdk;*.dmg" },
+		{ filter_all.c_str (), L"*.*" },
+	};
+
+	if (FAILED (CoCreateInstance (CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
+		return {};
+	if (FAILED (dlg->GetOptions (&opts))
+		|| FAILED (dlg->SetOptions (opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST))
+		|| FAILED (dlg->SetTitle (title.c_str ()))
+		|| FAILED (dlg->SetFileTypes (ARRAYSIZE (types), types))
+		|| FAILED (dlg->Show (g_main))
+		|| FAILED (dlg->GetResult (&item))
+		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
+		goto fail;
+
+	out = path;
+	CoTaskMemFree (path);
+fail:
+	if (item)
+		item->Release ();
+	dlg->Release ();
+	return out;
+}
+
+/* Mount a file picked from the Windows filesystem as a virtual disk
+   (winfile.c); the result arrives like a loopback mount.  */
+void
+open_host_image (bool decompress)
+{
+	std::wstring file = pick_open_image ();
+
+	if (file.empty ())
+		return;
+
+	backend_task task;
+	task.type = backend_task_type::winfile_add;
+	task.dest = std::move (file);
+	task.decompress = decompress;
+	backend_post (std::move (task));
+	set_status (IDS_STATUS_MOUNTING);
 }
 
 std::vector<std::string>
@@ -968,7 +1031,9 @@ on_tree_rclick (void)
 		if (is_loop)
 		{
 			backend_task task;
-			task.type = backend_task_type::loopback_del;
+			task.type = d.dev_id == BACKEND_DEV_WINFILE
+				? backend_task_type::winfile_del
+				: backend_task_type::loopback_del;
 			task.path = d.name;
 			backend_post (std::move (task));
 			set_status (IDS_STATUS_UNMOUNTING);
@@ -1178,6 +1243,8 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::loopback_add:
 	case backend_task_type::loopback_del:
+	case backend_task_type::winfile_add:
+	case backend_task_type::winfile_del:
 		break;
 	case backend_task_type::file_props:
 		props_on_type (res.get ());
@@ -1242,6 +1309,7 @@ on_task_done (backend_result *raw)
 		break;
 	}
 	case backend_task_type::loopback_add:
+	case backend_task_type::winfile_add:
 	{
 		g_mounted.insert (res->path);
 		refresh ();
@@ -1251,6 +1319,7 @@ on_task_done (backend_result *raw)
 		break;
 	}
 	case backend_task_type::loopback_del:
+	case backend_task_type::winfile_del:
 	{
 		g_mounted.erase (res->path);
 		/* Leave the view if it was on the departed device.  */
@@ -1433,6 +1502,9 @@ create_menu_bar (HWND wnd)
 	HMENU bar = CreateMenu ();
 
 	g_menu_file = CreatePopupMenu ();
+	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_OPEN_IMAGE, res_str (IDS_MENU_OPEN_IMAGE).c_str ());
+	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_OPEN_IMAGE_DECOMP, res_str (IDS_MENU_OPEN_IMAGE_DECOMP).c_str ());
+	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	/* Check mark set by on_menu_popup from g_preserve_times.  */
@@ -1466,8 +1538,11 @@ on_menu_popup (HMENU menu)
 	{
 		/* Same rule as the old toolbar button: a refresh would
 		   queue behind a running extraction and overwrite the
-		   progress line.  */
+		   progress line.  Mounting an image ends in a refresh, so
+		   it waits for the same moment.  */
 		EnableMenuItem (menu, IDM_FILE_REFRESH, g_extracting ? MF_GRAYED : MF_ENABLED);
+		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE, g_extracting ? MF_GRAYED : MF_ENABLED);
+		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE_DECOMP, g_extracting ? MF_GRAYED : MF_ENABLED);
 		CheckMenuItem (menu, IDM_FILE_TIMESTAMPS, g_preserve_times ? MF_CHECKED : MF_UNCHECKED);
 		return;
 	}
@@ -1602,6 +1677,11 @@ on_command (int id)
 	case IDM_FILE_REFRESH:
 		if (!g_extracting)
 			refresh ();
+		break;
+	case IDM_FILE_OPEN_IMAGE:
+	case IDM_FILE_OPEN_IMAGE_DECOMP:
+		if (!g_extracting)
+			open_host_image (id == IDM_FILE_OPEN_IMAGE_DECOMP);
 		break;
 	case IDM_FILE_TIMESTAMPS:
 		/* A running extraction keeps the setting it started with.  */

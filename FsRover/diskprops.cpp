@@ -139,6 +139,7 @@ dp_type_label (const backend_diskent &d)
 	switch (d.dev_id)
 	{
 	case BACKEND_DEV_LOOPBACK:
+	case BACKEND_DEV_WINFILE:
 		return IDS_DP_T_IMAGE;
 	case BACKEND_DEV_DISKFILTER:
 		return IDS_DP_T_VOLUME;

@@ -66,6 +66,7 @@ const char *rover_last_error (void);
 #define ROVER_DEV_DISKFILTER	3	/* lvm/ldm/mdraid/dmraid volume */
 #define ROVER_DEV_CRYPTODISK	4	/* unlocked crypto volume */
 #define ROVER_DEV_PROCFS	5	/* (proc) pseudo-device */
+#define ROVER_DEV_WINFILE	6	/* winfile host image mount */
 
 struct rover_disk_info
 {
@@ -199,6 +200,20 @@ int rover_loopback_del (const char *devname);
    no such device.  The returned string is owned by the loopback and stays
    valid until the device is deleted.  */
 const char *rover_loopback_get_file (const char *devname);
+
+/*
+ * Host images: the same thing for a file on the Windows filesystem,
+ * which has no grub device to name it by.  PATH is a Windows path in
+ * UTF-8 ("C:\\images\\disk.vhd"); the file is opened with the Win32 API
+ * and exposed as read-only virtual disk DEVNAME ("img0"), decoded
+ * through the same io filters (vhd/vhdx/qcow/... always, gzip/xz/...
+ * when DECOMPRESS is nonzero).  Deleting fails while the device is
+ * open.  rover_winfile_get_path() returns the Windows path a device was
+ * created from, owned by the device and valid until it is deleted.
+ */
+int rover_winfile_add (const char *devname, const char *path, int decompress);
+int rover_winfile_del (const char *devname);
+const char *rover_winfile_get_path (const char *devname);
 
 /*
  * Unlock the LUKS/LUKS2 volume on grub device DEVICE ("hd0,gpt2") using

@@ -359,6 +359,10 @@ enum_disk_shim (const char *name, void *data)
 		case GRUB_DISK_DEVICE_PROCFS_ID:
 			info.dev_id = ROVER_DEV_PROCFS;
 			break;
+		case GRUB_DISK_DEVICE_HOST_ID:
+			info.dev_id = ROVER_DEV_WINFILE;
+			info.parent_file = rover_winfile_get_path (name);
+			break;
 		default:
 			break;
 		}

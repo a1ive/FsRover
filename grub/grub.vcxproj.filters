@@ -195,6 +195,9 @@
     <ClCompile Include="grub-core\disk\windisk.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\disk\winfile.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\partmap\acorn.c">
       <Filter>grub-core\partmap</Filter>
     </ClCompile>

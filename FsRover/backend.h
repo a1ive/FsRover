@@ -56,6 +56,8 @@ enum class backend_task_type
 	export_image,	/* device name + limit -> dest, raw .img copy */
 	loopback_add,	/* path (image file) -> result.path = "loopN" */
 	loopback_del,	/* path = device name */
+	winfile_add,	/* dest (Windows file) -> result.path = "imgN" */
+	winfile_del,	/* path = device name */
 	file_props,	/* path -> result.text (libmagic description) */
 	hash_file,	/* path + hash_mask -> result.hash[] */
 	read_chunk,	/* path + offset/length -> result.data, file_size */
@@ -78,13 +80,14 @@ struct backend_task
 				   export_image: "hd0,gpt2", no parens */
 	std::vector<std::string> paths;	/* extract: sources */
 	std::wstring dest;	/* extract: destination directory;
-				   export_image: destination image file */
+				   export_image: destination image file;
+				   winfile_add: source image file */
 	UINT hash_mask = 0;	/* hash_file: BACKEND_HASH_* bits */
 	UINT64 offset = 0;	/* read_chunk: file position */
 	UINT length = 0;	/* read_chunk: bytes wanted */
 	UINT64 limit = ~0ULL;	/* read_chunk, export_image: logical EOF */
 	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes */
-	bool decompress = false;	/* loopback_add: decode gzip/xz/... transparently */
+	bool decompress = false;	/* loopback_add, winfile_add: decode gzip/xz/... transparently */
 	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
 };
 
@@ -107,6 +110,7 @@ constexpr int BACKEND_DEV_LOOPBACK = 2;	/* loopdisk image mount */
 constexpr int BACKEND_DEV_DISKFILTER = 3;	/* lvm/ldm/mdraid/dmraid volume */
 constexpr int BACKEND_DEV_CRYPTODISK = 4;	/* unlocked crypto volume */
 constexpr int BACKEND_DEV_PROCFS = 5;	/* (proc) pseudo-device */
+constexpr int BACKEND_DEV_WINFILE = 6;	/* winfile host image mount */
 
 struct backend_diskent
 {
@@ -119,7 +123,7 @@ struct backend_diskent
 	std::string fs_uuid;	/* filesystem UUID, empty if none */
 	UINT64 start_lba = 0;	/* partition start in sector_size units, 0 if whole disk */
 	UINT sector_size = 0;	/* logical sector size in bytes, 0 if unknown */
-	std::string parent_file;	/* loopback backing file (grub path), else empty */
+	std::string parent_file;	/* loopback backing file (grub path) or winfile backing file (Windows path), else empty */
 	std::string parent_device;	/* cryptodisk source device, else empty */
 	std::string parents;	/* diskfilter member devices, one per line, else empty */
 	bool encrypted = false;	/* locked LUKS/LUKS2, BitLocker or GELI container */

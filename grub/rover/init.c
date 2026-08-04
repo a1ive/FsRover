@@ -43,6 +43,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	/* disks: physical first, then volume managers / RAID */	\
 	mod (windisk)	\
 	mod (loopdisk)	\
+	mod (winfile)	\
 	mod (diskfilter)	\
 	mod (ldm)	\
 	mod (lvm)	\
