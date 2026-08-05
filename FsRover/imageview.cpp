@@ -44,10 +44,10 @@
 #define STBI_NO_STDIO
 #include "stb_image.h"
 
-HWND g_img;	/* modal image viewer, null when closed */
-
 namespace
 {
+
+HWND g_img;	/* image viewer, null when closed */
 
 /* Image viewer state; see the block comment at the top of the file.  */
 constexpr UINT IMG_PROBE = 4096;	/* first-stage sniff read */
@@ -671,11 +671,15 @@ show_image (const std::string &path)
 {
 	if (!img_load_d2d ())
 	{
+		modal_scope hold;
 		MessageBoxW (g_main, res_str (IDS_IMAGE_NO_D2D).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
 		return;
 	}
 	g_img_path = path;
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_IMAGE), g_main, img_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_IMAGE), g_main, img_dlg_proc, 0);
+	}
 	g_img = nullptr;
 	g_img_drag = false;
 	img_release_gfx ();

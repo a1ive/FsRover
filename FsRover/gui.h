@@ -39,12 +39,58 @@
 #define WM_DPICHANGED 0x02E0
 #endif
 
+/*
+ * Modal loops.  A dialog or message box owned by the main window
+ * disables it and runs a message loop of its own; the tray menu keeps
+ * working through that loop, so an Exit can arrive at any moment, and
+ * destroying the owner from under a modal loop is not survivable.
+ *
+ * Every modal call site holds a modal_scope for as long as its loop
+ * runs and WM_CLOSE refuses while any is up.  The viewers' own window
+ * handles cannot answer this question -- several are cleared early,
+ * while the dialog is still on screen, to drop read results that
+ * arrived too late -- which is why the registry is separate from them.
+ */
+
+class modal_scope
+{
+public:
+	modal_scope ();
+	~modal_scope ();
+	modal_scope (const modal_scope &) = delete;
+	modal_scope &operator= (const modal_scope &) = delete;
+};
+
+bool modal_open (void);
+
 /* main.cpp */
 extern HWND g_main;	/* owner window for every modal dialog */
 extern bool g_extracting;	/* an extract task is in flight */
 void navigate (const std::string &path);
 void refresh (void);
 int device_icon_id (const backend_diskent &d);	/* imageres.dll icon id */
+void mount_host_image (std::wstring file, bool decompress);	/* winfile */
+
+/* cmdline.cpp */
+
+/* What the command line asked for; filled once by cmdline_parse() and
+   read back while the session starts.  */
+struct cmdline_options
+{
+	bool minimize = false;	/* -m: come up in the tray, no window */
+	bool decompress = false;	/* -d rather than -f */
+	/* -f/-d: the physical disks are the one thing an unprivileged
+	   process cannot read, and a session about someone's own image
+	   file has no use for them.  */
+	bool no_windisk = false;
+	std::wstring mount_file;	/* -f/-d: host image, empty if none */
+};
+
+extern cmdline_options g_cmdline;
+
+/* False = the line was answered with a message box (a bad switch, or
+   --help) and the program should not start.  */
+bool cmdline_parse (void);
 
 /* util.cpp */
 extern UINT g_dpi;	/* main-window DPI; drives all layout scaling */
@@ -69,41 +115,34 @@ std::string join_path (const std::string &dir, const std::string &name);
 void clipboard_set_text (HWND owner, const std::wstring &text);
 
 /* propsdlg.cpp */
-extern HWND g_props;	/* modal file properties dialog, null when closed */
 void show_props (const std::string &path);
 void props_on_type (backend_result *res);
 void props_on_hash (backend_result *res);
 bool props_on_progress (backend_progress *p);
 
 /* diskprops.cpp */
-extern HWND g_diskprops;	/* modal disk properties dialog, null when closed */
 void show_disk_props (const backend_diskent &d,
 		      const std::vector<backend_diskent> &disks);
 
 /* cryptodlg.cpp */
-extern HWND g_crypto;	/* modal unlock dialog, null when closed */
 void prompt_unlock (const std::string &devname, const std::string &uuid);
 void crypto_unlock_done (backend_result *res);
 bool crypto_on_progress (backend_progress *p);
 
 /* hexview.cpp */
-extern HWND g_hex;	/* modal hex viewer, null when closed */
 void show_hex (const std::string &path, const std::wstring &title = {}, UINT64 known_size = BACKEND_SIZE_UNKNOWN);
 void hex_on_chunk (backend_result *res);
 
 /* textview.cpp */
-extern HWND g_text;	/* modal text viewer, null when closed */
 void show_text (const std::string &path);
 void text_on_chunk (backend_result *res);
 
 /* imageview.cpp */
-extern HWND g_img;	/* modal image viewer, null when closed */
 bool is_image_name (const std::string &name);
 void show_image (const std::string &path);
 void img_on_chunk (backend_result *res);
 
 /* mdview.cpp */
-extern HWND g_md;	/* modal markdown viewer, null when closed */
 
 /* A page the markdown viewer can show: window caption plus the UTF-8
    markdown itself.  Keeping the two apart from where they were read
@@ -125,8 +164,6 @@ bool md_load_file (const std::wstring &path, md_document *doc);
 bool md_load_help (const wchar_t *name, UINT res_id, md_document *doc);
 
 /* helpdlg.cpp */
-extern HWND g_about;	/* modal About dialog, null when closed */
-extern HWND g_support;	/* modal supported-features dialog */
 void show_about (void);
 void show_support (void);
 void show_shortcuts (void);

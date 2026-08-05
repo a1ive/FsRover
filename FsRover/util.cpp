@@ -25,6 +25,33 @@
 
 #include "gui.h"
 
+/* Modal-loop registry; see gui.h.  Everything modal runs on the GUI
+   thread, so a plain counter is enough -- the scopes nest (a viewer
+   putting up its own error box) and unwind in order.  */
+
+namespace
+{
+
+int g_modal_depth;
+
+} // namespace
+
+modal_scope::modal_scope ()
+{
+	g_modal_depth++;
+}
+
+modal_scope::~modal_scope ()
+{
+	g_modal_depth--;
+}
+
+bool
+modal_open (void)
+{
+	return g_modal_depth > 0;
+}
+
 std::wstring
 window_text (HWND wnd)
 {

@@ -68,6 +68,7 @@ UINT g_seq;	/* guarded by g_lock */
 std::atomic<bool> g_cancel;
 UINT g_loop_seq;	/* backend thread only: next "loopN" suffix */
 UINT g_img_seq;	/* backend thread only: next "imgN" suffix */
+int g_init_flags;	/* ROVER_INIT_*, set before the thread starts */
 
 /* Backend thread: run every pending backend_call().  Called between
    tasks and at chunk boundaries inside long ones, so dokan requests
@@ -1063,7 +1064,7 @@ run_task (queued_task &item)
 unsigned __stdcall
 backend_main (void *)
 {
-	rover_init ();
+	rover_init (g_init_flags);
 	PostMessageW (g_notify, WM_APP_BACKEND_READY, 0, 0);
 
 	for (;;)
@@ -1132,9 +1133,10 @@ backend_get_support (void)
 }
 
 void
-backend_start (HWND notify)
+backend_start (HWND notify, bool no_windisk)
 {
 	g_notify = notify;
+	g_init_flags = no_windisk ? ROVER_INIT_NO_WINDISK : 0;
 	g_thread = (HANDLE) _beginthreadex (nullptr, 0, backend_main, nullptr, 0, nullptr);
 }
 

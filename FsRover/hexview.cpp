@@ -37,10 +37,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_hex;	/* modal hex viewer, null when closed */
-
 namespace
 {
+
+HWND g_hex;	/* hex viewer, null when closed */
 
 /* Hex viewer state; see the block comment at the top of the file.  */
 constexpr UINT64 HEX_CHUNK = 1u << 16;
@@ -399,7 +399,10 @@ show_hex (const std::string &path, const std::wstring &title,
 	g_hex_path = path;
 	g_hex_title = title;
 	g_hex_size = known_size;
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_HEX), g_main, hex_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_HEX), g_main, hex_dlg_proc, 0);
+	}
 	g_hex = nullptr;
 	g_hex_cache.clear ();
 	g_hex_fifo.clear ();

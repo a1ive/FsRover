@@ -158,6 +158,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp" />
+    <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="cryptodlg.cpp" />
     <ClCompile Include="diskprops.cpp" />
     <ClCompile Include="dokanfs.cpp" />
@@ -169,6 +170,7 @@
     <ClCompile Include="md4c\md4c.c" />
     <ClCompile Include="mdrtf.cpp" />
     <ClCompile Include="mdview.cpp" />
+    <ClCompile Include="optparse.c" />
     <ClCompile Include="propsdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />
@@ -184,6 +186,7 @@
     <ClInclude Include="md4c\entity.h" />
     <ClInclude Include="md4c\md4c.h" />
     <ClInclude Include="mdrtf.h" />
+    <ClInclude Include="optparse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="strconv.h" />

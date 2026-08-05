@@ -209,6 +209,7 @@ HIMAGELIST g_tree_iml;	/* tree device-icon image list */
 HIMAGELIST g_list_iml;	/* DPI-sized file/folder icons */
 IImageList *g_shell_iml;	/* source shell icons at the nearest larger size */
 NOTIFYICONDATAW g_tray;	/* resident notification icon */
+UINT g_taskbar_msg;	/* "TaskbarCreated", re-add the icon after a shell restart */
 
 void
 set_status (const wchar_t *text)
@@ -621,8 +622,25 @@ fail:
 	return out;
 }
 
-/* Mount a file picked from the Windows filesystem as a virtual disk
-   (winfile.c); the result arrives like a loopback mount.  */
+} // namespace
+
+/* Mount a file from the Windows filesystem as a virtual disk
+   (winfile.c); the result arrives like a loopback mount.  Also the
+   --file startup path, which is why it lives outside the picker.  */
+void
+mount_host_image (std::wstring file, bool decompress)
+{
+	backend_task task;
+	task.type = backend_task_type::winfile_add;
+	task.dest = std::move (file);
+	task.decompress = decompress;
+	backend_post (std::move (task));
+	set_status (IDS_STATUS_MOUNTING);
+}
+
+namespace
+{
+
 void
 open_host_image (bool decompress)
 {
@@ -630,13 +648,7 @@ open_host_image (bool decompress)
 
 	if (file.empty ())
 		return;
-
-	backend_task task;
-	task.type = backend_task_type::winfile_add;
-	task.dest = std::move (file);
-	task.decompress = decompress;
-	backend_post (std::move (task));
-	set_status (IDS_STATUS_MOUNTING);
+	mount_host_image (std::move (file), decompress);
 }
 
 std::vector<std::string>
@@ -911,8 +923,11 @@ void
 do_dokan_mount (const backend_diskent &d)
 {
 	g_dokan_disk = d;
-	if (DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DOKANMOUNT), g_main, dokan_mount_dlg_proc, 0) != 1)
-		return;
+	{
+		modal_scope hold;
+		if (DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DOKANMOUNT), g_main, dokan_mount_dlg_proc, 0) != 1)
+			return;
+	}
 
 	std::wstring err;
 	dokan_mount *m = dokanfs_mount (g_dokan_disk.name, g_dokan_disk.fs, g_dokan_disk.size, g_dokan_letter, g_dokan_explorer, &err);
@@ -956,6 +971,8 @@ do_dokan_install (void)
 	bool ok = dokanfs_install (&err);
 
 	SetCursor (prev);
+
+	modal_scope hold;
 	if (ok)
 	{
 		set_status (IDS_DOKAN_INSTALL_OK);
@@ -1093,11 +1110,20 @@ on_tree_rclick (void)
 }
 
 /* Tray icon: resident for quick unmounting; the app only exits
-   through WM_CLOSE, which warns while dokan mounts are alive.  */
+   through WM_CLOSE, which warns while dokan mounts are alive.  It is
+   also the only way back to a minimized window, which leaves the
+   taskbar entirely (WM_SIZE).  */
 
 void
 tray_add (HWND wnd)
 {
+	/* Explorer drops every notification icon when it restarts and
+	   broadcasts this to ask for them back.  Without it a restart
+	   would stand the icon down for good, and a window that is
+	   hidden rather than merely minimized could never be reached
+	   again.  Registering twice is harmless: the atom is the same.  */
+	g_taskbar_msg = RegisterWindowMessageW (L"TaskbarCreated");
+
 	g_tray.cbSize = sizeof (g_tray);
 	g_tray.hWnd = wnd;
 	g_tray.uID = 1;
@@ -1115,9 +1141,12 @@ tray_add (HWND wnd)
 void
 show_main_window (void)
 {
-	ShowWindow (g_main, SW_SHOW);
-	if (IsIconic (g_main))
-		ShowWindow (g_main, SW_RESTORE);
+	/* Minimizing hides the window, so it can be hidden and iconic at
+	   once (from the minimize box) or hidden and normal (from
+	   --minimize, which never showed it).  SW_RESTORE covers the
+	   first, SW_SHOW the second; using SW_SHOW on an iconic window
+	   would only put the minimized frame back on screen.  */
+	ShowWindow (g_main, IsIconic (g_main) ? SW_RESTORE : SW_SHOW);
 	SetForegroundWindow (g_main);
 }
 
@@ -1551,8 +1580,11 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	/* Elevation cannot change while the process runs, so the re-launch
-	   is either offered for good or never.  */
-	if (!is_elevated ())
+	   is either offered for good or never.  Under --file it is never:
+	   the new instance would start on an empty command line, dropping
+	   the image this one was asked to open for physical disks this one
+	   was asked to leave alone.  */
+	if (!is_elevated () && !g_cmdline.no_windisk)
 		AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_RUNAS, res_str (IDS_MENU_RUNAS).c_str ());
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
 
@@ -1786,6 +1818,15 @@ on_command (int id)
 LRESULT CALLBACK
 main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+	/* Registered at run time, so it is no constant and cannot join
+	   the switch.  Zero until tray_add has run, which is why the id
+	   is tested rather than just compared.  */
+	if (g_taskbar_msg && msg == g_taskbar_msg)
+	{
+		Shell_NotifyIconW (NIM_ADD, &g_tray);
+		return 0;
+	}
+
 	switch (msg)
 	{
 	case WM_CREATE:
@@ -1793,7 +1834,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		g_dpi = dpi_for_window (wnd);
 		create_children (wnd);
 		create_menu_bar (wnd);
-		backend_start (wnd);
+		backend_start (wnd, g_cmdline.no_windisk);
 		dokanfs_init (wnd);
 		tray_add (wnd);
 		/* Grow the default frame for a high-DPI creation monitor
@@ -1802,6 +1843,15 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 			SetWindowPos (wnd, nullptr, 0, 0, dpi_scale (DEF_W), dpi_scale (DEF_H), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 		return 0;
 	case WM_SIZE:
+		/* The tray icon is already the app's resident presence, so a
+		   minimized window would just be a second, redundant entry
+		   in the taskbar: leave it altogether and come back through
+		   the tray.  Nothing to lay out at zero client size either.  */
+		if (wp == SIZE_MINIMIZED)
+		{
+			ShowWindow (wnd, SW_HIDE);
+			return 0;
+		}
 		layout (wnd);
 		return 0;
 	case WM_DPICHANGED:
@@ -1880,7 +1930,13 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_NOTIFY:
 		return on_notify ((NMHDR *) lp);
 	case WM_APP_BACKEND_READY:
-		refresh ();
+		/* --file stands in for the first refresh: mounting ends in
+		   one of its own (on_task_done), and doing both would leave
+		   two enumerations racing for the tree.  */
+		if (!g_cmdline.mount_file.empty ())
+			mount_host_image (g_cmdline.mount_file, g_cmdline.decompress);
+		else
+			refresh ();
 		return 0;
 	case WM_APP_TASK_DONE:
 		on_task_done ((backend_result *) lp);
@@ -1915,12 +1971,14 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_CLOSE:
 		/* The tray Exit can arrive while a modal dialog holds
 		   the main window disabled; destroying the owner under
-		   a modal loop is not survivable.  */
-		if (g_props || g_diskprops || g_hex || g_text || g_img || g_crypto
-		    || g_about || g_support)
+		   a modal loop is not survivable.  Every modal call site
+		   registers itself (gui.h), so this stays right without
+		   anyone having to remember to extend it.  */
+		if (modal_open ())
 			return 0;
 		if (dokanfs_count () > 0)
 		{
+			modal_scope hold;
 			if (MessageBoxW (wnd, res_str (IDS_ASK_UNMOUNT_ALL).c_str (), res_str (IDS_APP_TITLE).c_str (),
 				MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES)
 				return 0;
@@ -1945,6 +2003,12 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {
 	CoInitializeEx (nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 	init_language ();
+	/* After init_language(), because the usage box is localized.  */
+	if (!cmdline_parse ())
+	{
+		CoUninitialize ();
+		return 0;
+	}
 	load_dpi_api ();
 
 	INITCOMMONCONTROLSEX icc = { sizeof (icc),
@@ -1968,7 +2032,11 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 		WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, DEF_W, DEF_H, nullptr, nullptr, instance, nullptr);
 	if (!wnd)
 		return 1;
-	ShowWindow (wnd, show);
+	/* --minimize overrides the shell's suggestion and starts in the
+	   tray.  The window has simply never been shown, so there is no
+	   taskbar button to put up and take away again -- which is what
+	   showing it minimized would do, now that minimizing hides.  */
+	ShowWindow (wnd, g_cmdline.minimize ? SW_HIDE : show);
 	UpdateWindow (wnd);
 
 	/* Explorer's navigation bindings plus Ctrl+A.  Built here rather than

@@ -38,10 +38,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_text;	/* modal text viewer, null when closed */
-
 namespace
 {
+
+HWND g_text;	/* text viewer, null when closed */
 
 /* Text viewer state; see the block comment at the top of the file.  */
 constexpr UINT TEXT_MAX = 16u << 20;	/* bytes loaded; the rest is cut */
@@ -648,7 +648,10 @@ show_text (const std::string &path)
 			return;
 	}
 	g_text_path = path;
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_TEXT), g_main, text_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_TEXT), g_main, text_dlg_proc, 0);
+	}
 	g_text = nullptr;
 	g_text_loaded = false;
 	std::vector<char> ().swap (g_text_raw);

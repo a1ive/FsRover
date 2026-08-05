@@ -27,10 +27,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_diskprops;	/* modal disk properties dialog, null when closed */
-
 namespace
 {
+
+HWND g_diskprops;	/* disk properties dialog, null when closed */
 
 /* Layout metrics authored at 96 DPI; scaled through dpi_scale().  */
 constexpr int DP_MARGIN = 12;
@@ -701,6 +701,9 @@ show_disk_props (const backend_diskent &d, const std::vector<backend_diskent> &d
 	g_dp_map_name.clear ();
 	g_dp_map_size = 0;
 	dp_build (d, disks);
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DISKPROPS), g_main, disk_props_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DISKPROPS), g_main, disk_props_dlg_proc, 0);
+	}
 	g_diskprops = nullptr;
 }

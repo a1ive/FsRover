@@ -22,6 +22,9 @@
     <ClCompile Include="backend.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="cmdline.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="cryptodlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -67,6 +70,9 @@
     <ClCompile Include="util.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="optparse.c">
+      <Filter>SRC</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="backend.h">
@@ -107,6 +113,9 @@
     </ClInclude>
     <ClInclude Include="dokan\public.h">
       <Filter>SRC\dokan</Filter>
+    </ClInclude>
+    <ClInclude Include="optparse.h">
+      <Filter>SRC</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

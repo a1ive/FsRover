@@ -40,8 +40,8 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	/* message digests (io modules look them up at open time) */	\
 	mod (adler32)	\
 	mod (crc64)	\
-	/* disks: physical first, then volume managers / RAID */	\
-	mod (windisk)	\
+	/* disks: physical (windisk) is optional and rover_init calls it */	\
+	/* itself; here come the rest, then volume managers / RAID */	\
 	mod (loopdisk)	\
 	mod (winfile)	\
 	mod (diskfilter)	\
@@ -167,11 +167,17 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 
 ROVER_MODULE_LIST (ROVER_MOD_DECLARE)
 
+/* The one module outside the list: see ROVER_INIT_NO_WINDISK.  Its
+   _fini is unconditional -- the module remembers whether it registered
+   (it also declines without an elevated token) and does nothing here
+   when it did not.  */
+ROVER_MOD_DECLARE (windisk)
+
 #define ROVER_MOD_INIT(name)	grub_##name##_init ();
 #define ROVER_MOD_FINI(name)	grub_##name##_fini ();
 
 void
-rover_init (void)
+rover_init (int flags)
 {
 	grub_md_register (&_gcry_digest_spec_crc32);
 	grub_md_register (&_gcry_digest_spec_md5);
@@ -185,12 +191,15 @@ rover_init (void)
 	grub_cipher_register (&_gcry_cipher_spec_aes192);
 	grub_cipher_register (&_gcry_cipher_spec_aes256);
 
+	if (!(flags & ROVER_INIT_NO_WINDISK))
+		grub_windisk_init ();
 	ROVER_MODULE_LIST (ROVER_MOD_INIT)
 }
 
 void
 rover_fini (void)
 {
+	grub_windisk_fini ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)
 
 	grub_cipher_unregister (&_gcry_cipher_spec_aes256);

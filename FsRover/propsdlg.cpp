@@ -30,10 +30,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_props;	/* modal file properties dialog, null when closed */
-
 namespace
 {
+
+HWND g_props;	/* file properties dialog, null when closed */
 
 UINT g_seq_props;	/* pending seq per task; older results */
 UINT g_seq_hash;	/* are stale and dropped */
@@ -152,9 +152,12 @@ show_props (const std::string &path)
 {
 	g_props_path = path;
 	g_hashing = false;
-	DialogBoxParamW (GetModuleHandleW (nullptr),
-			 MAKEINTRESOURCEW (IDD_PROPS), g_main,
-			 props_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr),
+				 MAKEINTRESOURCEW (IDD_PROPS), g_main,
+				 props_dlg_proc, 0);
+	}
 	g_props = nullptr;
 }
 

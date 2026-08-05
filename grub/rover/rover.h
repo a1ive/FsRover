@@ -40,8 +40,15 @@ extern "C" {
    and GRUB_DISK_SIZE_UNKNOWN).  */
 #define ROVER_SIZE_UNKNOWN	0xffffffffffffffffULL
 
-/* Register all built-in grub modules.  Call once before anything else.  */
-void rover_init (void);
+/* Leave the windisk backend (physical drives and optical discs)
+   unregistered.  It is the only module that wants an elevated token,
+   so a caller that came to browse one image file can drop it and never
+   touch a device it has no business opening.  */
+#define ROVER_INIT_NO_WINDISK	0x1
+
+/* Register all built-in grub modules.  Call once before anything else.
+   FLAGS is a combination of the ROVER_INIT_* bits above, or 0.  */
+void rover_init (int flags);
 
 /* Unregister all modules and release grub state.  */
 void rover_fini (void);

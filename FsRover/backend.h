@@ -173,8 +173,11 @@ struct backend_support
 
 backend_support backend_get_support (void);
 
-/* Start the backend thread; results are posted to NOTIFY.  */
-void backend_start (HWND notify);
+/* Start the backend thread; results are posted to NOTIFY.  With
+   NO_WINDISK the physical drives are left unregistered, so nothing in
+   the session can reach a device that would need an elevated token
+   (--file, see cmdline.cpp).  */
+void backend_start (HWND notify, bool no_windisk);
 
 /* Discard queued tasks, join the thread, release grub state.  */
 void backend_stop (void);

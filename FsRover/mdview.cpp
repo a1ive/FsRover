@@ -29,10 +29,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_md;	/* modal markdown viewer, null when closed */
-
 namespace
 {
+
+HWND g_md;	/* markdown viewer, null when closed */
 
 constexpr UINT MD_MAX = 4u << 20;	/* bytes rendered; the rest is cut */
 constexpr UINT MD_PROBE = 64u << 10;	/* first-stage sniff read */
@@ -242,7 +242,10 @@ md_show_dialog (void)
 		if (!msftedit)
 			return;
 	}
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_MD), g_main, md_dlg_proc, 0);
+	{
+		modal_scope hold;
+		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_MD), g_main, md_dlg_proc, 0);
+	}
 	g_md = nullptr;
 	g_md_doc = md_document ();
 	g_md_path.clear ();

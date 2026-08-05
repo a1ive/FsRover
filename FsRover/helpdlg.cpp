@@ -32,11 +32,11 @@
 #include "strconv.h"
 #include "version.h"
 
-HWND g_about;	/* modal About dialog, null when closed */
-HWND g_support;	/* modal supported-features dialog */
-
 namespace
 {
+
+HWND g_about;	/* About dialog, null when closed */
+HWND g_support;	/* supported-features dialog */
 
 #if defined(_M_X64)
 #define ROVER_ARCH_W	L"x64"
@@ -174,6 +174,8 @@ support_section (UINT title_id, const std::vector<std::string> &names)
 void
 show_about (void)
 {
+	modal_scope hold;
+
 	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_ABOUT), g_main, about_dlg_proc, 0);
 }
 
@@ -182,6 +184,8 @@ show_about (void)
 void
 show_shortcuts (void)
 {
+	modal_scope hold;
+
 	MessageBoxW (g_main, res_str (IDS_KEY_LIST).c_str (), menu_caption (IDS_MENU_SHORTCUTS).c_str (), MB_ICONINFORMATION | MB_OK);
 }
 
@@ -195,6 +199,7 @@ show_support (void)
 		+ support_section (IDS_SUPPORT_CRYPTODISK, s.cryptodisk)
 		+ support_section (IDS_SUPPORT_IOFILTER, s.iofilter);
 
+	modal_scope hold;
 	DialogBoxParamW (GetModuleHandleW (nullptr),
 		MAKEINTRESOURCEW (IDD_SUPPORT), g_main, support_dlg_proc, (LPARAM) text.c_str ());
 }

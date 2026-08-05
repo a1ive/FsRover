@@ -30,10 +30,10 @@
 #include "resource.h"
 #include "strconv.h"
 
-HWND g_crypto;	/* modal unlock dialog, null when closed */
-
 namespace
 {
+
+HWND g_crypto;	/* unlock dialog, null when closed */
 
 /* Source device being unlocked, its UUID, and (on success) the
    resulting "cryptoN" device to navigate into.  */
@@ -198,7 +198,11 @@ prompt_unlock (const std::string &devname, const std::string &uuid)
 	g_crypto_uuid = uuid;
 	g_crypto_newdev.clear ();
 
-	INT_PTR r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_CRYPTO), g_main, crypto_dlg_proc, 0);
+	INT_PTR r;
+	{
+		modal_scope hold;
+		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_CRYPTO), g_main, crypto_dlg_proc, 0);
+	}
 	if (r == 1 && !g_crypto_newdev.empty ())
 	{
 		/* "cryptoN" now exists: rebuild the tree and browse into it.  */
