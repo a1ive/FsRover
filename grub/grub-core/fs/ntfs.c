@@ -706,11 +706,17 @@ read_data (struct grub_ntfs_attr *at, grub_uint8_t *pa, grub_uint8_t *dest,
       if (res_attr_data_len (pa) > (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR))
 	return grub_error (GRUB_ERR_BAD_FS, "resident attribute too large");
 
-      if (pa >= at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR))
+      /*
+       * PA lives in AT->END's buffer, which is the base MFT record only
+       * when the attribute was not reached through an attribute list;
+       * otherwise it is the extension record buffer.  Bounding it by
+       * AT->MFT->BUF would compare pointers into unrelated allocations.
+       */
+      if (pa >= at->end)
 	return grub_error (GRUB_ERR_BAD_FS, "resident attribute out of range");
 
-      if (res_attr_data_off (pa) + res_attr_data_len (pa) >
-	  (grub_addr_t) at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR) - (grub_addr_t) pa)
+      if (res_attr_data_off (pa) + res_attr_data_len (pa)
+	  > (grub_size_t) (at->end - pa))
 	return grub_error (GRUB_ERR_BAD_FS, "resident attribute out of range");
 
       grub_memcpy (dest, pa + res_attr_data_off (pa) + ofs, len);
@@ -1148,8 +1154,10 @@ grub_ntfs_iterate_dir (grub_fshelp_node_t dir,
     }
 
   cur_pos += 0x10;		/* Skip index root */
-  ret = list_file (mft, cur_pos + u16at (cur_pos, 0),
-                   at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR),
+  /* AT->END, not the base MFT record: a directory whose $INDEX_ROOT was
+     pushed into an extension record by an attribute list has CUR_POS in
+     AT->EMFT_BUF instead.  */
+  ret = list_file (mft, cur_pos + u16at (cur_pos, 0), at->end,
                    hook, hook_data);
   if (ret)
     goto done;
@@ -1195,14 +1203,15 @@ grub_ntfs_iterate_dir (grub_fshelp_node_t dir,
 		  goto done;
 		}
 
-              if (cur_pos >= at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR))
+              /* Bound by AT->END: see the note in read_data().  */
+              if (cur_pos >= at->end)
 		{
 		  grub_error (GRUB_ERR_BAD_FS, "resident bitmap out of range");
 		  goto done;
 		}
 
-              if (res_attr_data_off (cur_pos) + res_attr_data_len (cur_pos) >
-		  (grub_addr_t) at->mft->buf + (at->mft->data->mft_size << GRUB_NTFS_BLK_SHR) - (grub_addr_t) cur_pos)
+              if (res_attr_data_off (cur_pos) + res_attr_data_len (cur_pos)
+		  > (grub_size_t) (at->end - cur_pos))
 		{
 		  grub_error (GRUB_ERR_BAD_FS, "resident bitmap out of range");
 		  goto done;
