@@ -261,6 +261,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\refs.c" />
+    <ClCompile Include="grub-core\fs\regfs.c" />
     <ClCompile Include="grub-core\fs\reiserfs.c" />
     <ClCompile Include="grub-core\fs\romfs.c" />
     <ClCompile Include="grub-core\fs\rpm.c" />

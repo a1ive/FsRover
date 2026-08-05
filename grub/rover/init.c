@@ -115,6 +115,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (rar)	\
 	mod (redoxfs)	\
 	mod (refs)	\
+	mod (regfs)	\
 	mod (reiserfs)	\
 	mod (romfs)	\
 	mod (rpm)	\

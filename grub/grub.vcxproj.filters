@@ -342,6 +342,9 @@
     <ClCompile Include="grub-core\fs\refs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\regfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\ubifs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
