@@ -1315,6 +1315,7 @@ grub_ntfs_mount (grub_disk_t disk)
   struct grub_ntfs_bpb bpb;
   struct grub_ntfs_data *data = 0;
   grub_uint32_t spc;
+  grub_uint32_t sectors_per_cluster;
 
   if (!disk)
     goto fail;
@@ -1329,14 +1330,27 @@ grub_ntfs_mount (grub_disk_t disk)
   if (grub_disk_read (disk, 0, 0, sizeof (bpb), &bpb))
     goto fail;
 
+  /*
+   * A cluster larger than 64 KiB does not fit the byte-sized sector count,
+   * so it is stored the way clusters_per_mft is: as the negated log2 of
+   * the count.  Bound the shift like Linux's ntfs3 does (0xf4 is the 2 MiB
+   * cluster Windows caps at); anything between the two forms is bogus.
+   */
+  if (bpb.sectors_per_cluster <= 0x80)
+    sectors_per_cluster = bpb.sectors_per_cluster;
+  else if (bpb.sectors_per_cluster >= 0xf4)
+    sectors_per_cluster = 1U << (0x100 - bpb.sectors_per_cluster);
+  else
+    goto fail;
+
   if (grub_memcmp ((char *) &bpb.oem_name, "NTFS", 4) != 0
-      || bpb.sectors_per_cluster == 0
-      || (bpb.sectors_per_cluster & (bpb.sectors_per_cluster - 1)) != 0
+      || sectors_per_cluster == 0
+      || (sectors_per_cluster & (sectors_per_cluster - 1)) != 0
       || bpb.bytes_per_sector == 0
       || (bpb.bytes_per_sector & (bpb.bytes_per_sector - 1)) != 0)
     goto fail;
 
-  spc = (((grub_uint32_t) bpb.sectors_per_cluster
+  spc = ((sectors_per_cluster
 	  * (grub_uint32_t) grub_le_to_cpu16 (bpb.bytes_per_sector))
 	 >> GRUB_NTFS_BLK_SHR);
   if (spc == 0)
