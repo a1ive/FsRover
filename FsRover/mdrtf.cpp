@@ -35,7 +35,9 @@
  * running total is the character position the RichEdit will report.
  * Link spans are recorded with those positions and the caller turns
  * them into CFE_LINK ranges after streaming; mdview.cpp checks the
- * total against the control before trusting them.
+ * total against the control before trusting them.  Headings are
+ * recorded the same way under their GitHub slug, which is what makes a
+ * "#section" link in a table of contents land somewhere.
  *
  * Two constructs work around what RichEdit does not read.  Tables are
  * laid out with tab stops instead of \trowd rows, so a cell wider than
@@ -53,6 +55,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wctype.h>
 
 #include <string>
 #include <vector>
@@ -84,6 +87,9 @@ constexpr int RULE_W = 14400;	/* thematic break width, twips */
 
 /* Heading size as a percentage of the body size, h1 first.  */
 const int HEADING_PCT[6] = { 175, 145, 125, 112, 100, 92 };
+
+/* Code size, as a percentage of the text it sits in.  */
+constexpr int CODE_PCT = 92;
 
 /* Bullet per unordered nesting level: * o - (U+2022/25E6/25AA).  */
 const wchar_t BULLETS[3] = { 0x2022, 0x25e6, 0x25aa };
@@ -163,6 +169,25 @@ attr_text (const MD_ATTRIBUTE *a)
 	return out;
 }
 
+/* GitHub's heading slug: lowercase, drop everything that is not a
+   letter, digit, hyphen or underscore, and turn runs of space into
+   hyphens (each space becomes one hyphen, so "A -- b" keeps its double
+   hyphen).  Letters are tested with iswalnum, which keeps CJK.  */
+std::wstring
+heading_slug (const std::wstring &title)
+{
+	std::wstring slug;
+
+	for (wchar_t c : title)
+	{
+		if (c == L' ' || c == L'\t')
+			slug += L'-';
+		else if (c == L'-' || c == L'_' || iswalnum ((wint_t) c))
+			slug += (wchar_t) towlower ((wint_t) c);
+	}
+	return slug;
+}
+
 /* Append text as RTF body, one control character per wchar_t: the
    caller's character accounting depends on that ratio holding.  */
 void
@@ -200,7 +225,10 @@ public:
 
 	void prologue (void);
 	void epilogue (void);
-	md_rtf_doc take (void) { return { std::move (m_out), std::move (m_links), m_chars }; }
+	md_rtf_doc take (void)
+	{
+		return { std::move (m_out), std::move (m_links), std::move (m_anchors), m_chars };
+	}
 
 	int enter_block (MD_BLOCKTYPE type, void *detail);
 	int leave_block (MD_BLOCKTYPE type, void *detail);
@@ -217,6 +245,18 @@ private:
 
 	int base_cf (void) const { return m_quote ? COL_QUOTE : COL_TEXT; }
 	int base_halfpt (void) const { return (m_st.body_pt10 + 2) / 5; }
+	/* Size of the paragraph being written, and the slightly smaller
+	   one code is set in -- a monospaced run at the surrounding size
+	   draws a highlight box taller than the line it sits on.  */
+	int para_halfpt (void) const
+	{
+		int halfpt = base_halfpt ();
+
+		if (m_heading)
+			return halfpt * HEADING_PCT[m_heading - 1] / 100;
+		return m_code ? halfpt * CODE_PCT / 100 : halfpt;
+	}
+	int code_halfpt (void) const { return para_halfpt () * CODE_PCT / 100; }
 
 	void put (const char *rtf) { m_out += rtf; }
 	void putf (const char *fmt, ...);
@@ -236,6 +276,7 @@ private:
 	LONG m_chars = 0;	/* characters the control will hold so far */
 	const md_rtf_style &m_st;
 	std::vector<md_rtf_link> m_links;
+	std::vector<md_rtf_anchor> m_anchors;
 
 	bool m_para = false;	/* a paragraph is open */
 	bool m_need_par = false;	/* the previous one still owes its \par */
@@ -244,6 +285,8 @@ private:
 	std::vector<list_level> m_lists;
 	std::wstring m_marker;	/* list marker waiting for a paragraph */
 	int m_heading = 0;	/* heading level, 0 outside one */
+	LONG m_head_at = -1;	/* where the heading's text starts, -1 = none yet */
+	std::wstring m_head_text;	/* its plain text, for the slug */
 	bool m_code = false;	/* inside a code block */
 	int m_code_nl = 0;	/* newlines owed inside that block */
 	bool m_rule = false;	/* the paragraph being opened is a rule */
@@ -271,6 +314,8 @@ renderer::putf (const char *fmt, ...)
 void
 renderer::put_text (const std::wstring &text)
 {
+	if (m_heading)
+		m_head_text += text;
 	rtf_escape (m_out, text);
 	m_chars += (LONG) text.size ();
 }
@@ -302,7 +347,12 @@ renderer::open_para (void)
 	put ("\\pard\\plain");
 	if (m_cols)
 	{
-		putf ("\\sa40\\li%d", m_indent);
+		/* Hanging by one column: the row starts at the margin, but a
+		   cell too long for its column wraps under the second one
+		   instead of back under the first, where it would read as a
+		   new row.  */
+		int col = TABLE_W / (int) m_cols;
+		putf ("\\sa40\\li%d\\fi-%d", m_indent + col, col);
 		put (m_stops.c_str ());
 	}
 	else if (!m_marker.empty ())
@@ -316,12 +366,7 @@ renderer::open_para (void)
 	else
 		putf ("\\sa120\\li%d", m_indent);
 
-	int halfpt = base_halfpt ();
-	if (m_heading)
-		halfpt = halfpt * HEADING_PCT[m_heading - 1] / 100;
-	else if (m_code)
-		halfpt = halfpt * 92 / 100;
-	putf ("\\f%d\\fs%d", m_code ? 1 : 0, halfpt);
+	putf ("\\f%d\\fs%d", m_code ? 1 : 0, para_halfpt ());
 	if (m_heading || m_head_row)
 		put ("\\b");
 	if (m_code)
@@ -329,6 +374,8 @@ renderer::open_para (void)
 	else
 		putf ("\\cf%d", m_rule ? COL_RULE : base_cf ());
 	put (" ");
+	if (m_heading && m_head_at < 0)
+		m_head_at = m_chars;
 
 	if (!m_marker.empty ())
 	{
@@ -500,6 +547,8 @@ renderer::enter_block (MD_BLOCKTYPE type, void *detail)
 		m_heading = (int) ((MD_BLOCK_H_DETAIL *) detail)->level;
 		if (m_heading < 1 || m_heading > 6)
 			m_heading = 6;
+		m_head_at = -1;
+		m_head_text.clear ();
 		break;
 	case MD_BLOCK_CODE:
 		close_para ();
@@ -571,9 +620,18 @@ renderer::leave_block (MD_BLOCKTYPE type, void *)
 		close_para ();
 		break;
 	case MD_BLOCK_H:
+	{
 		close_para ();
 		m_heading = 0;
+		std::wstring slug = heading_slug (m_head_text);
+		/* First heading with a given slug wins, as on GitHub (which
+		   suffixes the later ones; a "#name-1" link simply misses).  */
+		if (m_head_at >= 0 && !slug.empty ())
+			m_anchors.push_back ({ std::move (slug), m_head_at });
+		m_head_at = -1;
+		m_head_text.clear ();
 		break;
+	}
 	case MD_BLOCK_CODE:
 		close_para ();
 		m_code = false;
@@ -622,7 +680,7 @@ renderer::enter_span (MD_SPANTYPE type, void *detail)
 		break;
 	case MD_SPAN_CODE:
 		if (!m_code)
-			putf ("\\f1\\cf%d\\highlight%d ", COL_CODE, COL_CODEBG);
+			putf ("\\f1\\fs%d\\cf%d\\highlight%d ", code_halfpt (), COL_CODE, COL_CODEBG);
 		break;
 	case MD_SPAN_A:
 		begin_link (attr_text (&((MD_SPAN_A_DETAIL *) detail)->href));
@@ -661,7 +719,7 @@ renderer::leave_span (MD_SPANTYPE type, void *)
 		break;
 	case MD_SPAN_CODE:
 		if (!m_code)
-			putf ("\\f0\\highlight0\\cf%d ", base_cf ());
+			putf ("\\f0\\fs%d\\highlight0\\cf%d ", para_halfpt (), base_cf ());
 		break;
 	case MD_SPAN_A:
 	case MD_SPAN_WIKILINK:

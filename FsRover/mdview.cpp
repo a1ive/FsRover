@@ -43,6 +43,7 @@ std::string g_md_path;	/* backend path, empty for an in-memory document */
 UINT g_seq_md;	/* in-flight read_chunk task */
 bool g_md_probing;	/* the in-flight read is the sniff stage */
 std::vector<md_rtf_link> g_md_links;	/* clickable ranges, document order */
+std::vector<md_rtf_anchor> g_md_anchors;	/* heading slug -> position */
 
 /* Feeds the converted RTF to EM_STREAMIN.  */
 struct md_stream
@@ -113,18 +114,43 @@ md_render (HWND dlg)
 			SendMessageW (edit, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM) &cf);
 		}
 		g_md_links = std::move (doc.links);
+		g_md_anchors = std::move (doc.anchors);
 	}
 	else
+	{
 		g_md_links.clear ();
+		g_md_anchors.clear ();
+	}
 
 	CHARRANGE home = { 0, 0 };
 	SendMessageW (edit, EM_EXSETSEL, 0, (LPARAM) &home);
 	SendMessageW (edit, WM_VSCROLL, SB_TOP, 0);
 }
 
-/* A link the user clicked.  Only web and mail targets are launched, and
-   only after the full target has been shown and confirmed; relative
-   links inside the document have nothing to resolve against here.  */
+/* Put the heading a "#slug" link names at the top of the view.  */
+void
+md_goto_anchor (HWND dlg, const std::wstring &slug)
+{
+	HWND edit = GetDlgItem (dlg, IDC_MD_EDIT);
+
+	for (const md_rtf_anchor &a : g_md_anchors)
+	{
+		if (_wcsicmp (a.slug.c_str (), slug.c_str ()) != 0)
+			continue;
+		CHARRANGE cr = { a.at, a.at };
+		SendMessageW (edit, EM_EXSETSEL, 0, (LPARAM) &cr);
+		LONG line = (LONG) SendMessageW (edit, EM_EXLINEFROMCHAR, 0, a.at);
+		LONG first = (LONG) SendMessageW (edit, EM_GETFIRSTVISIBLELINE, 0, 0);
+		SendMessageW (edit, EM_LINESCROLL, 0, (LPARAM) (line - first));
+		return;
+	}
+}
+
+/* A link the user clicked.  A "#section" link jumps within the
+   document; only web and mail targets leave the program, and only after
+   the whole target has been shown and confirmed.  Anything else -- a
+   relative path to a neighbouring file -- has nothing to resolve
+   against here and stays inert.  */
 void
 md_open_link (HWND dlg, CHARRANGE cr)
 {
@@ -133,6 +159,11 @@ md_open_link (HWND dlg, CHARRANGE cr)
 		if (cr.cpMin < l.start || cr.cpMax > l.end)
 			continue;
 		const wchar_t *t = l.target.c_str ();
+		if (t[0] == L'#')
+		{
+			md_goto_anchor (dlg, l.target.substr (1));
+			return;
+		}
 		if (_wcsnicmp (t, L"http://", 7) != 0 && _wcsnicmp (t, L"https://", 8) != 0 && _wcsnicmp (t, L"mailto:", 7) != 0)
 			return;
 		std::wstring ask = res_str (IDS_MD_ASK_LINK) + L"\r\n\r\n" + l.target;
@@ -148,6 +179,7 @@ md_init_dialog (HWND dlg)
 {
 	g_md = dlg;
 	g_md_links.clear ();
+	g_md_anchors.clear ();
 	SetWindowTextW (dlg, g_md_doc.title.c_str ());
 
 	HWND edit = GetDlgItem (dlg, IDC_MD_EDIT);
@@ -250,6 +282,7 @@ md_show_dialog (void)
 	g_md_doc = md_document ();
 	g_md_path.clear ();
 	std::vector<md_rtf_link> ().swap (g_md_links);
+	std::vector<md_rtf_anchor> ().swap (g_md_anchors);
 }
 
 } // namespace

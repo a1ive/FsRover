@@ -44,6 +44,16 @@ struct md_rtf_link
 	std::wstring target;
 };
 
+/* A heading, under the slug a "#..." link would name it by.  The slug
+   is built the way GitHub builds one -- lowercased, punctuation
+   dropped, spaces turned into hyphens -- so a table of contents
+   written for GitHub resolves here too.  */
+struct md_rtf_anchor
+{
+	std::wstring slug;
+	LONG at;	/* character position of the heading text */
+};
+
 /* Look of the rendered document.  md_rtf_default_style() fills this
    from the system message font and the system colours; a caller that
    wants a different body font or size only has to override fields.  */
@@ -70,6 +80,7 @@ struct md_rtf_doc
 {
 	std::string rtf;	/* ready for EM_STREAMIN with SF_RTF */
 	std::vector<md_rtf_link> links;	/* in document order */
+	std::vector<md_rtf_anchor> anchors;	/* one per heading */
 	LONG chars;
 };
 
