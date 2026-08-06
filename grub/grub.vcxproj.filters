@@ -16,6 +16,9 @@
     <Filter Include="grub-core\io">
       <UniqueIdentifier>{fe8bfb87-b254-427a-853f-9fc39b6cc05d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="grub-core\io\cdimage">
+      <UniqueIdentifier>{7c1de6a3-9f42-4f0a-b1cf-2ad5c4e08b91}</UniqueIdentifier>
+    </Filter>
     <Filter Include="grub-core\kern">
       <UniqueIdentifier>{51aeee51-ff57-4c95-97be-c7ed109c392a}</UniqueIdentifier>
     </Filter>
@@ -426,6 +429,27 @@
     <ClCompile Include="grub-core\io\ffu.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\ccd.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\cdimage.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\cue.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\mds.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\nrg.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\toc.c">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClCompile>
+    <ClInclude Include="grub-core\io\cdimage\cdimage.h">
+      <Filter>grub-core\io\cdimage</Filter>
+    </ClInclude>
     <ClCompile Include="grub-core\io\gzio.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>

@@ -599,7 +599,8 @@ pick_open_image (void)
 	std::wstring filter_all = res_str (IDS_FILTER_ALL);
 	COMDLG_FILTERSPEC types[] =
 	{
-		{ filter.c_str (), L"*.img;*.ima;*.iso;*.vhd;*.vhdx;*.vdi;*.qcow;*.qcow2;*.vmdk;*.dmg" },
+		{ filter.c_str (), L"*.img;*.ima;*.iso;*.vhd;*.vhdx;*.vdi;*.qcow;*.qcow2;*.vmdk;*.dmg;"
+				   L"*.cue;*.toc;*.nrg;*.ccd;*.mds;*.cdr" },
 		{ filter_all.c_str (), L"*.*" },
 	};
 

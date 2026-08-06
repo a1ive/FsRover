@@ -314,6 +314,16 @@
     <ClCompile Include="grub-core\io\bz2io.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\ccd.c" />
+    <ClCompile Include="grub-core\io\cdimage\cdimage.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\cue.c" />
+    <ClCompile Include="grub-core\io\cdimage\mds.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\cdimage\nrg.c" />
+    <ClCompile Include="grub-core\io\cdimage\toc.c" />
     <ClCompile Include="grub-core\io\dmg.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -654,6 +664,7 @@
     <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h" />
     <ClInclude Include="grub-core\lib\lz4\lz4.h" />
     <ClInclude Include="grub-core\lib\miniz\miniz.h" />
+    <ClInclude Include="grub-core\io\cdimage\cdimage.h" />
     <ClInclude Include="include\grub\winfile.h" />
     <ClInclude Include="grub-core\lib\vbox\vbox.h" />
     <ClInclude Include="grub-core\lib\libzbitmap\libzbitmap.h" />

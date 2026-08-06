@@ -797,6 +797,42 @@ only ever hold one, and it is the main disk of a multi-store V2 image.
 **Supported:** format version 10.0 (the first endianness-safe version) and the
 older pre-10.0 layout.
 
+#### CD/DVD image containers — `cdimage`
+
+> Origin: FsRover / libcdio
+
+A CD image describes the disc as tracks of raw or cooked sectors rather than as
+a flat volume. This filter rebuilds the flat 2048-byte-per-sector stream the
+iso9660 and udf drivers expect, addressed by absolute disc LSN so that a data
+track keeps its on-disc position. Audio tracks and unwritten gaps read back as
+zeros.
+
+**Supported containers**, all recognised by extension:
+
+| Extension | Format | Sector data |
+|---|---|---|
+| `.cue` | CDRWIN cue sheet | one or more sibling `FILE`s |
+| `.toc` | cdrdao toc file | sibling `DATAFILE` / `AUDIOFILE`s |
+| `.nrg` | Nero Burning ROM | inside the same file |
+| `.ccd` | CloneCD | sibling `.img` |
+| `.mds` | Alcohol 120% | sibling `.mdf` |
+| `.cdr` | raw sector dump | inside the same file |
+
+**Supported sector layouts:** 2048 cooked, 2324 (mode 2 form 2), 2336 (mode 2
+without the sync and header), 2352 raw, and 2448 raw with 96 bytes of
+interleaved subchannel.
+
+**Track sources.** Multi-`FILE` cue sheets, cdrdao statements with explicit
+`#byte-offset`s, `PREGAP` / `POSTGAP` / `SILENCE` / `ZERO` runs, and pregap
+sectors stored in the image are all placed at the right disc address.
+
+**Not supported:** sessions other than the first. The iso9660 driver looks for
+its volume descriptor at LSN 16, so a disc whose first session is audio — a
+CD-Extra — exposes the right address space but does not mount. Mode 2 form 2
+sectors are exposed as the first 2048 of their 2324 user bytes, which is what
+bin-to-iso converters do; they carry no filesystem of their own. CD-TEXT,
+subchannel data and audio track extraction are all ignored.
+
 ---
 
 ### 2.3 Backup archives
