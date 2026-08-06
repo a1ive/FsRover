@@ -17,27 +17,30 @@
  */
 
 /*
- * VMFS (VMware vSphere VMFS3 / VMFS5) read-only driver.
+ * VMFS (VMware vSphere VMFS3 / VMFS5 / VMFS6) read-only driver.
  *
- * On-disk layout follows vmfs-tools (libvmfs), which reverse engineered
- * the format.  A VMFS partition (MBR type 0xfb) starts with the volume
- * header at 0x100000, holding the LVM information: a logical volume is
- * the concatenation of one or more extents, each contributing a range of
- * 256 MiB segments identified by a shared LVM UUID.  All volume-relative
- * offsets below are translated to extent-relative ones and shifted by
- * another 0x1000000 bytes, exactly like vmfs_vol_read() does.
+ * On-disk semantics follow vmfs-tools (libvmfs) for VMFS3 and VMFS5, and
+ * its vmfs6-tool fork for VMFS6; both reverse engineered the format.
+ *
+ * A VMFS partition starts with the volume header at 0x100000, holding the
+ * LVM information: a logical volume is the concatenation of one or more
+ * extents, each contributing a range of 256 MiB segments identified by a
+ * shared LVM UUID.  All volume-relative offsets below are translated to
+ * extent-relative ones and shifted by another 0x1000000 bytes, exactly
+ * like vmfs_vol_read() does.
  *
  * The filesystem header sits at volume offset 0x200000 and gives the
  * block size plus the volume label / UUID.  Everything else lives in
- * four meta files in the root directory (.fbb.sf, .fdc.sf, .pbc.sf and
- * .sbc.sf); each is a "bitmap": a header, then areas of 1 KiB allocation
- * entries followed by that area's fixed-size items.  Inodes are the
- * items of .fdc.sf, pointer blocks those of .pbc.sf and sub-blocks those
- * of .sbc.sf; file blocks are raw volume space addressed by index.  A
- * block ID packs the item and entry numbers plus a 3-bit type tag, and
- * an inode's "zla" field says which block type its 256 block slots hold
- * (VMFS5 adds 4301 to it, and 4301+FD means the data is stored inline in
- * the inode itself).
+ * meta files in the root directory (.fbb.sf, .fdc.sf, .pbc.sf, .sbc.sf
+ * and, on VMFS6, .pb2.sf); each is a "bitmap": a header, then areas of
+ * fixed-size allocation entries followed by that area's fixed-size
+ * items.  Inodes are the items of .fdc.sf, sub-blocks those of .sbc.sf,
+ * pointer blocks those of .pbc.sf (VMFS3/5) or .sbc.sf and .pb2.sf
+ * (VMFS6); file blocks are raw volume space addressed by index.  A block
+ * ID packs the item and entry numbers plus a 3-bit type tag, and an
+ * inode's "zla" field says which block type its block slots hold (VMFS5
+ * adds 4301 to it, and 4301+FD means the data is stored inline in the
+ * inode itself).
  *
  * Bootstrapping is circular: reading any inode needs .fdc.sf, which is
  * itself a file described by an inode.  The way out (again from
@@ -45,10 +48,17 @@
  * heartbeat area, so a synthetic one-block inode is enough to reach the
  * root directory and from there the real meta files.
  *
+ * VMFS6 keeps that architecture but widens nearly every structure: 4 KiB
+ * metadata headers, 8 KiB inodes with 320 64-bit block slots, 8 KiB
+ * bitmap entries, 64-bit block IDs with a split file-block item field,
+ * 288-byte directory records laid out in 4 KiB pages behind a presence
+ * bitmap, a second pointer block level (.pb2.sf), 512 MiB large file
+ * blocks, and the LVM header at 0x1000 instead of 0x200.  Everything
+ * version dependent is collected in struct grub_vmfs_layout.
+ *
  * Limitations: read-only, no RDM (raw device mapping) pass-through, and
  * .fbb.sf is never opened because file blocks are read straight off the
- * volume.  Only VMFS3 and VMFS5 are recognised (VMFS6 has a different
- * layout).  Extents of a spanned volume are located by scanning all
+ * volume.  Extents of a spanned volume are located by scanning all
  * devices for a matching LVM UUID.
  */
 
@@ -68,19 +78,20 @@ GRUB_MOD_LICENSE("GPLv2+");
 /* === volume header (extent relative) === */
 #define VMFS_VOLINFO_BASE		0x100000
 #define VMFS_VOLINFO_MAGIC		0xc001d00d
-#define VMFS_VOLINFO_LEN		0x300
 
 #define VMFS_VOLINFO_OFS_MAGIC		0
 #define VMFS_VOLINFO_OFS_VER		4
 #define VMFS_VOLINFO_OFS_NAME		18
 #define VMFS_VOLINFO_NAME_LEN		28
+#define VMFS_VOLINFO_HDR_LEN		256
 
-/* LVM information, at 0x200 inside the volume header */
-#define VMFS_LVMINFO_OFS_UUID		0x254
-#define VMFS_LVMINFO_OFS_NUM_SEGMENTS	0x274
-#define VMFS_LVMINFO_OFS_FIRST_SEGMENT	0x278
-#define VMFS_LVMINFO_OFS_LAST_SEGMENT	0x280
-#define VMFS_LVMINFO_OFS_NUM_EXTENTS	0x290
+/* LVM information, at a version dependent offset in the volume header */
+#define VMFS_LVMINFO_OFS_UUID		0x54
+#define VMFS_LVMINFO_OFS_NUM_SEGMENTS	0x74
+#define VMFS_LVMINFO_OFS_FIRST_SEGMENT	0x78
+#define VMFS_LVMINFO_OFS_LAST_SEGMENT	0x80
+#define VMFS_LVMINFO_OFS_NUM_EXTENTS	0x90
+#define VMFS_LVMINFO_LEN		0x100
 
 #define VMFS_LVM_SEGMENT_SIZE		0x10000000ULL	/* 256 MiB */
 #define VMFS_LVM_MAX_EXTENTS		32
@@ -91,6 +102,7 @@ GRUB_MOD_LICENSE("GPLv2+");
 /* === filesystem header (volume relative) === */
 #define VMFS_FSINFO_BASE		0x200000
 #define VMFS_FSINFO_MAGIC		0x2fabf15e
+#define VMFSL_FSINFO_MAGIC		0x2fabf15f
 #define VMFS_FSINFO_LEN			512
 
 #define VMFS_FSINFO_OFS_MAGIC		0
@@ -100,17 +112,11 @@ GRUB_MOD_LICENSE("GPLv2+");
 #define VMFS_FSINFO_OFS_BLKSIZE		161
 #define VMFS_FSINFO_OFS_LVM_UUID	177
 
-/* === heartbeat area (volume relative), .fdc.sf starts right after === */
-#define VMFS_HB_BASE			0x300000
-#define VMFS_HB_SIZE			0x200
-#define VMFS_HB_NUM			2048
-
 /* === metadata header, shared prefix of inodes and bitmap entries === */
 #define VMFS_MDH_OFS_MAGIC		0
 
 /* === bitmaps === */
 #define VMFS_BITMAP_HDR_LEN		512
-#define VMFS_BITMAP_ENTRY_SIZE		0x400
 
 #define VMFS_BMH_OFS_ITEMS_PER_ENTRY	0x00
 #define VMFS_BMH_OFS_ENTRIES_PER_AREA	0x04
@@ -121,20 +127,19 @@ GRUB_MOD_LICENSE("GPLv2+");
 #define VMFS_BMH_OFS_AREA_COUNT		0x18
 
 /* === inodes (items of .fdc.sf) === */
-#define VMFS_INODE_SIZE			0x800
 #define VMFS_INODE_MAGIC		0x10c00001
-#define VMFS_INODE_BLK_COUNT		0x100
 
-#define VMFS_INODE_OFS_ID		512
-#define VMFS_INODE_OFS_TYPE		524
-#define VMFS_INODE_OFS_SIZE		532
-#define VMFS_INODE_OFS_BLK_SIZE		540
-#define VMFS_INODE_OFS_MTIME		556
-#define VMFS_INODE_OFS_ZLA		580
-#define VMFS_INODE_OFS_BLK_ARRAY	1024
+/* inode field offsets, relative to the end of the metadata header */
+#define VMFS_INODE_D_ID			0
+#define VMFS_INODE_D_TYPE		12
+#define VMFS_INODE_D_SIZE		20
+#define VMFS_INODE_D_BLK_SIZE		28
+#define VMFS_INODE_D_MTIME		44
+#define VMFS_INODE_D_MODE		64
+#define VMFS_INODE_D_ZLA		68
 
-/* size of the block array, doubling as the inline data area */
-#define VMFS_INODE_CONTENT_LEN		(VMFS_INODE_BLK_COUNT * 4)
+/* largest block array / inline data area of any version (VMFS6) */
+#define VMFS_INODE_UNION_MAX		3584
 
 /* file types, in inodes and directory records alike */
 #define VMFS_FILE_TYPE_DIR		0x02
@@ -143,23 +148,38 @@ GRUB_MOD_LICENSE("GPLv2+");
 #define VMFS_FILE_TYPE_META		0x05
 #define VMFS_FILE_TYPE_RDM		0x06
 
+/* POSIX mode bits; VMFS6 marks directories here rather than in "type" */
+#define VMFS_S_IFMT			0xf000
+#define VMFS_S_IFDIR			0x4000
+#define VMFS_S_IFLNK			0xa000
+
 /* VMFS5 offsets the zla field of an inode by this much */
 #define VMFS5_ZLA_BASE			4301
 
 /* === directory records === */
-#define VMFS_DIRENT_SIZE		0x8c
 #define VMFS_DIRENT_OFS_TYPE		0
 #define VMFS_DIRENT_OFS_BLK_ID		4
-#define VMFS_DIRENT_OFS_NAME		12
 #define VMFS_DIRENT_NAME_LEN		128
 
-/* directory records read per disk round trip */
+/* VMFS3/5 records are packed from offset 0; VMFS6 keeps "." and ".." in
+   the directory header and the rest in 4 KiB pages, each with a small
+   header, gated by a nibble per page in a presence bitmap */
+#define VMFS6_DIR_HEAD			0x3b8
+#define VMFS6_DIR_PRESENT		0x10040
+#define VMFS6_DIR_PAGE0			0x11000
+#define VMFS6_DIR_PAGE_SIZE		0x1000
+#define VMFS6_DIR_PAGE_HEAD		0x40
+#define VMFS6_DIR_PRESENT_LAST		0x8	/* no further pages */
+#define VMFS6_DIR_PRESENT_HERE		0x1	/* this page is allocated */
+
+/* VMFS3/5 directory records read per disk round trip */
 #define VMFS_DIRENT_BATCH		32
 
 /* the meta files, all in the root directory */
 #define VMFS_FDC_FILENAME		".fdc.sf"
 #define VMFS_PBC_FILENAME		".pbc.sf"
 #define VMFS_SBC_FILENAME		".sbc.sf"
+#define VMFS_PB2_FILENAME		".pb2.sf"
 
 /* longest symlink target we are willing to allocate */
 #define VMFS_SYMLINK_MAX		4096
@@ -170,24 +190,56 @@ GRUB_MOD_LICENSE("GPLv2+");
 #define VMFS_BLK_TYPE_SB		2	/* sub-block */
 #define VMFS_BLK_TYPE_PB		3	/* pointer block */
 #define VMFS_BLK_TYPE_FD		4	/* file descriptor (inode) */
+#define VMFS_BLK_TYPE_PB2		5	/* 2nd level pointer block */
+#define VMFS_BLK_TYPE_LFB		7	/* large file block (VMFS6) */
 
-#define VMFS_BLK_TYPE(id)	((id) & 0x7)
+#define VMFS_BLK_TYPE(id)	((grub_uint32_t) ((id) & 0x7))
+#define VMFS_BLK_TBZ(id)	((grub_uint32_t) (((id) >> 3) & 0x4))
 
-#define VMFS_BLK_FB_ITEM(id)	(((id) & 0xffffffc0u) >> 6)
-#define VMFS_BLK_FB_TBZ(id)	((((id) & 0x38u) >> 3) & 0x4u)
-#define VMFS_BLK_FB_BUILD(item)	((((item) << 6) & 0xffffffc0u) | VMFS_BLK_TYPE_FB)
+/* VMFS6 large file blocks span 512 MiB of volume space */
+#define VMFS_LARGE_BLOCK_SIZE		0x20000000ULL
 
-#define VMFS_BLK_SB_ENTRY(id)	(((id) & 0x0fffffc0u) >> 6)
-#define VMFS_BLK_SB_ITEM(id)	((((id) >> 28) & 0xfu) | ((((id) >> 3) & 0x3u) << 4))
+/* fields that keep the same encoding on every version */
+#define VMFS_BLK_FD_ENTRY(id)	((grub_uint32_t) (((id) >> 6) & 0xffff))
+#define VMFS_BLK_FD_ITEM(id)	((grub_uint32_t) (((id) >> 22) & 0x3ff))
+#define VMFS_BLK_PB_ENTRY(id)	((grub_uint32_t) (((id) >> 6) & 0x3fffff))
+#define VMFS_BLK_PB_ITEM(id)	((grub_uint32_t) (((id) >> 28) & 0xf))
+#define VMFS_BLK_PB2_ENTRY(id)	((grub_uint32_t) (((id) >> 6) & 0x1fffff))
+#define VMFS_BLK_PB2_ITEM(id)	((grub_uint32_t) (((id) >> 27) & 0x1f))
 
-#define VMFS_BLK_PB_ENTRY(id)	(((id) & 0x0fffffc0u) >> 6)
-#define VMFS_BLK_PB_ITEM(id)	(((id) & 0xf0000000u) >> 28)
-
-#define VMFS_BLK_FD_ENTRY(id)	(((id) & 0x003fffc0u) >> 6)
-#define VMFS_BLK_FD_ITEM(id)	(((id) & 0xffc00000u) >> 22)
 #define VMFS_BLK_FD_ROOT	VMFS_BLK_TYPE_FD	/* entry 0, item 0 */
 
 struct grub_vmfs_data;
+
+/* Everything that moved between VMFS3/5 and VMFS6. */
+struct grub_vmfs_layout
+{
+	int v6;
+	grub_uint32_t lvminfo;		/* LVM info offset in the volume header */
+	grub_uint64_t hb_end;		/* first byte past the heartbeat area */
+	grub_uint32_t bme_size;		/* bitmap allocation entry size */
+	grub_uint32_t mdh_size;		/* metadata header size */
+	grub_uint32_t inode_size;
+	grub_uint32_t union_ofs;	/* inode offset of the block array area */
+	grub_uint32_t union_len;
+	grub_uint32_t blk_ofs;		/* block array offset inside that area */
+	grub_uint32_t blk_count;	/* number of block slots */
+	grub_uint32_t blk_bytes;	/* bytes per block slot */
+	grub_uint32_t dirent_size;
+	grub_uint32_t dirent_name;	/* name offset inside a record */
+};
+
+/* VMFS3 and VMFS5 share one layout, VMFS6 has its own */
+static const struct grub_vmfs_layout grub_vmfs_layout_v5 =
+{
+	0, 0x200, 0x400000, 0x400, 512, 0x800, 1024, 1024, 0, 256, 4, 0x8c, 12
+};
+
+static const struct grub_vmfs_layout grub_vmfs_layout_v6 =
+{
+	1, 0x1000, 0x700000, 0x2000, 4096, 0x2000, 4608, 3584, 1024, 320, 8,
+	0x120, 24
+};
 
 /* an in-core inode; also the fshelp node handed out by the directory
    iterator */
@@ -196,12 +248,13 @@ struct grub_fshelp_node
 	struct grub_vmfs_data *data;
 	grub_uint32_t id;			/* its own FD block ID */
 	grub_uint32_t type;			/* VMFS_FILE_TYPE_* */
+	grub_uint32_t mode;			/* POSIX mode bits */
 	grub_uint32_t zla;			/* type of the block slots */
 	grub_uint64_t size;
 	grub_uint64_t blk_size;
 	grub_int32_t mtime;
-	/* raw block array, or the inline data for a 4301+FD zla */
-	grub_uint8_t blocks[VMFS_INODE_CONTENT_LEN];
+	/* raw block array, prefixed by the inline data area */
+	grub_uint8_t blocks[VMFS_INODE_UNION_MAX];
 };
 
 /* one physical volume backing a range of the logical volume */
@@ -228,6 +281,7 @@ struct grub_vmfs_bitmap
 
 struct grub_vmfs_data
 {
+	const struct grub_vmfs_layout *l;
 	struct grub_vmfs_extent extents[VMFS_LVM_MAX_EXTENTS];
 	grub_uint32_t nextents;
 
@@ -235,18 +289,20 @@ struct grub_vmfs_data
 	grub_uint8_t uuid[16];
 	char label[VMFS_FSINFO_LABEL_LEN + 1];
 
-	struct grub_vmfs_bitmap fdc, pbc, sbc;
-	int have_pbc, have_sbc;
+	struct grub_vmfs_bitmap fdc, pbc, sbc, pb2;
+	int have_pbc, have_sbc, have_pb2;
 
 	struct grub_fshelp_node root;
 	struct grub_fshelp_node fdc_inode;
 	struct grub_fshelp_node pbc_inode;
 	struct grub_fshelp_node sbc_inode;
+	struct grub_fshelp_node pb2_inode;
 };
 
 /* volume header fields needed to assemble the logical volume */
 struct grub_vmfs_volinfo
 {
+	const struct grub_vmfs_layout *l;
 	grub_uint32_t version;
 	grub_uint32_t first_segment;
 	grub_uint32_t last_segment;
@@ -265,6 +321,46 @@ static grub_uint64_t
 vmfs_get64(const grub_uint8_t *p, grub_uint32_t off)
 {
 	return grub_le_to_cpu64(grub_get_unaligned64(p + off));
+}
+
+/* One entry of a block array, 32 bits on VMFS3/5 and 64 on VMFS6. */
+static grub_uint64_t
+vmfs_get_blk(const struct grub_vmfs_data *data, const grub_uint8_t *p,
+	grub_uint32_t index)
+{
+	if (data->l->blk_bytes == 8)
+		return vmfs_get64(p, index * 8);
+	return vmfs_get32(p, index * 4);
+}
+
+/*
+ * File block item number.  VMFS3/5 keep it in one field; VMFS6 splits it
+ * across a 64-bit ID, low 9 bits at 51 and high 17 bits at 15.
+ */
+static grub_uint64_t
+vmfs_blk_fb_item(const struct grub_vmfs_data *data, grub_uint64_t blk_id)
+{
+	if (!data->l->v6)
+		return (blk_id & 0xffffffc0ULL) >> 6;
+	return ((blk_id >> 51) & 0x1ff) | (((blk_id >> 15) & 0x1ffff) << 9);
+}
+
+static grub_uint32_t
+vmfs_blk_sb_entry(const struct grub_vmfs_data *data, grub_uint64_t blk_id)
+{
+	if (!data->l->v6)
+		return (grub_uint32_t) ((blk_id & 0x0fffffc0ULL) >> 6);
+	return (grub_uint32_t) ((blk_id >> 6) & 0xff);
+}
+
+static grub_uint32_t
+vmfs_blk_sb_item(const struct grub_vmfs_data *data, grub_uint64_t blk_id)
+{
+	if (!data->l->v6)
+		return (grub_uint32_t) (((blk_id >> 28) & 0xf)
+			| (((blk_id >> 3) & 0x3) << 4));
+	return (grub_uint32_t) (((blk_id >> 56) & 0xff)
+		| (((blk_id >> 14) & 0xf) << 8));
 }
 
 /* Read LEN bytes at volume offset POS, crossing extents as needed. */
@@ -315,7 +411,8 @@ grub_vmfs_dev_read(struct grub_vmfs_data *data, grub_uint64_t pos,
 
 /* Offset of a bitmap item inside its meta file. */
 static grub_err_t
-grub_vmfs_item_pos(const struct grub_vmfs_bitmap *bmp, grub_uint32_t entry,
+grub_vmfs_item_pos(const struct grub_vmfs_data *data,
+	const struct grub_vmfs_bitmap *bmp, grub_uint32_t entry,
 	grub_uint32_t item, grub_uint64_t *pos)
 {
 	grub_uint64_t items_per_area, addr, area;
@@ -331,7 +428,7 @@ grub_vmfs_item_pos(const struct grub_vmfs_bitmap *bmp, grub_uint32_t entry,
 			(unsigned long long) addr);
 
 	*pos = (grub_uint64_t) bmp->hdr_size + area * bmp->area_size;
-	*pos += (grub_uint64_t) bmp->entries_per_area * VMFS_BITMAP_ENTRY_SIZE;
+	*pos += (grub_uint64_t) bmp->entries_per_area * data->l->bme_size;
 	*pos += (addr % items_per_area) * bmp->data_size;
 	return GRUB_ERR_NONE;
 }
@@ -342,71 +439,141 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 
 /* Read one whole item of BMP into BUF (bmp->data_size bytes). */
 static grub_err_t
-grub_vmfs_get_item(struct grub_vmfs_bitmap *bmp, grub_uint32_t entry,
-	grub_uint32_t item, void *buf)
+grub_vmfs_get_item(struct grub_vmfs_data *data, struct grub_vmfs_bitmap *bmp,
+	grub_uint32_t entry, grub_uint32_t item, void *buf)
 {
 	grub_uint64_t pos;
 
-	if (grub_vmfs_item_pos(bmp, entry, item, &pos))
+	if (grub_vmfs_item_pos(data, bmp, entry, item, &pos))
 		return grub_errno;
 	return grub_vmfs_read_file(bmp->inode, pos, bmp->data_size, buf);
 }
 
 /*
+ * VMFS6 double indirection: the inode slot points at a sub-block full of
+ * pointers to further sub-blocks, which in turn hold the block IDs.
+ * Both levels live in .sbc.sf.
+ */
+static grub_err_t
+grub_vmfs_get_block_2(struct grub_fshelp_node *node, grub_uint64_t blk_index,
+	grub_uint8_t *pb_buf, grub_uint64_t *blk_id)
+{
+	struct grub_vmfs_data *data = node->data;
+	grub_uint32_t per_pb = data->sbc.data_size / 8;
+	grub_uint64_t primary = blk_index / ((grub_uint64_t) per_pb * per_pb);
+	grub_uint64_t rest = blk_index % ((grub_uint64_t) per_pb * per_pb);
+	grub_uint32_t second = (grub_uint32_t) (rest / per_pb);
+	grub_uint32_t leaf = (grub_uint32_t) (rest % per_pb);
+	grub_uint64_t id;
+
+	if (primary >= data->l->blk_count)
+		return grub_error(GRUB_ERR_BAD_FS,
+			"vmfs: pointer block index out of range");
+
+	id = vmfs_get_blk(data, node->blocks + data->l->blk_ofs,
+		(grub_uint32_t) primary);
+	if (!id)
+		return GRUB_ERR_NONE;
+	if (grub_vmfs_get_item(data, &data->sbc, vmfs_blk_sb_entry(data, id),
+		vmfs_blk_sb_item(data, id), pb_buf))
+		return grub_errno;
+
+	id = vmfs_get64(pb_buf, second * 8);
+	if (!id)
+		return GRUB_ERR_NONE;
+	if (grub_vmfs_get_item(data, &data->sbc, vmfs_blk_sb_entry(data, id),
+		vmfs_blk_sb_item(data, id), pb_buf))
+		return grub_errno;
+
+	*blk_id = vmfs_get64(pb_buf, leaf * 8);
+	return GRUB_ERR_NONE;
+}
+
+/*
  * Resolve the block ID holding volume file offset POS.  ZLA is the
- * inode's block type with the VMFS5 bias already removed; PB_BUF is a
- * scratch buffer of pbc.data_size bytes, only touched for pointer
- * blocks.  A zero block ID means the block is not allocated.
+ * inode's block type with the VMFS5 bias already removed, DOUBLE says
+ * the bias was present on a pointer block inode; PB_BUF is a scratch
+ * buffer for the pointer block, only touched for indirect layouts.  A
+ * zero block ID means the block is not allocated.
  */
 static grub_err_t
 grub_vmfs_get_block(struct grub_fshelp_node *node, grub_uint64_t pos,
-	grub_uint32_t zla, grub_uint8_t *pb_buf, grub_uint32_t *blk_id)
+	grub_uint32_t zla, int dbl, grub_uint8_t *pb_buf, grub_uint64_t *blk_id)
 {
 	struct grub_vmfs_data *data = node->data;
+	const struct grub_vmfs_layout *l = data->l;
 	grub_uint64_t blk_index = pos / node->blk_size;
+	struct grub_vmfs_bitmap *bmp;
+	grub_uint32_t per_pb, sub_index;
+	grub_uint64_t pb_index, pb_blk;
 
 	*blk_id = 0;
 	switch (zla)
 	{
 	case VMFS_BLK_TYPE_FB:
 	case VMFS_BLK_TYPE_SB:
-		if (blk_index >= VMFS_INODE_BLK_COUNT)
+		if (blk_index >= l->blk_count)
 			return grub_error(GRUB_ERR_BAD_FS,
 				"vmfs: block index out of range");
-		*blk_id = vmfs_get32(node->blocks,
-			(grub_uint32_t) blk_index * 4);
-		break;
+		*blk_id = vmfs_get_blk(data, node->blocks + l->blk_ofs,
+			(grub_uint32_t) blk_index);
+		return GRUB_ERR_NONE;
 
 	case VMFS_BLK_TYPE_PB:
-	{
-		grub_uint32_t blk_per_pb = data->pbc.data_size / 4;
-		grub_uint64_t pb_index = blk_index / blk_per_pb;
-		grub_uint32_t sub_index =
-			(grub_uint32_t) (blk_index % blk_per_pb);
-		grub_uint32_t pb_blk;
-
-		if (pb_index >= VMFS_INODE_BLK_COUNT)
-			return grub_error(GRUB_ERR_BAD_FS,
-				"vmfs: pointer block index out of range");
-		pb_blk = vmfs_get32(node->blocks,
-			(grub_uint32_t) pb_index * 4);
-		if (!pb_blk)
-			break;
-		if (VMFS_BLK_TYPE(pb_blk) != VMFS_BLK_TYPE_PB)
-			return grub_error(GRUB_ERR_BAD_FS,
-				"vmfs: bad pointer block 0x%x", pb_blk);
-		if (grub_vmfs_get_item(&data->pbc, VMFS_BLK_PB_ENTRY(pb_blk),
-			VMFS_BLK_PB_ITEM(pb_blk), pb_buf))
-			return grub_errno;
-		*blk_id = vmfs_get32(pb_buf, sub_index * 4);
+		/* VMFS6 keeps pointer blocks in .sbc.sf, and uses a second
+		   level when the VMFS5 bias is set */
+		if (l->v6 && dbl)
+			return grub_vmfs_get_block_2(node, blk_index, pb_buf,
+				blk_id);
+		bmp = l->v6 ? &data->sbc : &data->pbc;
 		break;
-	}
+
+	case VMFS_BLK_TYPE_PB2:
+		bmp = &data->pb2;
+		break;
 
 	default:
 		/* only reached for an inline (VMFS5 4301+FD) inode */
 		*blk_id = node->id;
-		break;
+		return GRUB_ERR_NONE;
 	}
+
+	per_pb = bmp->data_size / l->blk_bytes;
+	pb_index = blk_index / per_pb;
+	sub_index = (grub_uint32_t) (blk_index % per_pb);
+
+	if (pb_index >= l->blk_count)
+		return grub_error(GRUB_ERR_BAD_FS,
+			"vmfs: pointer block index out of range");
+	pb_blk = vmfs_get_blk(data, node->blocks + l->blk_ofs,
+		(grub_uint32_t) pb_index);
+	if (!pb_blk)
+		return GRUB_ERR_NONE;
+
+	if (zla == VMFS_BLK_TYPE_PB2)
+	{
+		if (grub_vmfs_get_item(data, bmp, VMFS_BLK_PB2_ENTRY(pb_blk),
+			VMFS_BLK_PB2_ITEM(pb_blk), pb_buf))
+			return grub_errno;
+	}
+	else if (l->v6)
+	{
+		if (grub_vmfs_get_item(data, bmp, vmfs_blk_sb_entry(data, pb_blk),
+			vmfs_blk_sb_item(data, pb_blk), pb_buf))
+			return grub_errno;
+	}
+	else
+	{
+		if (VMFS_BLK_TYPE(pb_blk) != VMFS_BLK_TYPE_PB)
+			return grub_error(GRUB_ERR_BAD_FS,
+				"vmfs: bad pointer block 0x%llx",
+				(unsigned long long) pb_blk);
+		if (grub_vmfs_get_item(data, bmp, VMFS_BLK_PB_ENTRY(pb_blk),
+			VMFS_BLK_PB_ITEM(pb_blk), pb_buf))
+			return grub_errno;
+	}
+
+	*blk_id = vmfs_get_blk(data, pb_buf, sub_index);
 	return GRUB_ERR_NONE;
 }
 
@@ -416,11 +583,12 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 	grub_size_t len, void *buf)
 {
 	struct grub_vmfs_data *data = node->data;
+	const struct grub_vmfs_layout *l = data->l;
 	grub_uint8_t *out = buf;
 	grub_uint8_t *sb_buf = NULL;
 	grub_uint8_t *pb_buf = NULL;
 	grub_uint32_t zla = node->zla;
-	int inline_data = 0;
+	int inline_data = 0, dbl = 0;
 
 	if (node->type == VMFS_FILE_TYPE_RDM)
 		return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET,
@@ -436,6 +604,7 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 	{
 		zla -= VMFS5_ZLA_BASE;
 		inline_data = (zla == VMFS_BLK_TYPE_FD);
+		dbl = 1;
 	}
 
 	switch (zla)
@@ -443,20 +612,30 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 	case VMFS_BLK_TYPE_FB:
 		break;
 
+	/* sub-block buffers are allocated on first use below, because a
+	   pointer block inode can have sub-block leaves too */
 	case VMFS_BLK_TYPE_SB:
-		if (!data->have_sbc || !data->sbc.data_size)
+		if (!data->have_sbc)
 			return grub_error(GRUB_ERR_BAD_FS,
 				"vmfs: sub-block bitmap is unavailable");
-		sb_buf = grub_malloc(data->sbc.data_size);
-		if (!sb_buf)
-			return grub_errno;
 		break;
 
 	case VMFS_BLK_TYPE_PB:
-		if (!data->have_pbc || data->pbc.data_size < 4)
+		/* VMFS6 keeps pointer blocks in .sbc.sf */
+		if (l->v6 ? !data->have_sbc : !data->have_pbc)
 			return grub_error(GRUB_ERR_BAD_FS,
 				"vmfs: pointer block bitmap is unavailable");
-		pb_buf = grub_malloc(data->pbc.data_size);
+		pb_buf = grub_malloc(l->v6 ? data->sbc.data_size
+			: data->pbc.data_size);
+		if (!pb_buf)
+			return grub_errno;
+		break;
+
+	case VMFS_BLK_TYPE_PB2:
+		if (!data->have_pb2)
+			return grub_error(GRUB_ERR_BAD_FS,
+				"vmfs: 2nd level pointer block bitmap is unavailable");
+		pb_buf = grub_malloc(data->pb2.data_size);
 		if (!pb_buf)
 			return grub_errno;
 		break;
@@ -470,15 +649,15 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 
 	while (len > 0)
 	{
-		grub_uint32_t blk_id, blk_type;
-		grub_uint64_t off;
+		grub_uint64_t blk_id, off;
+		grub_uint32_t blk_type;
 		grub_size_t take;
 
-		if (grub_vmfs_get_block(node, pos, zla, pb_buf, &blk_id))
+		if (grub_vmfs_get_block(node, pos, zla, dbl, pb_buf, &blk_id))
 			goto fail;
 
 		blk_type = VMFS_BLK_TYPE(blk_id);
-		if (blk_type == VMFS_BLK_TYPE_FB && VMFS_BLK_FB_TBZ(blk_id))
+		if (blk_type == VMFS_BLK_TYPE_FB && VMFS_BLK_TBZ(blk_id))
 			blk_type = VMFS_BLK_TYPE_NONE;
 		if (inline_data)
 			blk_type = VMFS_BLK_TYPE_FD;
@@ -494,47 +673,68 @@ grub_vmfs_read_file(struct grub_fshelp_node *node, grub_uint64_t pos,
 			grub_memset(out, 0, take);
 			break;
 
+		/* a leaf tagged PB2 is a plain file block, as in vmfs6-tool */
 		case VMFS_BLK_TYPE_FB:
+		case VMFS_BLK_TYPE_PB2:
 			off = pos % data->blocksize;
 			take = (grub_size_t) (data->blocksize - off);
 			if (take > len)
 				take = len;
 			if (grub_vmfs_dev_read(data,
-				(grub_uint64_t) VMFS_BLK_FB_ITEM(blk_id)
-					* data->blocksize + off,
+				vmfs_blk_fb_item(data, blk_id) * data->blocksize
+					+ off,
+				take, out))
+				goto fail;
+			break;
+
+		/* 512 MiB extent, its item still counted in file blocks */
+		case VMFS_BLK_TYPE_LFB:
+			off = pos % VMFS_LARGE_BLOCK_SIZE;
+			take = (grub_size_t) (VMFS_LARGE_BLOCK_SIZE - off);
+			if (take > len)
+				take = len;
+			if (grub_vmfs_dev_read(data,
+				vmfs_blk_fb_item(data, blk_id) * data->blocksize
+					+ off,
 				take, out))
 				goto fail;
 			break;
 
 		case VMFS_BLK_TYPE_SB:
-			if (!sb_buf)
+			if (!data->have_sbc)
 			{
 				grub_error(GRUB_ERR_BAD_FS,
-					"vmfs: unexpected sub-block 0x%x",
-					blk_id);
+					"vmfs: unexpected sub-block 0x%llx",
+					(unsigned long long) blk_id);
 				goto fail;
+			}
+			if (!sb_buf)
+			{
+				sb_buf = grub_malloc(data->sbc.data_size);
+				if (!sb_buf)
+					goto fail;
 			}
 			off = pos % data->sbc.data_size;
 			take = (grub_size_t) (data->sbc.data_size - off);
 			if (take > len)
 				take = len;
-			if (grub_vmfs_get_item(&data->sbc,
-				VMFS_BLK_SB_ENTRY(blk_id),
-				VMFS_BLK_SB_ITEM(blk_id), sb_buf))
+			if (grub_vmfs_get_item(data, &data->sbc,
+				vmfs_blk_sb_entry(data, blk_id),
+				vmfs_blk_sb_item(data, blk_id), sb_buf))
 				goto fail;
 			grub_memcpy(out, sb_buf + (grub_size_t) off, take);
 			break;
 
 		/* stored inline in the inode itself */
 		case VMFS_BLK_TYPE_FD:
-			if (!inline_data || pos >= VMFS_INODE_CONTENT_LEN)
+			if (!inline_data || pos >= l->union_len)
 			{
 				grub_error(GRUB_ERR_BAD_FS,
-					"vmfs: unexpected file descriptor 0x%x",
-					blk_id);
+					"vmfs: unexpected file descriptor 0x%llx",
+					(unsigned long long) blk_id);
 				goto fail;
 			}
-			take = VMFS_INODE_CONTENT_LEN - (grub_size_t) pos;
+			take = l->union_len - (grub_size_t) pos;
 			if (take > len)
 				take = len;
 			grub_memcpy(out, node->blocks + (grub_size_t) pos, take);
@@ -566,24 +766,25 @@ static grub_err_t
 grub_vmfs_read_inode(struct grub_vmfs_data *data, grub_uint32_t blk_id,
 	struct grub_fshelp_node *node)
 {
+	const struct grub_vmfs_layout *l = data->l;
 	grub_uint8_t *raw;
 	grub_uint64_t pos;
 
 	if (VMFS_BLK_TYPE(blk_id) != VMFS_BLK_TYPE_FD)
 		return grub_error(GRUB_ERR_BAD_FS,
 			"vmfs: 0x%x is not a file descriptor", blk_id);
-	if (data->fdc.data_size < VMFS_INODE_SIZE)
+	if (data->fdc.data_size < l->inode_size)
 		return grub_error(GRUB_ERR_BAD_FS,
 			"vmfs: file descriptors are too small");
-	if (grub_vmfs_item_pos(&data->fdc, VMFS_BLK_FD_ENTRY(blk_id),
+	if (grub_vmfs_item_pos(data, &data->fdc, VMFS_BLK_FD_ENTRY(blk_id),
 		VMFS_BLK_FD_ITEM(blk_id), &pos))
 		return grub_errno;
 
-	raw = grub_malloc(VMFS_INODE_SIZE);
+	raw = grub_malloc(l->inode_size);
 	if (!raw)
 		return grub_errno;
 
-	if (grub_vmfs_read_file(data->fdc.inode, pos, VMFS_INODE_SIZE, raw))
+	if (grub_vmfs_read_file(data->fdc.inode, pos, l->inode_size, raw))
 		goto fail;
 	if (vmfs_get32(raw, VMFS_MDH_OFS_MAGIC) != VMFS_INODE_MAGIC)
 	{
@@ -592,14 +793,16 @@ grub_vmfs_read_inode(struct grub_vmfs_data *data, grub_uint32_t blk_id,
 	}
 
 	node->data = data;
-	node->id = vmfs_get32(raw, VMFS_INODE_OFS_ID);
-	node->type = vmfs_get32(raw, VMFS_INODE_OFS_TYPE);
-	node->zla = vmfs_get32(raw, VMFS_INODE_OFS_ZLA);
-	node->size = vmfs_get64(raw, VMFS_INODE_OFS_SIZE);
-	node->blk_size = vmfs_get64(raw, VMFS_INODE_OFS_BLK_SIZE);
-	node->mtime = (grub_int32_t) vmfs_get32(raw, VMFS_INODE_OFS_MTIME);
-	grub_memcpy(node->blocks, raw + VMFS_INODE_OFS_BLK_ARRAY,
-		sizeof(node->blocks));
+	node->id = vmfs_get32(raw, l->mdh_size + VMFS_INODE_D_ID);
+	node->type = vmfs_get32(raw, l->mdh_size + VMFS_INODE_D_TYPE);
+	node->mode = vmfs_get32(raw, l->mdh_size + VMFS_INODE_D_MODE);
+	node->zla = vmfs_get32(raw, l->mdh_size + VMFS_INODE_D_ZLA);
+	node->size = vmfs_get64(raw, l->mdh_size + VMFS_INODE_D_SIZE);
+	node->blk_size = vmfs_get64(raw, l->mdh_size + VMFS_INODE_D_BLK_SIZE);
+	node->mtime = (grub_int32_t) vmfs_get32(raw,
+		l->mdh_size + VMFS_INODE_D_MTIME);
+	grub_memset(node->blocks, 0, sizeof(node->blocks));
+	grub_memcpy(node->blocks, raw + l->union_ofs, l->union_len);
 
 	grub_free(raw);
 	return GRUB_ERR_NONE;
@@ -607,6 +810,21 @@ grub_vmfs_read_inode(struct grub_vmfs_data *data, grub_uint32_t blk_id,
 fail:
 	grub_free(raw);
 	return grub_errno;
+}
+
+/* VMFS6 flags directories in the mode bits rather than in "type". */
+static int
+grub_vmfs_is_dir(const struct grub_fshelp_node *node)
+{
+	return node->type == VMFS_FILE_TYPE_DIR
+		|| (node->mode & VMFS_S_IFMT) == VMFS_S_IFDIR;
+}
+
+static int
+grub_vmfs_is_symlink(const struct grub_fshelp_node *node)
+{
+	return node->type == VMFS_FILE_TYPE_SYMLINK
+		|| (node->mode & VMFS_S_IFMT) == VMFS_S_IFLNK;
 }
 
 /* Read a meta file's bitmap header and attach it to INODE. */
@@ -628,44 +846,129 @@ grub_vmfs_bitmap_open(struct grub_vmfs_bitmap *bmp,
 	bmp->total_items = vmfs_get32(hdr, VMFS_BMH_OFS_TOTAL_ITEMS);
 	bmp->area_count = vmfs_get32(hdr, VMFS_BMH_OFS_AREA_COUNT);
 
-	if (!bmp->items_per_entry || !bmp->entries_per_area || !bmp->data_size)
+	if (!bmp->items_per_entry || !bmp->entries_per_area
+		|| bmp->data_size < inode->data->l->blk_bytes)
 		return grub_error(GRUB_ERR_BAD_FS, "vmfs: bad bitmap header");
+	return GRUB_ERR_NONE;
+}
+
+/* Look up NAME in the root directory and open it as a meta file. */
+static grub_err_t
+grub_vmfs_lookup_meta(struct grub_vmfs_data *data, const char *name,
+	grub_uint32_t *blk_id);
+
+static grub_err_t
+grub_vmfs_open_meta(struct grub_vmfs_data *data, const char *name,
+	struct grub_vmfs_bitmap *bmp, struct grub_fshelp_node *inode)
+{
+	grub_uint32_t blk_id;
+
+	if (grub_vmfs_lookup_meta(data, name, &blk_id)
+		|| grub_vmfs_read_inode(data, blk_id, inode)
+		|| grub_vmfs_bitmap_open(bmp, inode))
+		return grub_errno;
 	return GRUB_ERR_NONE;
 }
 
 /*
  * Feed every directory record of DIR to HOOK, which returns non-zero to
  * stop.  Read errors abort the walk with grub_errno set.
+ *
+ * VMFS3/5 records are packed from offset 0.  VMFS6 puts "." and ".." in
+ * the directory header and the rest in 4 KiB pages, each holding a
+ * 0x40-byte header and 14 records; a nibble per page in the presence
+ * bitmap says whether the page is allocated (bit 0) and whether it is
+ * past the last one (bit 3).
  */
 static void
 grub_vmfs_scan_dir(struct grub_fshelp_node *dir,
 	int (*hook) (const grub_uint8_t *rec, void *data), void *hook_data)
 {
+	const struct grub_vmfs_layout *l = dir->data->l;
 	grub_uint8_t *chunk;
-	grub_uint64_t pos = 0;
+	grub_uint32_t page, nib_byte = 0xffffffff;
+	grub_uint8_t nib = 0;
 
-	chunk = grub_malloc(VMFS_DIRENT_SIZE * VMFS_DIRENT_BATCH);
+	if (!l->v6)
+	{
+		grub_uint64_t pos = 0;
+
+		chunk = grub_malloc((grub_size_t) l->dirent_size
+			* VMFS_DIRENT_BATCH);
+		if (!chunk)
+			return;
+
+		while (dir->size - pos >= l->dirent_size)
+		{
+			grub_uint64_t left = dir->size - pos;
+			grub_uint32_t i, n;
+			grub_size_t got;
+
+			n = VMFS_DIRENT_BATCH;
+			if (left / l->dirent_size < n)
+				n = (grub_uint32_t) (left / l->dirent_size);
+			got = (grub_size_t) n * l->dirent_size;
+
+			if (grub_vmfs_read_file(dir, pos, got, chunk))
+				break;
+
+			for (i = 0; i < n; i++)
+				if (hook(chunk + i * l->dirent_size, hook_data))
+					goto done;
+			pos += got;
+		}
+		goto done;
+	}
+
+	chunk = grub_malloc(VMFS6_DIR_PAGE_SIZE);
 	if (!chunk)
 		return;
 
-	while (dir->size - pos >= VMFS_DIRENT_SIZE)
+	/* "." and ".." live in the header and share page 0's nibble */
+	for (page = 0; ; page++)
 	{
-		grub_uint64_t left = dir->size - pos;
-		grub_uint32_t i, n;
-		grub_size_t got;
+		grub_uint32_t nib_idx = page + 1;
+		grub_uint64_t off = VMFS6_DIR_PAGE0
+			+ (grub_uint64_t) page * VMFS6_DIR_PAGE_SIZE;
+		grub_uint32_t slot, n;
+		grub_uint8_t present;
 
-		n = VMFS_DIRENT_BATCH;
-		if (left / VMFS_DIRENT_SIZE < n)
-			n = (grub_uint32_t) (left / VMFS_DIRENT_SIZE);
-		got = (grub_size_t) n * VMFS_DIRENT_SIZE;
-
-		if (grub_vmfs_read_file(dir, pos, got, chunk))
+		if (off + VMFS6_DIR_PAGE_SIZE > dir->size)
 			break;
 
-		for (i = 0; i < n; i++)
-			if (hook(chunk + i * VMFS_DIRENT_SIZE, hook_data))
+		if (nib_idx / 2 != nib_byte)
+		{
+			nib_byte = nib_idx / 2;
+			if (grub_vmfs_read_file(dir,
+				VMFS6_DIR_PRESENT + nib_byte, 1, &nib))
+				break;
+		}
+		present = (nib_idx & 1) ? (nib & 0x0f) : (nib >> 4);
+
+		if (present & VMFS6_DIR_PRESENT_LAST)
+			break;
+		if (!(present & VMFS6_DIR_PRESENT_HERE))
+			continue;
+
+		if (page == 0)
+		{
+			n = 2;
+			if (grub_vmfs_read_file(dir, VMFS6_DIR_HEAD,
+				(grub_size_t) n * l->dirent_size, chunk))
+				break;
+			for (slot = 0; slot < n; slot++)
+				if (hook(chunk + slot * l->dirent_size, hook_data))
+					goto done;
+		}
+
+		if (grub_vmfs_read_file(dir, off, VMFS6_DIR_PAGE_SIZE, chunk))
+			break;
+
+		n = (VMFS6_DIR_PAGE_SIZE - VMFS6_DIR_PAGE_HEAD) / l->dirent_size;
+		for (slot = 0; slot < n; slot++)
+			if (hook(chunk + VMFS6_DIR_PAGE_HEAD
+				+ slot * l->dirent_size, hook_data))
 				goto done;
-		pos += got;
 	}
 
 done:
@@ -675,6 +978,7 @@ done:
 /* context for grub_vmfs_lookup_rec */
 struct grub_vmfs_lookup_ctx
 {
+	const struct grub_vmfs_layout *l;
 	const char *name;
 	grub_uint32_t blk_id;
 };
@@ -685,7 +989,7 @@ grub_vmfs_lookup_rec(const grub_uint8_t *rec, void *ctx_in)
 	struct grub_vmfs_lookup_ctx *ctx = ctx_in;
 	char name[VMFS_DIRENT_NAME_LEN + 1];
 
-	grub_memcpy(name, rec + VMFS_DIRENT_OFS_NAME, VMFS_DIRENT_NAME_LEN);
+	grub_memcpy(name, rec + ctx->l->dirent_name, VMFS_DIRENT_NAME_LEN);
 	name[VMFS_DIRENT_NAME_LEN] = '\0';
 	if (grub_strcmp(name, ctx->name) != 0)
 		return 0;
@@ -703,7 +1007,7 @@ static grub_err_t
 grub_vmfs_lookup_meta(struct grub_vmfs_data *data, const char *name,
 	grub_uint32_t *blk_id)
 {
-	struct grub_vmfs_lookup_ctx ctx = { name, 0 };
+	struct grub_vmfs_lookup_ctx ctx = { data->l, name, 0 };
 
 	grub_vmfs_scan_dir(&data->root, grub_vmfs_lookup_rec, &ctx);
 	if (grub_errno)
@@ -734,7 +1038,7 @@ grub_vmfs_iter_rec(const grub_uint8_t *rec, void *ctx_in)
 	grub_uint32_t blk_id;
 
 	blk_id = vmfs_get32(rec, VMFS_DIRENT_OFS_BLK_ID);
-	grub_memcpy(name, rec + VMFS_DIRENT_OFS_NAME, VMFS_DIRENT_NAME_LEN);
+	grub_memcpy(name, rec + ctx->data->l->dirent_name, VMFS_DIRENT_NAME_LEN);
 	name[VMFS_DIRENT_NAME_LEN] = '\0';
 
 	/* fshelp resolves "." and ".." on its own */
@@ -753,20 +1057,14 @@ grub_vmfs_iter_rec(const grub_uint8_t *rec, void *ctx_in)
 		return 0;
 	}
 
-	switch (node->type)
-	{
-	case VMFS_FILE_TYPE_DIR:
+	if (grub_vmfs_is_dir(node))
 		type = GRUB_FSHELP_DIR;
-		break;
-	case VMFS_FILE_TYPE_SYMLINK:
+	else if (grub_vmfs_is_symlink(node))
 		type = GRUB_FSHELP_SYMLINK;
-		break;
-	default:
-		/* meta files and raw device mappings show up as plain
-		   files, the way vmfs_file_type2mode() reports them */
+	else
+		/* meta files and raw device mappings show up as plain files,
+		   the way vmfs_file_type2mode() reports them */
 		type = GRUB_FSHELP_REG;
-		break;
-	}
 
 	if (ctx->hook(name, type, node, ctx->hook_data))
 	{
@@ -782,7 +1080,7 @@ grub_vmfs_iterate_dir(grub_fshelp_node_t dir,
 {
 	struct grub_vmfs_iter_ctx ctx;
 
-	if (dir->type != VMFS_FILE_TYPE_DIR)
+	if (!grub_vmfs_is_dir(dir))
 	{
 		grub_error(GRUB_ERR_BAD_FILE_TYPE, "not a directory");
 		return 0;
@@ -824,7 +1122,8 @@ grub_vmfs_read_symlink(grub_fshelp_node_t node)
 static grub_err_t
 grub_vmfs_read_volinfo(grub_disk_t disk, struct grub_vmfs_volinfo *vi)
 {
-	grub_uint8_t buf[VMFS_VOLINFO_LEN];
+	grub_uint8_t buf[VMFS_VOLINFO_HDR_LEN];
+	grub_uint8_t lvm[VMFS_LVMINFO_LEN];
 
 	if (grub_disk_read(disk, 0, VMFS_VOLINFO_BASE, sizeof(buf), buf))
 		return grub_errno;
@@ -832,18 +1131,27 @@ grub_vmfs_read_volinfo(grub_disk_t disk, struct grub_vmfs_volinfo *vi)
 		return grub_error(GRUB_ERR_BAD_FS, "not a vmfs volume");
 
 	vi->version = vmfs_get32(buf, VMFS_VOLINFO_OFS_VER);
-	if (vi->version != 3 && vi->version != 5)
+	if (vi->version == 3 || vi->version == 5)
+		vi->l = &grub_vmfs_layout_v5;
+	else if (vi->version == 6)
+		vi->l = &grub_vmfs_layout_v6;
+	else
 		return grub_error(GRUB_ERR_BAD_FS,
 			"vmfs: unsupported version %u", vi->version);
 
-	vi->first_segment = vmfs_get32(buf, VMFS_LVMINFO_OFS_FIRST_SEGMENT);
-	vi->last_segment = vmfs_get32(buf, VMFS_LVMINFO_OFS_LAST_SEGMENT);
-	vi->num_extents = vmfs_get32(buf, VMFS_LVMINFO_OFS_NUM_EXTENTS);
-	grub_memcpy(vi->lvm_uuid, buf + VMFS_LVMINFO_OFS_UUID,
-		sizeof(vi->lvm_uuid));
 	grub_memcpy(vi->name, buf + VMFS_VOLINFO_OFS_NAME,
 		VMFS_VOLINFO_NAME_LEN);
 	vi->name[VMFS_VOLINFO_NAME_LEN] = '\0';
+
+	if (grub_disk_read(disk, 0, VMFS_VOLINFO_BASE + vi->l->lvminfo,
+		sizeof(lvm), lvm))
+		return grub_errno;
+
+	vi->first_segment = vmfs_get32(lvm, VMFS_LVMINFO_OFS_FIRST_SEGMENT);
+	vi->last_segment = vmfs_get32(lvm, VMFS_LVMINFO_OFS_LAST_SEGMENT);
+	vi->num_extents = vmfs_get32(lvm, VMFS_LVMINFO_OFS_NUM_EXTENTS);
+	grub_memcpy(vi->lvm_uuid, lvm + VMFS_LVMINFO_OFS_UUID,
+		sizeof(vi->lvm_uuid));
 
 	if (vi->last_segment < vi->first_segment)
 		return grub_error(GRUB_ERR_BAD_FS, "vmfs: bad segment range");
@@ -855,6 +1163,7 @@ struct grub_vmfs_scan_ctx
 {
 	struct grub_vmfs_data *data;
 	const grub_uint8_t *lvm_uuid;
+	grub_uint32_t version;
 	grub_uint32_t num_extents;
 };
 
@@ -879,6 +1188,7 @@ grub_vmfs_scan_extent(const char *name, void *ctx_in)
 	}
 
 	if (grub_vmfs_read_volinfo(disk, &vi)
+		|| vi.version != ctx->version
 		|| vi.num_extents != ctx->num_extents
 		|| grub_memcmp(vi.lvm_uuid, ctx->lvm_uuid, 16) != 0)
 		goto skip;
@@ -923,11 +1233,12 @@ grub_vmfs_unmount(struct grub_vmfs_data *data)
 static struct grub_vmfs_data *
 grub_vmfs_mount(grub_disk_t disk)
 {
+	const struct grub_vmfs_layout *l;
 	struct grub_vmfs_data *data;
 	struct grub_vmfs_volinfo vi;
 	struct grub_fshelp_node *tmp = NULL;
 	grub_uint8_t fsi[VMFS_FSINFO_LEN];
-	grub_uint32_t fdc_base, blk_id;
+	grub_uint32_t magic, fdc_base, blk_id;
 
 	if (grub_vmfs_read_volinfo(disk, &vi))
 		return NULL;
@@ -942,6 +1253,7 @@ grub_vmfs_mount(grub_disk_t disk)
 	if (!data)
 		return NULL;
 
+	l = data->l = vi.l;
 	data->extents[0].disk = disk;
 	data->extents[0].first_segment = vi.first_segment;
 	data->extents[0].last_segment = vi.last_segment;
@@ -954,6 +1266,7 @@ grub_vmfs_mount(grub_disk_t disk)
 
 		ctx.data = data;
 		ctx.lvm_uuid = vi.lvm_uuid;
+		ctx.version = vi.version;
 		ctx.num_extents = vi.num_extents;
 		grub_device_iterate(grub_vmfs_scan_extent, &ctx);
 		grub_errno = GRUB_ERR_NONE;
@@ -969,7 +1282,8 @@ grub_vmfs_mount(grub_disk_t disk)
 
 	if (grub_vmfs_dev_read(data, VMFS_FSINFO_BASE, sizeof(fsi), fsi))
 		goto fail;
-	if (vmfs_get32(fsi, VMFS_FSINFO_OFS_MAGIC) != VMFS_FSINFO_MAGIC)
+	magic = vmfs_get32(fsi, VMFS_FSINFO_OFS_MAGIC);
+	if (magic != VMFS_FSINFO_MAGIC && magic != VMFSL_FSINFO_MAGIC)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "vmfs: bad filesystem magic");
 		goto fail;
@@ -1003,8 +1317,7 @@ grub_vmfs_mount(grub_disk_t disk)
 	 * the first file descriptors -- enough for the root directory and
 	 * the meta files themselves.
 	 */
-	fdc_base = (grub_uint32_t) ((VMFS_HB_BASE
-		+ (grub_uint64_t) VMFS_HB_NUM * VMFS_HB_SIZE) / data->blocksize);
+	fdc_base = (grub_uint32_t) (l->hb_end / data->blocksize);
 	if (fdc_base == 0)
 		fdc_base = 1;
 
@@ -1013,44 +1326,82 @@ grub_vmfs_mount(grub_disk_t disk)
 	data->fdc_inode.zla = VMFS_BLK_TYPE_FB;
 	data->fdc_inode.size = data->blocksize;
 	data->fdc_inode.blk_size = data->blocksize;
-	grub_set_unaligned32(data->fdc_inode.blocks,
-		grub_cpu_to_le32(VMFS_BLK_FB_BUILD(fdc_base)));
+	if (l->v6)
+		grub_set_unaligned64(data->fdc_inode.blocks + l->blk_ofs,
+			grub_cpu_to_le64(
+				((grub_uint64_t) (fdc_base & 0x1ff) << 51)
+				| ((grub_uint64_t) ((fdc_base >> 9) & 0x1ffff)
+					<< 15)
+				| VMFS_BLK_TYPE_FB));
+	else
+		grub_set_unaligned32(data->fdc_inode.blocks + l->blk_ofs,
+			grub_cpu_to_le32(((fdc_base << 6) & 0xffffffc0u)
+				| VMFS_BLK_TYPE_FB));
 
 	if (grub_vmfs_bitmap_open(&data->fdc, &data->fdc_inode))
 		goto fail;
 	if (grub_vmfs_read_inode(data, VMFS_BLK_FD_ROOT, &data->root))
 		goto fail;
-	if (data->root.type != VMFS_FILE_TYPE_DIR)
+	if (!grub_vmfs_is_dir(&data->root))
 	{
 		grub_error(GRUB_ERR_BAD_FS, "vmfs: root is not a directory");
 		goto fail;
 	}
 
-	/*
-	 * Open .pbc.sf first: the real .fdc.sf and .sbc.sf are large enough
-	 * to be described by pointer blocks themselves.
-	 */
-	if (grub_vmfs_lookup_meta(data, VMFS_PBC_FILENAME, &blk_id)
-		|| grub_vmfs_read_inode(data, blk_id, &data->pbc_inode)
-		|| grub_vmfs_bitmap_open(&data->pbc, &data->pbc_inode))
-		goto fail;
-	data->have_pbc = 1;
-
 	tmp = grub_malloc(sizeof(*tmp));
 	if (!tmp)
 		goto fail;
-	if (grub_vmfs_lookup_meta(data, VMFS_FDC_FILENAME, &blk_id)
-		|| grub_vmfs_read_inode(data, blk_id, tmp))
-		goto fail;
-	grub_memcpy(&data->fdc_inode, tmp, sizeof(*tmp));
-	if (grub_vmfs_bitmap_open(&data->fdc, &data->fdc_inode))
-		goto fail;
 
-	if (grub_vmfs_lookup_meta(data, VMFS_SBC_FILENAME, &blk_id)
-		|| grub_vmfs_read_inode(data, blk_id, &data->sbc_inode)
-		|| grub_vmfs_bitmap_open(&data->sbc, &data->sbc_inode))
-		goto fail;
-	data->have_sbc = 1;
+	if (l->v6)
+	{
+		/*
+		 * VMFS6 stores pointer blocks in .sbc.sf, so the real
+		 * .fdc.sf has to come first: everything else is then read
+		 * through a descriptor table that is no longer capped at
+		 * one block.
+		 */
+		if (grub_vmfs_lookup_meta(data, VMFS_FDC_FILENAME, &blk_id)
+			|| grub_vmfs_read_inode(data, blk_id, tmp))
+			goto fail;
+		grub_memcpy(&data->fdc_inode, tmp, sizeof(*tmp));
+		if (grub_vmfs_bitmap_open(&data->fdc, &data->fdc_inode))
+			goto fail;
+
+		if (grub_vmfs_open_meta(data, VMFS_SBC_FILENAME, &data->sbc,
+			&data->sbc_inode))
+			goto fail;
+		data->have_sbc = 1;
+
+		/* the second pointer level is only used by huge files */
+		if (grub_vmfs_open_meta(data, VMFS_PB2_FILENAME, &data->pb2,
+			&data->pb2_inode) == GRUB_ERR_NONE)
+			data->have_pb2 = 1;
+		else
+			grub_errno = GRUB_ERR_NONE;
+	}
+	else
+	{
+		/*
+		 * Open .pbc.sf first: the real .fdc.sf and .sbc.sf are large
+		 * enough to be described by pointer blocks themselves.
+		 */
+		if (grub_vmfs_open_meta(data, VMFS_PBC_FILENAME, &data->pbc,
+			&data->pbc_inode))
+			goto fail;
+		data->have_pbc = 1;
+
+		if (grub_vmfs_lookup_meta(data, VMFS_FDC_FILENAME, &blk_id)
+			|| grub_vmfs_read_inode(data, blk_id, tmp))
+			goto fail;
+		grub_memcpy(&data->fdc_inode, tmp, sizeof(*tmp));
+		if (grub_vmfs_bitmap_open(&data->fdc, &data->fdc_inode))
+			goto fail;
+
+		if (grub_vmfs_open_meta(data, VMFS_SBC_FILENAME, &data->sbc,
+			&data->sbc_inode))
+			goto fail;
+		data->have_sbc = 1;
+	}
 
 	grub_free(tmp);
 	return data;
