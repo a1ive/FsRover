@@ -1737,15 +1737,20 @@ vhdxLoadRegionTable(PVHDXIMAGE pImage)
 					if (RT_FAILURE(rc))
 						break;
 
-					/* Check the uuid for known regions. */
+					/*
+					 * Check the uuid for known regions.  The required flag
+					 * says the reader has to understand the region, so it
+					 * only decides what to do with an unknown one; for BAT
+					 * and metadata, which are understood, a writer that
+					 * leaves it clear (qemu-img does) is still readable.
+					 */
 					if (!RTUuidCompareStr(&pRegTblEntry->UuidObject, VHDX_REGION_TBL_ENTRY_UUID_BAT))
 					{
 						/*
 						 * Save the BAT region and process it later.
 						 * It may come before the metadata region but needs the block size.
 						 */
-						if ((pRegTblEntry->u32Flags & VHDX_REGION_TBL_ENTRY_FLAGS_IS_REQUIRED)
-							&& !fBatRegPresent)
+						if (!fBatRegPresent)
 						{
 							fBatRegPresent = 1;
 							grub_memcpy(&RegTblEntryBat, pRegTblEntry, sizeof(RegTblEntryBat));
@@ -1755,8 +1760,7 @@ vhdxLoadRegionTable(PVHDXIMAGE pImage)
 					}
 					else if (!RTUuidCompareStr(&pRegTblEntry->UuidObject, VHDX_REGION_TBL_ENTRY_UUID_METADATA))
 					{
-						if ((pRegTblEntry->u32Flags & VHDX_REGION_TBL_ENTRY_FLAGS_IS_REQUIRED)
-							&& !fMetadataRegPresent)
+						if (!fMetadataRegPresent)
 						{
 							fMetadataRegPresent = 1;
 							grub_memcpy(&RegTblEntryMetadata, pRegTblEntry, sizeof(RegTblEntryMetadata));
