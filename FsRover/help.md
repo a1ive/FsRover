@@ -1165,11 +1165,6 @@ FsRover.exe [options]
 - Option names are matched **case-insensitively**, and the Windows-style
   `/file=PATH` / `/m` spelling is accepted alongside `--file=PATH` / `-m`.
 - `--` ends option parsing.
-- There is **no positional syntax** — a bare argument, from dragging a file onto
-  `FsRover.exe` for instance, is reported as an error rather than silently
-  ignored. Use `-f` explicitly.
-- Errors and `--help` are shown as a message box, and the program exits without
-  opening its window.
 
 ### Notes
 
@@ -1185,9 +1180,6 @@ FsRover.exe [options]
 - `-d` differs from `-f` only in that the *outer* stream is decompressed first.
   It is the command-line equivalent of **File ▸ Open Image (decompress)…** and of
   the **Mount as disk (decompress)** context-menu item.
-- A differencing image (VHD / VHDX / QCOW / VMDK with a parent) cannot be opened
-  this way, because the parent is looked up as a grub device and a Windows file
-  has no such name. Such an image reports an error rather than being read flat.
 
 ### Examples
 

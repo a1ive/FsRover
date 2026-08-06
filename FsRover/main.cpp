@@ -55,6 +55,12 @@ name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' \
 language='*'\"")
 
+/* The message the drag payload itself travels in; the SDK headers
+   name every other one but not this.  See enable_file_drop().  */
+#ifndef WM_COPYGLOBALDATA
+#define WM_COPYGLOBALDATA 0x0049
+#endif
+
 /* Shared with the dialog and viewer files through gui.h.  */
 HWND g_main;
 bool g_extracting;
@@ -651,6 +657,54 @@ open_host_image (bool decompress)
 	if (file.empty ())
 		return;
 	mount_host_image (std::move (file), decompress);
+}
+
+/* Take dropped files.  The main window is the only drop target, which
+   is enough for the panes as well: a drop lands on the first ancestor
+   that is registered.  An elevated window also has to let the drag
+   through UIPI -- these three messages carry it, and without them a
+   drag from the unelevated Explorer is refused with no sign of why.
+   The hole is opened only where the integrity boundary exists.  */
+void
+enable_file_drop (HWND wnd)
+{
+	DragAcceptFiles (wnd, TRUE);
+	if (!is_elevated ())
+		return;
+	ChangeWindowMessageFilterEx (wnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr);
+	ChangeWindowMessageFilterEx (wnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
+	ChangeWindowMessageFilterEx (wnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr);
+}
+
+/* Every dropped file is mounted as a virtual disk of its own, exactly
+   as --file does: a drop carries no way to ask for anything else, and
+   the decompressing variant stays a menu item away.  */
+void
+on_drop_files (HDROP drop)
+{
+	UINT count = DragQueryFileW (drop, 0xFFFFFFFF, nullptr, 0);
+
+	/* The mount menu items gray out while an extraction runs, for the
+	   same reason: the mount would queue behind the job and overwrite
+	   the progress line it is holding.  */
+	if (g_extracting)
+		count = 0;
+	for (UINT i = 0; i < count; i++)
+	{
+		std::wstring path (DragQueryFileW (drop, i, nullptr, 0), L'\0');
+		DWORD attr;
+
+		if (path.empty ())
+			continue;
+		DragQueryFileW (drop, i, path.data (), (UINT) path.size () + 1);
+		/* A directory cannot back a disk, and the Win32 error for
+		   opening one as a file (access denied) would only mislead.  */
+		attr = GetFileAttributesW (path.c_str ());
+		if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY))
+			continue;
+		mount_host_image (std::move (path), false);
+	}
+	DragFinish (drop);
 }
 
 std::vector<std::string>
@@ -1844,6 +1898,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		backend_start (wnd, g_cmdline.no_windisk);
 		dokanfs_init (wnd);
 		tray_add (wnd);
+		enable_file_drop (wnd);
 		/* Grow the default frame for a high-DPI creation monitor
 		   (WM_DPICHANGED takes over once it is on screen).  */
 		if (g_dpi != 96)
@@ -1936,6 +1991,9 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		return 0;
 	case WM_NOTIFY:
 		return on_notify ((NMHDR *) lp);
+	case WM_DROPFILES:
+		on_drop_files ((HDROP) wp);
+		return 0;
 	case WM_APP_BACKEND_READY:
 		/* --file stands in for the first refresh: mounting ends in
 		   one of its own (on_task_done), and doing both would leave
