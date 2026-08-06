@@ -162,6 +162,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (pmf)	\
 	mod (pmfx)	\
 	mod (ntfsclone)	\
+	mod (sna)	\
 	mod (cdimage)
 
 #define ROVER_MOD_DECLARE(name)	\

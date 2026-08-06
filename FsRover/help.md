@@ -837,11 +837,6 @@ subchannel data and audio track extraction are all ignored.
 
 ### 2.3 Backup archives
 
-Both products below write one container family that has a sector mode and a
-file mode. The sector modes are I/O filters and present the disk or partition
-they hold; the file mode has no volume to expose and is a filesystem driver
-instead.
-
 #### Acronis True Image — `tib`, `tibx`
 
 > Origin: FsRover
@@ -924,6 +919,43 @@ result.
 
 Volumes in a format this build does not special-case are passed through, so an
 unrecognised `.pmf` simply shows up as an ordinary file.
+
+#### Drive Snapshot — `sna`
+
+> Origin: FsRover
+
+A partition image, presented as the volume it holds. The container is a chain
+of records — a 4-byte tag, a length, an adler32 and the payload — laid end to
+end: a text header, the physical disk geometry with a copy of the MBR/GPT, the
+volume record, then the data chunks, and at the very end the chunk index.
+
+The backup is sector-level but filesystem-aware. The volume is cut into 64 KiB
+chunks (with an extra cut at the start of the filesystem data area, so the data
+area gets its own aligned grid), and only the chunks holding at least one
+allocated cluster are stored; unused sectors *inside* a stored chunk are written
+as zeros rather than skipped. Chunks are compressed one by one with one of four
+encodings — stored, LZSS, Huffman, or Huffman over LZSS — and are **not** written
+in volume order, so random access goes through the index. Both codecs are
+written for this project from the format notes; there is no library involved.
+
+**Split sets are supported.** The index only lives in the last file, so opening
+`x.sna` opens `x.sn1`, `x.sn2` … alongside it, and its entries carry the volume
+number in their top byte. **Differential images are supported**: the image names
+its base image and the timestamp it was taken against, both of which are checked,
+and it stores only the 4 KiB subblocks that changed — the rest comes from the
+base, which may itself be differential.
+
+The text header, the volume record, the index and every chunk are checksum
+verified, so a damaged image reports an error instead of handing back quietly
+wrong bytes. Regions the backup never covered, and the
+tail of a volume past the last index entry, read back as zeros — that is what the
+format means, not an error, and it is why a restored volume is not byte-identical
+to the source in its free space.
+
+**Not supported:** encrypted images. The disk geometry record, and the copy of
+the MBR/GPT it carries, are skipped: what you browse is the one volume the image
+holds, not the disk it came from, so a backup set covering several partitions
+shows up as one image per partition.
 
 ---
 
