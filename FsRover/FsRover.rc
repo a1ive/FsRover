@@ -21,6 +21,11 @@ IDI_APP ICON "FsRover.ico"
 // with the zstd decoder from grub.lib.  See filetype\magic\.
 IDR_FILETYPE_MAGIC_ZST RCDATA "../filetype/magic/magic.zst"
 
+// The help page, shipped as UTF-8 markdown and rendered by the markdown
+// viewer (Help > Help Document).  Language-neutral: one English page,
+// not part of the string table.
+IDR_HELP_MD RCDATA "help.md"
+
 // Bundled Dokan runtime for the build architecture: user-mode library
 // (dokan2.dll) and Microsoft-signed kernel driver (dokan2.sys).  Dokan >
 // Install Dokan writes both to the system, creates the Dokan2 service and
@@ -331,6 +336,7 @@ BEGIN
 	IDS_FMT_MD_TRUNC	"Only the first %s of %s is shown."
 	IDS_CMDLINE_USAGE	"Usage: FsRover.exe [options]\n\n  -m, --minimize\t\tStart minimized.\n  -f, --file=FILE\t\tMount FILE as a virtual disk.\n  -d, --file-dec=FILE\t\tThe same, decompressing the image on the fly.\n  -h, --help\t\tShow this message."
 	IDS_FMT_CMDLINE_ARG	"Unexpected argument -- '%s'"
+	IDS_MENU_HELPDOC	"&Help Document"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -517,6 +523,7 @@ BEGIN
 	IDS_FMT_MD_TRUNC	"仅显示前 %s，共 %s。"
 	IDS_CMDLINE_USAGE	"用法：FsRover.exe [选项]\n\n  -m, --minimize\t\t最小化启动。\n  -f, --file=文件\t\t将“文件”挂载为虚拟磁盘。\n  -d, --file-dec=文件\t\t同上，并在读取时透明解压。\n  -h, --help\t\t显示本说明。"
 	IDS_FMT_CMDLINE_ARG	"多余的参数 -- “%s”"
+	IDS_MENU_HELPDOC	"帮助文档(&H)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -700,6 +707,7 @@ BEGIN
 	IDS_FMT_MD_TRUNC	"僅顯示前 %s，共 %s。"
 	IDS_CMDLINE_USAGE	"用法：FsRover.exe [選項]\n\n  -m, --minimize\t\t最小化啟動。\n  -f, --file=檔案\t\t將「檔案」掛載為虛擬磁碟。\n  -d, --file-dec=檔案\t\t同上，並在讀取時透明解壓縮。\n  -h, --help\t\t顯示本說明。"
 	IDS_FMT_CMDLINE_ARG	"多餘的參數 -- 「%s」"
+	IDS_MENU_HELPDOC	"說明文件(&H)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -883,6 +891,7 @@ BEGIN
 	IDS_FMT_MD_TRUNC	"先頭 %s のみ表示しています (全体 %s)。"
 	IDS_CMDLINE_USAGE	"使い方: FsRover.exe [オプション]\n\n  -m, --minimize\t\t最小化した状態で起動します。\n  -f, --file=ファイル\t\t指定したファイルを仮想ディスクとしてマウントします。\n  -d, --file-dec=ファイル\t\t同上。イメージを透過的に展開します。\n  -h, --help\t\tこのメッセージを表示します。"
 	IDS_FMT_CMDLINE_ARG	"不明な引数です -- 「%s」"
+	IDS_MENU_HELPDOC	"ヘルプ ドキュメント(&H)"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

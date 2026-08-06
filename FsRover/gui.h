@@ -167,5 +167,6 @@ bool md_load_help (const wchar_t *name, UINT res_id, md_document *doc);
 void show_about (void);
 void show_support (void);
 void show_shortcuts (void);
+void show_help_doc (void);	/* the bundled help page, IDR_HELP_MD */
 
 #endif /* ! FSROVER_GUI_H */

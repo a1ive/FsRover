@@ -83,6 +83,7 @@ constexpr int IDM_HELP_SUPPORT = 220;
 constexpr int IDM_HELP_ABOUT = 221;
 constexpr int IDM_DOKAN_INSTALL = 222;
 constexpr int IDM_HELP_SHORTCUTS = 223;
+constexpr int IDM_HELP_DOC = 224;
 constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
 
 constexpr int IDM_EXTRACT = 1;
@@ -1595,6 +1596,8 @@ create_menu_bar (HWND wnd)
 	g_menu_dokan = CreatePopupMenu ();
 
 	HMENU help = CreatePopupMenu ();
+	AppendMenuW (help, MF_STRING, IDM_HELP_DOC, res_str (IDS_MENU_HELPDOC).c_str ());
+	AppendMenuW (help, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (help, MF_STRING, IDM_HELP_SHORTCUTS, res_str (IDS_MENU_SHORTCUTS).c_str ());
 	AppendMenuW (help, MF_STRING, IDM_HELP_SUPPORT, res_str (IDS_MENU_SUPPORT).c_str ());
 	AppendMenuW (help, MF_SEPARATOR, 0, nullptr);
@@ -1785,6 +1788,9 @@ on_command (int id)
 	case IDM_SEL_INVERT:
 		for (int i = 0, n = ListView_GetItemCount (g_list); i < n; i++)
 			ListView_SetItemState (g_list, i, ListView_GetItemState (g_list, i, LVIS_SELECTED) ^ LVIS_SELECTED, LVIS_SELECTED);
+		break;
+	case IDM_HELP_DOC:
+		show_help_doc ();
 		break;
 	case IDM_HELP_SHORTCUTS:
 		show_shortcuts ();

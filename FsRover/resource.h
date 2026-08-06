@@ -33,6 +33,11 @@
 #define IDR_DOKAN_DLL		210
 #define IDR_DOKAN_SYS		211
 
+/* Bundled help page (FsRover\help.md), UTF-8 markdown shown by the
+   markdown viewer.  See mdview.cpp: a help.md next to the executable
+   overrides it.  */
+#define IDR_HELP_MD		212
+
 #define IDC_STATIC		-1
 
 /* File properties dialog  */
@@ -252,5 +257,6 @@
 #define IDS_FMT_MD_TRUNC	134
 #define IDS_CMDLINE_USAGE	135
 #define IDS_FMT_CMDLINE_ARG	136
+#define IDS_MENU_HELPDOC	137
 
 #endif /* ! FSROVER_RESOURCE_H */

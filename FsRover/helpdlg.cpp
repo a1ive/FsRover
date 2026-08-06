@@ -179,6 +179,22 @@ show_about (void)
 	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_ABOUT), g_main, about_dlg_proc, 0);
 }
 
+/* The bundled help page, shown by the markdown viewer (which holds the
+   modal scope itself).  It is an RCDATA resource, so the load only
+   fails on a corrupt executable; a help.md sitting next to the
+   executable wins over it, which is how a release can carry a
+   corrected page without a rebuild.  */
+void
+show_help_doc (void)
+{
+	md_document doc;
+
+	if (!md_load_help (L"help.md", IDR_HELP_MD, &doc))
+		return;
+	doc.title = menu_caption (IDS_MENU_HELPDOC);
+	show_markdown_doc (doc);
+}
+
 /* The whole list is one string resource: the key names are not
    translated, only the actions after them.  */
 void

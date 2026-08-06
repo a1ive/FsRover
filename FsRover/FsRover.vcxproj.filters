@@ -140,5 +140,8 @@
     <None Include="..\.github\workflows\msbuild.yml">
       <Filter>GitHub</Filter>
     </None>
+    <None Include="help.md">
+      <Filter>RC</Filter>
+    </None>
   </ItemGroup>
 </Project>
