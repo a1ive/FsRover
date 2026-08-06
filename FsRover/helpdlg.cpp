@@ -23,6 +23,7 @@
    one task-queue checkpoint.  */
 
 #include <windows.h>
+#include <shellapi.h>
 
 #include <string>
 #include <vector>
@@ -81,7 +82,7 @@ menu_caption (UINT id)
 }
 
 INT_PTR CALLBACK
-about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 {
 	switch (msg)
 	{
@@ -102,6 +103,21 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		   an edit it focuses (DLGC_HASSETSEL).  */
 		SetFocus (GetDlgItem (dlg, IDOK));
 		return FALSE;	/* focus was set explicitly */
+	}
+	case WM_NOTIFY:
+	{
+		/* The project link.  Its target is the href baked into the
+		   dialog template, so there is nothing to confirm the way the
+		   markdown viewer does for document links.  */
+		const NMHDR *nm = (const NMHDR *) lp;
+
+		if (nm->idFrom == IDC_ABOUT_URL && (nm->code == NM_CLICK || nm->code == NM_RETURN))
+		{
+			ShellExecuteW (dlg, L"open", ((const NMLINK *) lp)->item.szUrl,
+				       nullptr, nullptr, SW_SHOWNORMAL);
+			return TRUE;
+		}
+		break;
 	}
 	case WM_COMMAND:
 		if (LOWORD (wp) == IDOK || LOWORD (wp) == IDCANCEL)

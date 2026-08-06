@@ -100,21 +100,25 @@ FONT 9, "Segoe UI"
 BEGIN
 END
 
-// About box: app icon, version/copyright, third-party credits.  The
-// caption and credits label come from the string table at runtime; the
-// copyright and the credits list are ASCII and language-neutral.
-IDD_ABOUT DIALOGEX 0, 0, 280, 190
+// About box: app icon, version, project link, copyright, third-party
+// credits.  The caption and credits label come from the string table at
+// runtime; the link, copyright and credits list are ASCII and
+// language-neutral.  The link is a SysLink, so comctl32 v6 and
+// ICC_LINK_CLASS (main.cpp) are what make it a control rather than
+// literal markup.
+IDD_ABOUT DIALOGEX 0, 0, 280, 202
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "About"
 FONT 9, "Segoe UI"
 BEGIN
 	CONTROL		"", IDC_ABOUT_ICON, "Static", SS_ICON, 12, 12, 21, 20
 	LTEXT		"", IDC_ABOUT_NAME, 44, 12, 229, 10
-	LTEXT		ROVER_COPYRIGHT, IDC_STATIC, 44, 24, 229, 10
-	LTEXT		"Licensed under the GNU General Public License v3.", IDC_STATIC, 44, 36, 229, 10
-	LTEXT		"", IDC_ABOUT_CREDITS_LABEL, 12, 54, 261, 10
-	EDITTEXT	IDC_ABOUT_CREDITS, 12, 66, 261, 98, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
-	DEFPUSHBUTTON	"OK", IDOK, 223, 169, 50, 14
+	CONTROL		"<a href=""https://github.com/a1ive/FsRover"">https://github.com/a1ive/FsRover</a>", IDC_ABOUT_URL, "SysLink", WS_TABSTOP, 44, 24, 229, 10
+	LTEXT		ROVER_COPYRIGHT, IDC_STATIC, 44, 36, 229, 10
+	LTEXT		"Licensed under the GNU General Public License v3.", IDC_STATIC, 44, 48, 229, 10
+	LTEXT		"", IDC_ABOUT_CREDITS_LABEL, 12, 66, 261, 10
+	EDITTEXT	IDC_ABOUT_CREDITS, 12, 78, 261, 98, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+	DEFPUSHBUTTON	"OK", IDOK, 223, 181, 50, 14
 END
 
 // Supported features: per-category name lists, filled at runtime from
