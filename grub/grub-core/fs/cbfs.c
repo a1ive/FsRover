@@ -140,6 +140,208 @@ validate_head (struct cbfs_header *head)
 	  && head->romsize != 0);
 }
 
+/*
+ * Modern coreboot images carry no master header: the flash is carved up by
+ * an FMAP (flash map) and the CBFS lives inside one of its areas -- what
+ * "cbfstool FILE create -M layout.fmap" produces.  The on-disk layout below
+ * is coreboot's src/commonlib/include/commonlib/fmap_serialized.h (all
+ * little-endian, unlike the big-endian master header above); coreboot has no
+ * header for it in grub, so it is spelled out here.
+ */
+#define CBFS_FMAP_SIGNATURE	"__FMAP__"
+#define CBFS_FMAP_VER_MAJOR	1
+#define CBFS_FMAP_STRLEN	32
+
+/* The region cbfstool calls the primary CBFS.  */
+#define CBFS_FMAP_REGION	"COREBOOT"
+
+/* CBFS_ALIGNMENT: an FMAP CBFS has no master header to state its alignment,
+   every producer uses 64.  */
+#define CBFS_FMAP_ALIGN		64
+
+/* Bounds on the search below.  Nothing but a flash image can be a cbfs, so
+   refuse to sweep something that is too big to be one (the largest SPI part
+   in circulation is 64 MiB).  The stride is the floor of the binary search
+   in coreboot's own util/cbfstool/flashmap/fmap.c; a byte-granular FMAP
+   would not be found, no layout tool emits one.  */
+#define CBFS_FMAP_MAX_IMAGE	(64ULL << 20)
+#define CBFS_FMAP_MIN_IMAGE	(64ULL << 10)
+#define CBFS_FMAP_STRIDE	16
+#define CBFS_FMAP_CHUNK		65536
+
+PRAGMA_BEGIN_PACKED
+struct cbfs_fmap
+{
+  char signature[8];
+  grub_uint8_t ver_major;
+  grub_uint8_t ver_minor;
+  grub_uint64_t base;
+  grub_uint32_t size;
+  char name[CBFS_FMAP_STRLEN];
+  grub_uint16_t nareas;
+} GRUB_PACKED;
+
+struct cbfs_fmap_area
+{
+  grub_uint32_t offset;
+  grub_uint32_t size;
+  char name[CBFS_FMAP_STRLEN];
+  grub_uint16_t flags;
+} GRUB_PACKED;
+PRAGMA_END_PACKED
+
+/* Does OFF start a cbfs, i.e. is there a file header there?  This is the
+   only thing that tells a CBFS area apart from any other FMAP area -- the
+   flags word has no bit for it and cbfstool goes by the magic too.  */
+static int
+cbfs_area_is_cbfs (grub_disk_t disk, grub_off_t off)
+{
+  struct cbfs_file hd;
+
+  if (grub_disk_read (disk, 0, off, sizeof (hd), &hd))
+    {
+      grub_errno = GRUB_ERR_NONE;
+      return 0;
+    }
+
+  return grub_memcmp (hd.magic, CBFS_FILE_MAGIC,
+		      sizeof (CBFS_FILE_MAGIC) - 1) == 0;
+}
+
+/* Pick the area holding the CBFS out of an FMAP whose header sits at
+   FMAP_OFF.  CBFS_FMAP_REGION wins when it is present, so that a ChromeOS
+   style image with several CBFSes (FW_MAIN_A/B beside COREBOOT) opens on
+   the read-only one; otherwise the first area that starts with a file
+   header does.  */
+static int
+cbfs_fmap_area (grub_disk_t disk, grub_off_t fmap_off, grub_uint16_t nareas,
+		grub_off_t total, grub_off_t *start, grub_off_t *end)
+{
+  grub_off_t off = fmap_off + sizeof (struct cbfs_fmap);
+  grub_uint16_t i;
+  int found = 0;
+
+  for (i = 0; i < nareas; i++, off += sizeof (struct cbfs_fmap_area))
+    {
+      struct cbfs_fmap_area area;
+      grub_uint32_t abeg, asize;
+      int is_region;
+
+      if (grub_disk_read (disk, 0, off, sizeof (area), &area))
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  return found;
+	}
+
+      abeg = grub_le_to_cpu32 (area.offset);
+      asize = grub_le_to_cpu32 (area.size);
+
+      /* Areas nest (RO_SECTION contains both FMAP and COREBOOT), so an
+         out-of-range one is a reason to skip it, not to give up.  */
+      if (asize <= sizeof (struct cbfs_file) || abeg >= total
+	  || asize > total - abeg)
+	continue;
+
+      is_region = grub_memcmp (area.name, CBFS_FMAP_REGION,
+			       sizeof (CBFS_FMAP_REGION)) == 0;
+      if (!is_region && found)
+	continue;
+
+      if (!cbfs_area_is_cbfs (disk, abeg))
+	continue;
+
+      *start = abeg;
+      *end = (grub_off_t) abeg + asize;
+      found = 1;
+
+      if (is_region)
+	break;
+    }
+
+  return found;
+}
+
+/* Sweep the image for an FMAP header.  */
+static int
+cbfs_fmap_find (grub_disk_t disk, grub_off_t total,
+		grub_off_t *start, grub_off_t *end)
+{
+  grub_uint8_t *buf;
+  grub_off_t pos;
+  int found = 0;
+
+  if (total < CBFS_FMAP_MIN_IMAGE || total > CBFS_FMAP_MAX_IMAGE)
+    return 0;
+
+  buf = grub_malloc (CBFS_FMAP_CHUNK);
+  if (!buf)
+    return 0;
+
+  /* CBFS_FMAP_CHUNK is a multiple of the stride and so is every chunk
+     boundary, hence no candidate offset ever straddles two chunks.  */
+  for (pos = 0; pos + sizeof (struct cbfs_fmap) <= total; pos += CBFS_FMAP_CHUNK)
+    {
+      grub_size_t len = CBFS_FMAP_CHUNK;
+      grub_size_t i;
+
+      if (len > total - pos)
+	len = (grub_size_t) (total - pos);
+
+      if (grub_disk_read (disk, 0, pos, len, buf))
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  break;
+	}
+
+      for (i = 0; i + sizeof (CBFS_FMAP_SIGNATURE) - 1 <= len;
+	   i += CBFS_FMAP_STRIDE)
+	{
+	  struct cbfs_fmap fmap;
+	  grub_uint32_t fsize;
+	  grub_uint16_t nareas;
+	  grub_off_t need;
+
+	  if (grub_memcmp (buf + i, CBFS_FMAP_SIGNATURE,
+			   sizeof (CBFS_FMAP_SIGNATURE) - 1) != 0)
+	    continue;
+
+	  if (grub_disk_read (disk, 0, pos + i, sizeof (fmap), &fmap))
+	    {
+	      grub_errno = GRUB_ERR_NONE;
+	      continue;
+	    }
+
+	  if (fmap.ver_major != CBFS_FMAP_VER_MAJOR)
+	    continue;
+
+	  /* The map covers the whole flash part, which is this image (or a
+	     window into a bigger one, hence <= rather than ==).  */
+	  fsize = grub_le_to_cpu32 (fmap.size);
+	  nareas = grub_le_to_cpu16 (fmap.nareas);
+	  if (fsize < CBFS_FMAP_MIN_IMAGE || fsize > total || nareas == 0)
+	    continue;
+
+	  /* The area table follows the header in the same image.  */
+	  need = sizeof (struct cbfs_fmap)
+	    + (grub_off_t) nareas * sizeof (struct cbfs_fmap_area);
+	  if (need > total - (pos + i))
+	    continue;
+
+	  if (cbfs_fmap_area (disk, pos + i, nareas, total, start, end))
+	    {
+	      found = 1;
+	      break;
+	    }
+	}
+
+      if (found)
+	break;
+    }
+
+  grub_free (buf);
+  return found;
+}
+
 static struct grub_archelp_data *
 grub_cbfs_mount (grub_disk_t disk)
 {
@@ -147,9 +349,16 @@ grub_cbfs_mount (grub_disk_t disk)
   struct grub_archelp_data *data = NULL;
   grub_uint32_t ptr;
   grub_off_t header_off;
+  grub_off_t total;
   struct cbfs_header head;
 
   if (grub_disk_native_sectors (disk) == GRUB_DISK_SIZE_UNKNOWN)
+    goto fail;
+
+  total = grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS;
+
+  data = (struct grub_archelp_data *) grub_zalloc (sizeof (*data));
+  if (!data)
     goto fail;
 
   if (grub_disk_read (disk, grub_disk_native_sectors (disk) - 1,
@@ -158,39 +367,41 @@ grub_cbfs_mount (grub_disk_t disk)
     goto fail;
 
   ptr = grub_cpu_to_le32 (ptr);
-  header_off = (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS)
-    + (grub_int32_t) ptr;
+  header_off = total + (grub_int32_t) ptr;
 
-  if (grub_disk_read (disk, 0, header_off,
-		      sizeof (head), &head))
-    goto fail;
+  if (grub_disk_read (disk, 0, header_off, sizeof (head), &head)
+      || !validate_head (&head))
+    {
+      /* No master header: the modern, FMAP-partitioned layout.  The area
+         search already checked for a file header at cbfs_start.  */
+      grub_errno = GRUB_ERR_NONE;
 
-  if (!validate_head (&head))
-    goto fail;
+      if (!cbfs_fmap_find (disk, total, &data->cbfs_start, &data->cbfs_end))
+	goto fail;
 
-  data = (struct grub_archelp_data *) grub_zalloc (sizeof (*data));
-  if (!data)
-    goto fail;
+      data->cbfs_align = CBFS_FMAP_ALIGN;
+    }
+  else
+    {
+      data->cbfs_start = total
+	- (grub_be_to_cpu32 (head.romsize) - grub_be_to_cpu32 (head.offset));
+      data->cbfs_end = total - grub_be_to_cpu32 (head.bootblocksize);
+      data->cbfs_align = grub_be_to_cpu32 (head.align);
 
-  data->cbfs_start = (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS)
-    - (grub_be_to_cpu32 (head.romsize) - grub_be_to_cpu32 (head.offset));
-  data->cbfs_end = (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS)
-    - grub_be_to_cpu32 (head.bootblocksize);
-  data->cbfs_align = grub_be_to_cpu32 (head.align);
+      if (data->cbfs_start >= total)
+	goto fail;
+      if (data->cbfs_end > total)
+	data->cbfs_end = total;
 
-  if (data->cbfs_start >= (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS))
-    goto fail;
-  if (data->cbfs_end > (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS))
-    data->cbfs_end = (grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS);
+      if (grub_disk_read (disk, 0, data->cbfs_start, sizeof (hd), &hd))
+	goto fail;
+
+      if (grub_memcmp (hd.magic, CBFS_FILE_MAGIC,
+		       sizeof (CBFS_FILE_MAGIC) - 1))
+	goto fail;
+    }
 
   data->next_hofs = data->cbfs_start;
-
-  if (grub_disk_read (disk, 0, data->cbfs_start, sizeof (hd), &hd))
-    goto fail;
-
-  if (grub_memcmp (hd.magic, CBFS_FILE_MAGIC, sizeof (CBFS_FILE_MAGIC) - 1))
-    goto fail;
-
   data->disk = disk;
 
   return data;

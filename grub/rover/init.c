@@ -80,6 +80,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (bfs)	\
 	mod (btrfs)	\
 	mod (cab)	\
+	mod (cbfs)	\
 	mod (cpio)	\
 	mod (cpio_be)	\
 	mod (cramfs)	\
@@ -106,6 +107,7 @@ extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
 	mod (minix3)	\
 	mod (minix3_be)	\
 	mod (newc)	\
+	mod (nilfs2)	\
 	mod (ntfs)	\
 	mod (ntfscomp)	\
 	mod (odc)	\

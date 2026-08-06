@@ -252,6 +252,9 @@
     <ClCompile Include="grub-core\fs\btrfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\cbfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\cpio.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -316,6 +319,9 @@
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\newc.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\nilfs2.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\ntfs.c">
@@ -673,6 +679,9 @@
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\bufio.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\cbfs_core.h">
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\charset.h">
