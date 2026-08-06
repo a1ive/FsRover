@@ -1213,7 +1213,7 @@ static int qcowOpenImage(PQCOWIMAGE pImage)
 							pszBacking, pImage->cbBackingFilename, NULL);
 						if (RT_SUCCESS(rc))
 						{
-							pImage->Backing = grub_vdisk_open_parent(pImage->File->name,
+							pImage->Backing = grub_vdisk_open_parent(pImage->File,
 								pszBacking);
 							if (!pImage->Backing)
 								rc = grub_errno;

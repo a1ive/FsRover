@@ -666,6 +666,9 @@
     <ClInclude Include="include\grub\acorn_filecore.h">
       <Filter>include\grub</Filter>
     </ClInclude>
+    <ClInclude Include="include\grub\winfile.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
     <ClInclude Include="include\grub\archelp.h">
       <Filter>include\grub</Filter>
     </ClInclude>

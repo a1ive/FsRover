@@ -654,6 +654,7 @@
     <ClInclude Include="grub-core\lib\bzip2\bzlib_private.h" />
     <ClInclude Include="grub-core\lib\lz4\lz4.h" />
     <ClInclude Include="grub-core\lib\miniz\miniz.h" />
+    <ClInclude Include="include\grub\winfile.h" />
     <ClInclude Include="grub-core\lib\vbox\vbox.h" />
     <ClInclude Include="grub-core\lib\libzbitmap\libzbitmap.h" />
     <ClInclude Include="grub-core\lib\lzfse\lzfse.h" />

@@ -516,7 +516,7 @@ vmdk_parse_extents (struct vmdk_image *image, const char *desc)
 			}
 		}
 
-		file = grub_vdisk_open_member (image->file->name, fname);
+		file = grub_vdisk_open_member (image->file, fname);
 		if (!file)
 			return grub_errno;
 
@@ -712,7 +712,7 @@ vmdk_open_image (struct vmdk_image *image)
 
 	if (image->parent_hint)
 	{
-		image->parent = grub_vdisk_open_parent (image->file->name,
+		image->parent = grub_vdisk_open_parent (image->file,
 							image->parent_hint);
 		if (!image->parent)
 		{

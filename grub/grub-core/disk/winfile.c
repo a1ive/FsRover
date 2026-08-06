@@ -24,6 +24,7 @@
 #include <grub/mm.h>
 #include <grub/safemath.h>
 #include <grub/types.h>
+#include <grub/winfile.h>
 
 #include <windows.h>
 
@@ -111,24 +112,16 @@ static struct grub_fs grub_winfile_fs =
 	.next = 0
 };
 
-/* PATH is a Windows path in UTF-8.  Returns the filtered grub file, or NULL with grub_errno set.  */
+/* PATH is a Windows path in UTF-8.  Returns the unfiltered grub file, or NULL with grub_errno set.  */
 static grub_file_t
-host_open (const char *path, int decompress)
+host_open_raw (const char *path)
 {
-	enum grub_file_type type = GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_FILTER_VDISK;
 	struct winfile_host *host = NULL;
 	grub_file_t file = NULL;
-	grub_file_t last = NULL;
-	grub_file_filter_id_t filter;
 	HANDLE handle = INVALID_HANDLE_VALUE;
 	LARGE_INTEGER size;
 	WCHAR *wpath;
 	int wlen;
-
-	/* Compressed images stay raw unless transparent decompression was
-	   asked for; virtual disk images are always decoded.  */
-	if (!decompress)
-		type |= GRUB_FILE_TYPE_NO_DECOMPRESS;
 
 	wlen = MultiByteToWideChar (CP_UTF8, 0, path, -1, NULL, 0);
 	if (wlen <= 0)
@@ -177,6 +170,26 @@ host_open (const char *path, int decompress)
 		file = NULL;
 		goto fail;
 	}
+	return file;
+
+fail:
+	if (handle != INVALID_HANDLE_VALUE)
+		CloseHandle (handle);
+	grub_free (host);
+	return NULL;
+}
+
+/* The same, decoded through the io filter chain.  */
+grub_file_t
+grub_winfile_open (const char *path, enum grub_file_type type)
+{
+	grub_file_t file;
+	grub_file_t last = NULL;
+	grub_file_filter_id_t filter;
+
+	file = host_open_raw (path);
+	if (!file)
+		return NULL;
 
 	/* The chain kern\file.c runs after fs_open.  */
 	for (filter = 0; file && filter < ARRAY_SIZE (grub_file_filters); filter++)
@@ -195,15 +208,20 @@ host_open (const char *path, int decompress)
 		grub_file_close (last);
 		if (!grub_errno)
 			grub_error (GRUB_ERR_BAD_DEVICE, "cannot decode image `%s'", path);
-		goto fail;
 	}
 	return file;
+}
 
-fail:
-	if (handle != INVALID_HANDLE_VALUE)
-		CloseHandle (handle);
-	grub_free (host);
-	return NULL;
+/* Compressed images stay raw unless transparent decompression was asked
+   for; virtual disk images are always decoded.  */
+static grub_file_t
+host_open (const char *path, int decompress)
+{
+	enum grub_file_type type = GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_FILTER_VDISK;
+
+	if (!decompress)
+		type |= GRUB_FILE_TYPE_NO_DECOMPRESS;
+	return grub_winfile_open (path, type);
 }
 
 int

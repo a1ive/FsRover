@@ -17,11 +17,28 @@
  */
 
 /*
- * Parent / backing file resolution shared by the vhd, vhdx and qcow io
- * filters.  A differencing child stores the parent location as a Windows
- * (VHD/VHDX) or POSIX (QCOW) path; we resolve it relative to the child's
- * own grub path and reopen it through the vdisk filter chain, so parent
- * chains of arbitrary format nest naturally.
+ * Parent / backing / extent file resolution shared by the vhd, vhdx,
+ * qcow, vmdk and cdimage io filters.  A child stores the location of
+ * the file it needs as a Windows (VHD/VHDX/VMDK), POSIX (QCOW) or bare
+ * name (cue/ccd/mds) path, which is resolved relative to the child's
+ * own location and reopened, so chains of arbitrary format nest
+ * naturally.
+ *
+ * "Its own location" means one of two namespaces, told apart by whether
+ * the child has a grub device:
+ *
+ *   - a grub path like "(loop0)/dir/child.vhd", when the image was
+ *     mounted off a browsed volume.  Resolution is textual and the
+ *     result goes back through grub_file_open.
+ *   - a Windows path like "F:\images\child.vhd", when the GUI opened
+ *     the image straight off the host filesystem (File > Open Image, or
+ *     --file).  grub_file_open has no device to resolve against there,
+ *     so the join is done in Windows terms and the result opened with
+ *     the Win32 API through grub_winfile_open.
+ *
+ * An absolute path recorded by whoever made the image usually names a
+ * directory that only existed on that machine; both namespaces fall
+ * back to looking for its last component next to the child.
  */
 
 #include <grub/charset.h>
@@ -29,6 +46,7 @@
 #include <grub/file.h>
 #include <grub/misc.h>
 #include <grub/mm.h>
+#include <grub/winfile.h>
 
 #include "vbox.h"
 
@@ -36,6 +54,15 @@
    recursion counter is a safe guard against parent chain loops.  */
 #define VDISK_PARENT_MAX_DEPTH	8
 static int vdisk_parent_depth;
+
+/* A parent may itself be a differencing image, so it goes back through
+   the vdisk filters.  An extent must not: a VMDK SPARSE extent carries
+   the same magic as a full image.  */
+#define VDISK_PARENT_TYPE	(GRUB_FILE_TYPE_LOOPBACK	\
+				 | GRUB_FILE_TYPE_NO_DECOMPRESS	\
+				 | GRUB_FILE_TYPE_FILTER_VDISK)
+#define VDISK_MEMBER_TYPE	(GRUB_FILE_TYPE_LOOPBACK	\
+				 | GRUB_FILE_TYPE_NO_DECOMPRESS)
 
 char *
 grub_vdisk_utf16_to_utf8_dup (const void *src, grub_size_t nunits,
@@ -76,6 +103,18 @@ fail:
 	return NULL;
 }
 
+/* Last component of a path, in either namespace.  */
+static const char *
+vdisk_basename (const char *path)
+{
+	const char *p, *base = path;
+
+	for (p = path; *p; p++)
+		if (*p == '/' || *p == '\\')
+			base = p + 1;
+	return base;
+}
+
 /* Strip the last path component in place ("(hd0)/a/b" -> "(hd0)/a").
    Never strips the device prefix.  */
 static void
@@ -90,8 +129,9 @@ vdisk_dirname (char *path, const char *root)
 	*p = '\0';
 }
 
-char *
-grub_vdisk_parent_path (const char *image, const char *parent)
+/* Resolution inside the grub namespace.  */
+static char *
+vdisk_grub_path (const char *image, const char *member)
 {
 	char *norm = NULL;
 	char *result = NULL;
@@ -100,10 +140,10 @@ grub_vdisk_parent_path (const char *image, const char *parent)
 	grub_size_t len;
 
 	/* Already a full grub path (as produced by ourselves).  */
-	if (parent[0] == '(')
-		return grub_strdup (parent);
+	if (member[0] == '(')
+		return grub_strdup (member);
 
-	norm = grub_strdup (parent);
+	norm = grub_strdup (member);
 	if (!norm)
 		goto fail;
 	for (char *p = norm; *p; p++)
@@ -116,15 +156,15 @@ grub_vdisk_parent_path (const char *image, const char *parent)
 	if ((grub_isalpha (norm[0]) && norm[1] == ':')
 	    || (norm[0] == '/' && norm[1] == '/'))
 	{
-		char *base = grub_strrchr (norm, '/');
-		char *dup = grub_strdup (base ? base + 1 : norm);
+		char *dup = grub_strdup (vdisk_basename (norm));
+
 		grub_free (norm);
 		if (!dup)
 			return NULL;
 		norm = dup;
 	}
 
-	/* Work buffer: image directory + '/' + parent.  */
+	/* Work buffer: image directory + '/' + member.  */
 	len = grub_strlen (image) + grub_strlen (norm) + 2;
 	result = grub_malloc (len);
 	if (!result)
@@ -183,11 +223,88 @@ fail:
 	return NULL;
 }
 
-struct grub_file *
-grub_vdisk_open_parent (const char *image, const char *parent)
+/* Drive letter, UNC share, \\?\ device path or a root relative path;
+   Win32 resolves "." and ".." itself, so nothing has to be folded.  */
+static int
+vdisk_host_absolute (const char *path)
+{
+	return (grub_isalpha (path[0]) && path[1] == ':')
+	       || path[0] == '/' || path[0] == '\\';
+}
+
+/* Resolution next to a host image: its directory plus MEMBER.  */
+static char *
+vdisk_host_path (const char *image, const char *member)
+{
+	const char *base = vdisk_basename (image);
+	grub_size_t dirlen = (grub_size_t) (base - image);
+	char *path;
+
+	path = grub_malloc (dirlen + grub_strlen (member) + 1);
+	if (!path)
+		return NULL;
+	grub_memcpy (path, image, dirlen);
+	grub_strcpy (path + dirlen, member);
+	return path;
+}
+
+static struct grub_file *
+vdisk_open_host (const char *image, const char *member,
+		 enum grub_file_type type)
 {
 	char *path;
-	grub_file_t file;
+	struct grub_file *file;
+
+	if (vdisk_host_absolute (member))
+	{
+		file = grub_winfile_open (member, type);
+		if (file)
+			return file;
+		grub_errno = GRUB_ERR_NONE;
+		member = vdisk_basename (member);
+	}
+
+	path = vdisk_host_path (image, member);
+	if (!path)
+		return NULL;
+	file = grub_winfile_open (path, type);
+	grub_free (path);
+	return file;
+}
+
+static struct grub_file *
+vdisk_open_grub (const char *image, const char *member,
+		 enum grub_file_type type)
+{
+	char *path;
+	struct grub_file *file;
+
+	path = vdisk_grub_path (image, member);
+	if (!path)
+		return NULL;
+	file = grub_file_open (path, type);
+	grub_free (path);
+	return file;
+}
+
+static struct grub_file *
+vdisk_open_relative (struct grub_file *image, const char *member,
+		     enum grub_file_type type)
+{
+	if (!image || !image->name || !member || !member[0])
+	{
+		grub_error (GRUB_ERR_BAD_DEVICE, "virtual disk file not named");
+		return NULL;
+	}
+	if (image->device)
+		return vdisk_open_grub (image->name, member, type);
+	return vdisk_open_host (image->name, member, type);
+}
+
+struct grub_file *
+grub_vdisk_open_parent (struct grub_file *image, const char *parent)
+{
+	struct grub_file *file;
 
 	if (vdisk_parent_depth >= VDISK_PARENT_MAX_DEPTH)
 	{
@@ -195,54 +312,25 @@ grub_vdisk_open_parent (const char *image, const char *parent)
 			    "virtual disk parent chain too deep");
 		return NULL;
 	}
-	if (!image || !parent || !parent[0])
-	{
-		grub_error (GRUB_ERR_BAD_DEVICE,
-			    "virtual disk parent image not found");
-		return NULL;
-	}
-
-	path = grub_vdisk_parent_path (image, parent);
-	if (!path)
-		return NULL;
 
 	vdisk_parent_depth++;
-	file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK
-				     | GRUB_FILE_TYPE_NO_DECOMPRESS
-				     | GRUB_FILE_TYPE_FILTER_VDISK);
+	file = vdisk_open_relative (image, parent, VDISK_PARENT_TYPE);
 	vdisk_parent_depth--;
 	if (!file)
 		grub_error (GRUB_ERR_BAD_DEVICE,
-			    "cannot open virtual disk parent `%s'", path);
-	grub_free (path);
+			    "cannot open virtual disk parent `%s'", parent);
 	return file;
 }
 
 struct grub_file *
-grub_vdisk_open_member (const char *image, const char *member)
+grub_vdisk_open_member (struct grub_file *image, const char *member)
 {
-	char *path;
-	grub_file_t file;
+	struct grub_file *file;
 
-	if (!image || !member || !member[0])
-	{
-		grub_error (GRUB_ERR_BAD_DEVICE,
-			    "virtual disk extent file not found");
-		return NULL;
-	}
-
-	path = grub_vdisk_parent_path (image, member);
-	if (!path)
-		return NULL;
-
-	/* Raw open: an extent must not be decoded by the vdisk filters
-	   (a SPARSE extent carries the same magic as a full image).  */
-	file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK
-				     | GRUB_FILE_TYPE_NO_DECOMPRESS);
+	file = vdisk_open_relative (image, member, VDISK_MEMBER_TYPE);
 	if (!file)
 		grub_error (GRUB_ERR_BAD_DEVICE,
-			    "cannot open virtual disk extent `%s'", path);
-	grub_free (path);
+			    "cannot open virtual disk extent `%s'", member);
 	return file;
 }
 

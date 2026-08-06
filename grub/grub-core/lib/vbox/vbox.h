@@ -332,23 +332,20 @@ char *
 grub_vdisk_utf16_to_utf8_dup (const void *src, grub_size_t nunits,
 			      int big_endian);
 
-/* Resolve PARENT (Windows or POSIX style, relative or absolute) against
-   the directory of IMAGE (a grub path like "(disk)/dir/child.vhd") and
-   return a malloc'd grub path.  Foreign absolute paths (drive letter or
-   UNC) fall back to the basename next to IMAGE.  */
-char *
-grub_vdisk_parent_path (const char *image, const char *parent);
-
-/* Open the parent image PARENT of IMAGE through the vdisk filter chain.
-   Guards against runaway parent chains.  Returns NULL with grub_errno
-   set on failure.  */
+/* Open the parent image PARENT (Windows or POSIX style, relative or
+   absolute) of IMAGE through the vdisk filter chain, resolved next to
+   IMAGE -- in the grub namespace or, when IMAGE has no grub device, on
+   the Windows filesystem.  A foreign absolute path falls back to its
+   basename next to IMAGE.  Guards against runaway parent chains.
+   Returns NULL with grub_errno set on failure.  */
 struct grub_file *
-grub_vdisk_open_parent (const char *image, const char *parent);
+grub_vdisk_open_parent (struct grub_file *image, const char *parent);
 
-/* Open MEMBER (an extent file referenced by IMAGE, e.g. a vmdk flat or
-   sparse extent) raw, without running the vdisk filters on it.  */
+/* The same for MEMBER, a data file referenced by IMAGE (a vmdk flat or
+   sparse extent, a cue sheet's bin), opened without the vdisk filters:
+   a SPARSE extent carries the same magic as a full image.  */
 struct grub_file *
-grub_vdisk_open_member (const char *image, const char *member);
+grub_vdisk_open_member (struct grub_file *image, const char *member);
 
 /* Read LEN bytes at virtual offset OFF from an opened parent, zero
    filling anything past its end.  */

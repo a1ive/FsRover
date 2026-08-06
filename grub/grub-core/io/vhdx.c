@@ -1858,7 +1858,7 @@ vhdxOpenImage(PVHDXIMAGE pImage)
 						"VHDX differencing image has no parent linkage");
 				else
 				{
-					pImage->Parent = grub_vdisk_open_parent(pImage->File->name,
+					pImage->Parent = grub_vdisk_open_parent(pImage->File,
 						pImage->pszParentPath);
 					if (!pImage->Parent)
 						rc = grub_errno;

@@ -683,11 +683,12 @@ These turn a container into a raw disk, which is then partition-scanned and
 mounted as if it were a physical drive. They apply whenever an image is opened
 as a disk.
 
-**A note on differencing chains.** VHD, VHDX, QCOW and VMDK parents are resolved
-by path relative to the child image. That only works when the image was opened
-as a grub device — **Mount as disk** on a file inside a browsed volume. An image
-opened from Windows through **File ▸ Open Image…** or `--file` cannot follow a
-parent chain, and reports an error rather than being read as a flat disk.
+**A note on files an image refers to.** A differencing VHD, VHDX, QCOW or VMDK
+names its parent, and a VMDK descriptor names its extents, by a path relative to
+the image itself.
+
+When the parent or extent cannot be found, the image is not decoded at all and
+its raw bytes are shown instead.
 
 #### Microsoft VHD — `vhd`
 

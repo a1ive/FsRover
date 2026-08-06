@@ -373,7 +373,7 @@ vhdOpenParent(PVHDIMAGE pImage, VHDDynamicDiskHeader* pDynHdr)
 			"VHD differencing image has no usable parent locator");
 	}
 
-	pImage->Parent = grub_vdisk_open_parent(pImage->File->name, pszParent);
+	pImage->Parent = grub_vdisk_open_parent(pImage->File, pszParent);
 	grub_free(pszParent);
 	if (!pImage->Parent)
 		return grub_errno;
