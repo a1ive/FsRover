@@ -33,8 +33,16 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
-#define GRUB_UDF_MAX_PDS		2
+#define GRUB_UDF_MAX_PDS		4
 #define GRUB_UDF_MAX_PMS		6
+#define GRUB_UDF_MAX_SPARING_TABLES	4
+
+/*
+ * How far back from the last recorded block the Virtual Allocation Table
+ * file entry is looked for.  It is supposed to sit exactly in the last
+ * block but some writers are off by a few blocks.
+ */
+#define GRUB_UDF_VAT_SEARCH_BACK	4
 
 #define U16				grub_le_to_cpu16
 #define U32				grub_le_to_cpu32
@@ -76,6 +84,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GRUB_UDF_ICBTAG_TYPE_TE		0x0B
 #define GRUB_UDF_ICBTAG_TYPE_SYMLINK	0x0C
 #define GRUB_UDF_ICBTAG_TYPE_STREAMDIR	0x0D
+#define GRUB_UDF_ICBTAG_TYPE_VAT20	0xF8
 
 #define GRUB_UDF_ICBTAG_FLAG_AD_MASK	0x0007
 #define GRUB_UDF_ICBTAG_FLAG_AD_SHORT	0x0000
@@ -114,6 +123,26 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 #define GRUB_UDF_PARTMAP_TYPE_1		1
 #define GRUB_UDF_PARTMAP_TYPE_2		2
+
+/* Entity identifiers of the type 2 partition maps (UDF 2.60 2.2.8-2.2.10).  */
+#define GRUB_UDF_ID_VIRTUAL		"*UDF Virtual Partition"
+#define GRUB_UDF_ID_SPARABLE		"*UDF Sparable Partition"
+#define GRUB_UDF_ID_METADATA		"*UDF Metadata Partition"
+#define GRUB_UDF_ID_SPARING		"*UDF Sparing Table"
+
+/* In-core flavour of a partition map.  */
+#define GRUB_UDF_PMAP_NONE		0
+#define GRUB_UDF_PMAP_PHYSICAL		1
+#define GRUB_UDF_PMAP_VIRTUAL		2
+#define GRUB_UDF_PMAP_SPARABLE		3
+#define GRUB_UDF_PMAP_METADATA		4
+
+/*
+ * How deep partition maps may be stacked.  A metadata or virtual map sits
+ * on one physical or sparable map and that is the end of it; the limit is
+ * only here to stop a corrupted medium from recursing forever.
+ */
+#define GRUB_UDF_MAX_NEST		4
 
 #define GRUB_UDF_INVALID_STRUCT_PTR(_ptr, _struct)	\
   ((char *) (_ptr) >= end_ptr || \
@@ -294,6 +323,7 @@ struct grub_udf_avdp
 {
   struct grub_udf_tag tag;
   struct grub_udf_extent_ad vds;
+  struct grub_udf_extent_ad rvds;
 } GRUB_PACKED;
 
 struct grub_udf_pd
@@ -309,6 +339,11 @@ struct grub_udf_pd
   grub_uint32_t length;
 } GRUB_PACKED;
 
+/*
+ * All type 2 partition maps share the first 40 bytes (ECMA-167 10.7.2 plus
+ * the OSTA entity identifier); the flavour is told apart by that
+ * identifier and each flavour appends its own fields.
+ */
 struct grub_udf_partmap
 {
   grub_uint8_t type;
@@ -323,9 +358,71 @@ struct grub_udf_partmap
 
     struct
     {
-      grub_uint8_t ident[62];
+      grub_uint8_t reserved[2];
+      struct grub_udf_regid part_ident;
+      grub_uint16_t seq_num;
+      grub_uint16_t part_num;
     } type2;
+
+    struct
+    {
+      grub_uint8_t reserved[2];
+      struct grub_udf_regid part_ident;
+      grub_uint16_t seq_num;
+      grub_uint16_t part_num;
+      grub_uint16_t packet_length;
+      grub_uint8_t num_sparing_tables;
+      grub_uint8_t reserved2;
+      grub_uint32_t size_sparing_table;
+      grub_uint32_t loc_sparing_table[GRUB_UDF_MAX_SPARING_TABLES];
+    } spar;
+
+    struct
+    {
+      grub_uint8_t reserved[2];
+      struct grub_udf_regid part_ident;
+      grub_uint16_t seq_num;
+      grub_uint16_t part_num;
+      grub_uint32_t meta_file_loc;
+      grub_uint32_t meta_mirror_file_loc;
+      grub_uint32_t meta_bitmap_file_loc;
+      grub_uint32_t alloc_unit_size;
+      grub_uint16_t align_unit_size;
+      grub_uint8_t flags;
+      grub_uint8_t reserved2[5];
+    } meta;
   };
+} GRUB_PACKED;
+
+struct grub_udf_sparing_entry
+{
+  grub_uint32_t orig;
+  grub_uint32_t mapped;
+} GRUB_PACKED;
+
+/* The reallocation table follows this header.  */
+struct grub_udf_sparing_table
+{
+  struct grub_udf_tag tag;
+  struct grub_udf_regid sparing_ident;
+  grub_uint16_t rt_len;
+  grub_uint16_t reserved;
+  grub_uint32_t seq_num;
+} GRUB_PACKED;
+
+/* Header of a UDF 2.00+ Virtual Allocation Table (UDF 2.60 2.2.11).  */
+struct grub_udf_vat20
+{
+  grub_uint16_t length_header;
+  grub_uint16_t length_imp_use;
+  grub_uint8_t logvol_ident[128];
+  grub_uint32_t prev_vat_icb_loc;
+  grub_uint32_t num_files;
+  grub_uint32_t num_dirs;
+  grub_uint16_t min_read_rev;
+  grub_uint16_t min_write_rev;
+  grub_uint16_t max_write_rev;
+  grub_uint16_t reserved;
 } GRUB_PACKED;
 
 struct grub_udf_pvd
@@ -379,21 +476,55 @@ struct grub_udf_aed
 } GRUB_PACKED;
 PRAGMA_END_PACKED
 
+/* In-core description of one entry of the partition map table.  */
+struct grub_udf_part
+{
+  int type;
+  grub_uint16_t part_num;
+
+  /* Extent of the backing physical partition, from the PD.  */
+  grub_uint32_t start;
+  grub_uint32_t length;
+
+  /*
+   * Physical or sparable partition this map is layered on top of, for
+   * the virtual and metadata flavours.  Index into grub_udf_data::parts.
+   */
+  grub_uint32_t phys_ref;
+
+  /* GRUB_UDF_PMAP_VIRTUAL.  */
+  struct grub_fshelp_node *vat;
+  grub_uint32_t vat_offset;
+  grub_uint32_t vat_entries;
+  int vat20;
+
+  /* GRUB_UDF_PMAP_SPARABLE.  */
+  grub_uint32_t packet_len;
+  grub_uint32_t spar_entries;
+  struct grub_udf_sparing_entry *spar_table;
+
+  /* GRUB_UDF_PMAP_METADATA.  */
+  struct grub_fshelp_node *meta;
+  grub_uint32_t meta_file_loc;
+  grub_uint32_t meta_mirror_loc;
+};
+
 struct grub_udf_data
 {
   grub_disk_t disk;
   struct grub_udf_pvd pvd;
   struct grub_udf_lvd lvd;
   struct grub_udf_pd pds[GRUB_UDF_MAX_PDS];
-  struct grub_udf_partmap *pms[GRUB_UDF_MAX_PMS];
+  struct grub_udf_part parts[GRUB_UDF_MAX_PMS];
   struct grub_udf_long_ad root_icb;
-  int npd, npm, lbshift;
+  grub_uint32_t last_block;
+  int npd, npm, lbshift, nest;
 };
 
 struct grub_fshelp_node
 {
   struct grub_udf_data *data;
-  int part_ref;
+  grub_uint32_t part_ref;
   union
   {
     struct grub_udf_file_entry fe;
@@ -413,37 +544,171 @@ get_fshelp_size (struct grub_udf_data *data)
 
 static grub_dl_t my_mod;
 
-static grub_uint32_t
-grub_udf_get_block (struct grub_udf_data *data,
-		    grub_uint16_t part_ref, grub_uint32_t block)
-{
-  part_ref = U16 (part_ref);
+static grub_disk_addr_t
+grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock);
 
-  if (part_ref >= data->npm)
+static grub_ssize_t
+grub_udf_read_file (grub_fshelp_node_t node,
+		    grub_disk_read_hook_t read_hook, void *read_hook_data,
+		    grub_off_t pos, grub_size_t len, char *buf);
+
+static grub_uint32_t
+grub_udf_get_block (struct grub_udf_data *data, grub_uint32_t part_ref,
+		    grub_uint32_t block, grub_uint32_t offset);
+
+/*
+ * A virtual partition (UDF 1.50 and 2.00, used on sequentially recorded
+ * media such as CD-R/DVD-R) indirects every logical block through the
+ * Virtual Allocation Table, a plain file living in the underlying
+ * physical partition.
+ */
+static grub_uint32_t
+grub_udf_get_block_virt (struct grub_udf_data *data,
+			 struct grub_udf_part *part,
+			 grub_uint32_t block, grub_uint32_t offset)
+{
+  grub_uint32_t entry;
+
+  if (!part->vat || block >= part->vat_entries)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "block outside of the VAT");
+      return 0;
+    }
+
+  if (grub_udf_read_file (part->vat, 0, 0,
+			  (grub_off_t) part->vat_offset
+			  + (grub_off_t) block * sizeof (entry),
+			  sizeof (entry), (char *) &entry)
+      != (grub_ssize_t) sizeof (entry))
+    {
+      if (!grub_errno)
+	grub_error (GRUB_ERR_BAD_FS, "can\'t read the VAT");
+      return 0;
+    }
+
+  return grub_udf_get_block (data, part->phys_ref, U32 (entry), offset);
+}
+
+/*
+ * A sparable partition (UDF 1.50+, used on CD-RW/DVD-RW) relocates
+ * defective packets through the sparing table.
+ */
+static grub_uint32_t
+grub_udf_get_block_spar (struct grub_udf_part *part,
+			 grub_uint32_t block, grub_uint32_t offset)
+{
+  grub_uint32_t i, lbn, packet;
+
+  lbn = block + offset;
+  packet = lbn & ~(part->packet_len - 1);
+
+  /* The reallocation table is sorted by the original location.  */
+  for (i = 0; i < part->spar_entries; i++)
+    {
+      grub_uint32_t orig = U32 (part->spar_table[i].orig);
+
+      /* 0xfffffff0 and above mark unused and defective entries.  */
+      if (orig >= 0xfffffff0)
+	break;
+      if (orig == packet)
+	return (U32 (part->spar_table[i].mapped)
+		+ (lbn & (part->packet_len - 1)));
+      if (orig > packet)
+	break;
+    }
+
+  return part->start + lbn;
+}
+
+/*
+ * A metadata partition (UDF 2.50+, used on Blu-ray) stores all metadata
+ * in one regular file of the underlying partition, so that it can be
+ * clustered; mapping a block means resolving that file's extents.
+ */
+static grub_uint32_t
+grub_udf_get_block_meta (struct grub_udf_part *part,
+			 grub_uint32_t block, grub_uint32_t offset)
+{
+  if (!part->meta)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "no metadata file");
+      return 0;
+    }
+
+  return (grub_uint32_t) grub_udf_read_block (part->meta,
+					      (grub_disk_addr_t) block
+					      + offset);
+}
+
+/*
+ * Map BLOCK + OFFSET, a logical block number within the partition
+ * PART_REF refers to, onto a physical block number.  Both are native
+ * endian.  Returns 0 on error, with grub_errno set.
+ */
+static grub_uint32_t
+grub_udf_get_block (struct grub_udf_data *data, grub_uint32_t part_ref,
+		    grub_uint32_t block, grub_uint32_t offset)
+{
+  struct grub_udf_part *part;
+  grub_uint32_t ret;
+
+  if (part_ref >= (grub_uint32_t) data->npm)
     {
       grub_error (GRUB_ERR_BAD_FS, "invalid part ref");
       return 0;
     }
 
-  return (U32 (data->pds[data->pms[part_ref]->type1.part_num].start)
-          + U32 (block));
+  part = &data->parts[part_ref];
+
+  if (part->type == GRUB_UDF_PMAP_PHYSICAL)
+    return part->start + block + offset;
+
+  if (part->type == GRUB_UDF_PMAP_SPARABLE)
+    return grub_udf_get_block_spar (part, block, offset);
+
+  /*
+   * The virtual and metadata maps resolve a block by reading a file, and
+   * on a corrupted medium that file's own descriptors can point straight
+   * back here.  Bound the nesting rather than the stack.
+   */
+  if (data->nest >= GRUB_UDF_MAX_NEST)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "too many nested partition maps");
+      return 0;
+    }
+
+  data->nest++;
+  switch (part->type)
+    {
+    case GRUB_UDF_PMAP_VIRTUAL:
+      ret = grub_udf_get_block_virt (data, part, block, offset);
+      break;
+
+    case GRUB_UDF_PMAP_METADATA:
+      ret = grub_udf_get_block_meta (part, block, offset);
+      break;
+
+    default:
+      grub_error (GRUB_ERR_BAD_FS, "partmap type not supported");
+      ret = 0;
+    }
+  data->nest--;
+
+  return ret;
 }
 
 static grub_err_t
-grub_udf_read_icb (struct grub_udf_data *data,
-		   struct grub_udf_long_ad *icb,
-		   struct grub_fshelp_node *node)
+grub_udf_read_icb (struct grub_udf_data *data, grub_uint32_t part_ref,
+		   grub_uint32_t block_num, struct grub_fshelp_node *node)
 {
   grub_uint32_t block;
 
-  block = grub_udf_get_block (data,
-			      icb->block.part_ref,
-                              icb->block.block_num);
+  block = grub_udf_get_block (data, part_ref, block_num, 0);
 
   if (grub_errno)
     return grub_errno;
 
-  if (grub_disk_read (data->disk, block << data->lbshift, 0,
+  if (grub_disk_read (data->disk, (grub_disk_addr_t) block << data->lbshift, 0,
 		      1 << (GRUB_DISK_SECTOR_BITS
 			    + data->lbshift),
 		      &node->block))
@@ -453,9 +718,66 @@ grub_udf_read_icb (struct grub_udf_data *data,
       (U16 (node->block.fe.tag.tag_ident) != GRUB_UDF_TAG_IDENT_EFE))
     return grub_error (GRUB_ERR_BAD_FS, "invalid fe/efe descriptor");
 
-  node->part_ref = icb->block.part_ref;
+  node->part_ref = part_ref;
   node->data = data;
   return 0;
+}
+
+static grub_err_t
+grub_udf_read_icb_ad (struct grub_udf_data *data,
+		      struct grub_udf_long_ad *icb,
+		      struct grub_fshelp_node *node)
+{
+  return grub_udf_read_icb (data, U16 (icb->block.part_ref),
+			    U32 (icb->block.block_num), node);
+}
+
+/*
+ * Follow an allocation extent descriptor: load the continuation of the
+ * allocation descriptor list into *BUF and hand back its new bounds.
+ */
+static grub_err_t
+grub_udf_read_aed (grub_fshelp_node_t node, char **buf, char **end_ptr,
+		   grub_uint32_t sec, grub_uint32_t adlen, grub_ssize_t *len)
+{
+  grub_uint32_t bsize = U32 (node->data->lvd.bsize);
+  struct grub_udf_aed *extension;
+  grub_ssize_t ae_len;
+
+  if (grub_errno)
+    return grub_errno;
+
+  if (adlen < sizeof (struct grub_udf_aed) || adlen > bsize)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid aed length");
+
+  if (!*buf)
+    {
+      *buf = grub_malloc (bsize);
+      if (!*buf)
+	return grub_errno;
+    }
+
+  if (grub_disk_read (node->data->disk,
+		      (grub_disk_addr_t) sec << node->data->lbshift,
+		      0, adlen, *buf))
+    return grub_errno;
+
+  extension = (struct grub_udf_aed *) *buf;
+  if (U16 (extension->tag.tag_ident) != GRUB_UDF_TAG_IDENT_AED)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid aed tag");
+
+  ae_len = (grub_ssize_t) U32 (extension->ae_len);
+  /*
+   * The continued list has to fit in the extent that was just read,
+   * which itself is at most one block per UDF spec v2.01 section 2.3.11.
+   */
+  if (ae_len < 0
+      || ae_len > (grub_ssize_t) (adlen - sizeof (struct grub_udf_aed)))
+    return grub_error (GRUB_ERR_BAD_FS, "invalid ae length");
+
+  *end_ptr = *buf + adlen;
+  *len = ae_len;
+  return GRUB_ERR_NONE;
 }
 
 static grub_disk_addr_t
@@ -465,6 +787,7 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
   char *ptr;
   grub_ssize_t len;
   grub_disk_addr_t filebytes;
+  grub_disk_addr_t ret = 0;
   char *end_ptr;
 
   switch (U16 (node->block.fe.tag.tag_ident))
@@ -492,7 +815,7 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
       if (GRUB_UDF_INVALID_STRUCT_PTR (ptr, struct grub_udf_short_ad))
 	{
 	  grub_error (GRUB_ERR_BAD_FS, "corrupted UDF file system");
-	  return 0;
+	  goto fail;
 	}
 
       struct grub_udf_short_ad *ad = (struct grub_udf_short_ad *) ptr;
@@ -504,41 +827,12 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 	  grub_uint32_t adtype = U32 (ad->length) >> 30;
 	  if (adtype == 3)
 	    {
-	      struct grub_udf_aed *extension;
-	      grub_disk_addr_t sec = grub_udf_get_block(node->data,
-							node->part_ref,
-							ad->position);
-	      if (!buf)
-		{
-		  buf = grub_malloc (U32 (node->data->lvd.bsize));
-		  if (!buf)
-		    return 0;
-		}
-	      if (grub_disk_read (node->data->disk, sec << node->data->lbshift,
-				  0, adlen, buf))
+	      grub_uint32_t sec = grub_udf_get_block (node->data,
+						      node->part_ref,
+						      U32 (ad->position), 0);
+
+	      if (grub_udf_read_aed (node, &buf, &end_ptr, sec, adlen, &len))
 		goto fail;
-
-	      extension = (struct grub_udf_aed *) buf;
-	      if (U16 (extension->tag.tag_ident) != GRUB_UDF_TAG_IDENT_AED)
-		{
-		  grub_error (GRUB_ERR_BAD_FS, "invalid aed tag");
-		  goto fail;
-		}
-
-	      len = U32 (extension->ae_len);
-              /*
-               * Ensure AE length is less than block size
-               * per UDF spec v2.01 section 2.3.11.
-               *
-               * node->data->lbshift is initialized by
-               * grub_udf_mount(). lbshift has a maximum value
-               * of 3 and it does not cause an overflow here.
-               */
-              if (len < 0 || len > ((grub_ssize_t) 1 << node->data->lbshift))
-                {
-                  grub_error (GRUB_ERR_BAD_FS, "invalid ae length");
-                  goto fail;
-                }
 
 	      ad = (struct grub_udf_short_ad *)
 		    (buf + sizeof (struct grub_udf_aed));
@@ -547,22 +841,25 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 
 	  if (filebytes < adlen)
 	    {
-	      grub_uint32_t ad_pos = ad->position;
-	      grub_free (buf);
-	      return ((U32 (ad_pos) & GRUB_UDF_EXT_MASK) ? 0 :
-		      (grub_udf_get_block (node->data, node->part_ref, ad_pos)
-		       + (filebytes >> (GRUB_DISK_SECTOR_BITS
-					+ node->data->lbshift))));
+	      /* Extents that are not recorded read back as zeroes.  */
+	      if (adtype == 0)
+		ret = grub_udf_get_block (node->data, node->part_ref,
+					  U32 (ad->position),
+					  (grub_uint32_t)
+					  (filebytes >> (GRUB_DISK_SECTOR_BITS
+						 + node->data->lbshift)));
+	      goto fail;
 	    }
 
 	  filebytes -= adlen;
 	  ad++;
 	  len -= sizeof (struct grub_udf_short_ad);
 
-	  if (GRUB_UDF_INVALID_STRUCT_PTR (ad, struct grub_udf_short_ad))
+	  if (len >= (grub_ssize_t) sizeof (struct grub_udf_short_ad)
+	      && GRUB_UDF_INVALID_STRUCT_PTR (ad, struct grub_udf_short_ad))
 	    {
 	      grub_error (GRUB_ERR_BAD_FS, "corrupted UDF file system");
-	      return 0;
+	      goto fail;
 	    }
 	}
     }
@@ -571,7 +868,7 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
       if (GRUB_UDF_INVALID_STRUCT_PTR (ptr, struct grub_udf_long_ad))
 	{
 	  grub_error (GRUB_ERR_BAD_FS, "corrupted UDF file system");
-	  return 0;
+	  goto fail;
 	}
 
       struct grub_udf_long_ad *ad = (struct grub_udf_long_ad *) ptr;
@@ -583,41 +880,13 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 	  grub_uint32_t adtype = U32 (ad->length) >> 30;
 	  if (adtype == 3)
 	    {
-	      struct grub_udf_aed *extension;
-	      grub_disk_addr_t sec = grub_udf_get_block(node->data,
-							ad->block.part_ref,
-							ad->block.block_num);
-	      if (!buf)
-		{
-		  buf = grub_malloc (U32 (node->data->lvd.bsize));
-		  if (!buf)
-		    return 0;
-		}
-	      if (grub_disk_read (node->data->disk, sec << node->data->lbshift,
-				  0, adlen, buf))
+	      grub_uint32_t sec = grub_udf_get_block (node->data,
+						      U16 (ad->block.part_ref),
+						      U32 (ad->block.block_num),
+						      0);
+
+	      if (grub_udf_read_aed (node, &buf, &end_ptr, sec, adlen, &len))
 		goto fail;
-
-	      extension = (struct grub_udf_aed *) buf;
-	      if (U16 (extension->tag.tag_ident) != GRUB_UDF_TAG_IDENT_AED)
-		{
-		  grub_error (GRUB_ERR_BAD_FS, "invalid aed tag");
-		  goto fail;
-		}
-
-	      len = U32 (extension->ae_len);
-              /*
-               * Ensure AE length is less than block size
-               * per UDF spec v2.01 section 2.3.11.
-               *
-               * node->data->lbshift is initialized by
-               * grub_udf_mount(). lbshift has a maximum value
-               * of 3 and it does not cause an overflow here.
-               */
-              if (len < 0 || len > ((grub_ssize_t) 1 << node->data->lbshift))
-                {
-                  grub_error (GRUB_ERR_BAD_FS, "invalid ae length");
-                  goto fail;
-                }
 
 	      ad = (struct grub_udf_long_ad *)
 		    (buf + sizeof (struct grub_udf_aed));
@@ -626,24 +895,26 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 
 	  if (filebytes < adlen)
 	    {
-	      grub_uint32_t ad_block_num = ad->block.block_num;
-	      grub_uint32_t ad_part_ref = ad->block.part_ref;
-	      grub_free (buf);
-	      return ((U32 (ad_block_num) & GRUB_UDF_EXT_MASK) ?  0 :
-		      (grub_udf_get_block (node->data, ad_part_ref,
-					   ad_block_num)
-		       + (filebytes >> (GRUB_DISK_SECTOR_BITS
-				        + node->data->lbshift))));
+	      /* Extents that are not recorded read back as zeroes.  */
+	      if (adtype == 0)
+		ret = grub_udf_get_block (node->data,
+					  U16 (ad->block.part_ref),
+					  U32 (ad->block.block_num),
+					  (grub_uint32_t)
+					  (filebytes >> (GRUB_DISK_SECTOR_BITS
+						 + node->data->lbshift)));
+	      goto fail;
 	    }
 
 	  filebytes -= adlen;
 	  ad++;
 	  len -= sizeof (struct grub_udf_long_ad);
 
-	  if (GRUB_UDF_INVALID_STRUCT_PTR (ad, struct grub_udf_long_ad))
+	  if (len >= (grub_ssize_t) sizeof (struct grub_udf_long_ad)
+	      && GRUB_UDF_INVALID_STRUCT_PTR (ad, struct grub_udf_long_ad))
 	    {
 	      grub_error (GRUB_ERR_BAD_FS, "corrupted UDF file system");
-	      return 0;
+	      goto fail;
 	    }
 	}
     }
@@ -651,7 +922,7 @@ grub_udf_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 fail:
   grub_free (buf);
 
-  return 0;
+  return ret;
 }
 
 static grub_ssize_t
@@ -672,7 +943,9 @@ grub_udf_read_file (grub_fshelp_node_t node,
 	       ((char *) &node->block.efe.ext_attr[0]
                 + U32 (node->block.efe.ext_attr_length)));
 
-	if ((ptr + pos + len) > end_ptr)
+	if (ptr < (char *) &node->block || ptr > end_ptr
+	    || pos > (grub_off_t) (end_ptr - ptr)
+	    || len > (grub_size_t) (end_ptr - ptr) - pos)
 	  {
 	    grub_error (GRUB_ERR_BAD_FS, "corrupted UDF file system");
 	    return 0;
@@ -695,52 +968,538 @@ grub_udf_read_file (grub_fshelp_node_t node,
 				node->data->lbshift, 0);
 }
 
-static unsigned sblocklist[] = { 256, 512, 0 };
+/* Release everything the partition maps hang off.  */
+static void
+grub_udf_free_parts (struct grub_udf_data *data)
+{
+  int i;
+
+  for (i = 0; i < GRUB_UDF_MAX_PMS; i++)
+    {
+      grub_free (data->parts[i].spar_table);
+      grub_free (data->parts[i].vat);
+      grub_free (data->parts[i].meta);
+    }
+
+  grub_memset (data->parts, 0, sizeof (data->parts));
+  data->npd = data->npm = 0;
+}
+
+static void
+grub_udf_free_data (struct grub_udf_data *data)
+{
+  if (!data)
+    return;
+
+  grub_udf_free_parts (data);
+  grub_free (data);
+}
+
+/*
+ * Look for an Anchor Volume Descriptor Pointer at BLOCK.  Returns 1 and
+ * fills in AVDP when one is found there.
+ */
+static int
+grub_udf_check_anchor (grub_disk_t disk, int lbshift, grub_uint32_t block,
+		       struct grub_udf_avdp *avdp)
+{
+  if (grub_disk_read (disk, (grub_disk_addr_t) block << lbshift, 0,
+		      sizeof (*avdp), avdp))
+    {
+      /* Reading past the end of the medium just means "not here".  */
+      grub_errno = GRUB_ERR_NONE;
+      return 0;
+    }
+
+  return (U16 (avdp->tag.tag_ident) == GRUB_UDF_TAG_IDENT_AVDP
+	  && U32 (avdp->tag.tag_location) == block);
+}
+
+/*
+ * An anchor is recorded at block 256, at the last recorded block and at
+ * the last recorded block minus 256 (ECMA-167 3/8.4.2.1); media that are
+ * still open only carry the one at 512.  Where the recording ends is
+ * frequently misreported, so a few blocks around it get probed as well -
+ * this mirrors udf_scan_anchors() of the Linux driver.
+ *
+ * LAST_BLOCK is set to where the recording was found to end, which is
+ * also where the VAT file entry of a sequentially recorded medium lives.
+ */
+static int
+grub_udf_scan_anchor (grub_disk_t disk, int lbshift, grub_uint64_t total,
+		      struct grub_udf_avdp *avdp, grub_uint32_t *last_block)
+{
+  static const grub_uint32_t back[] = { 0, 1, 2, 150, 152 };
+  grub_uint64_t last = 0;
+  unsigned i;
+
+  if (total != GRUB_DISK_SIZE_UNKNOWN && (total >> lbshift) != 0)
+    last = (total >> lbshift) - 1;
+  if (last > 0xffffffffULL)
+    last = 0;
+
+  *last_block = (grub_uint32_t) last;
+
+  if (grub_udf_check_anchor (disk, lbshift, 256, avdp))
+    return 1;
+
+  for (i = 0; last != 0 && i < ARRAY_SIZE (back); i++)
+    {
+      grub_uint32_t cand;
+
+      if (last < back[i])
+	continue;
+      cand = (grub_uint32_t) (last - back[i]);
+
+      if (grub_udf_check_anchor (disk, lbshift, cand, avdp)
+	  || (cand >= 256
+	      && grub_udf_check_anchor (disk, lbshift, cand - 256, avdp)))
+	{
+	  *last_block = cand;
+	  return 1;
+	}
+    }
+
+  return grub_udf_check_anchor (disk, lbshift, 512, avdp);
+}
+
+/*
+ * Load the sparing table of a sparable partition (UDF 1.50 2.2.11).
+ * Not finding a usable one is not fatal: the partition then simply has
+ * no relocated packets.
+ */
+static grub_err_t
+grub_udf_load_sparing (struct grub_udf_data *data, struct grub_udf_part *part,
+		       struct grub_udf_partmap *pm)
+{
+  grub_uint32_t bsize = 1U << (GRUB_DISK_SECTOR_BITS + data->lbshift);
+  grub_uint32_t size;
+  grub_err_t err = GRUB_ERR_NONE;
+  unsigned i, n;
+  char *buf;
+
+  if (pm->length < 64)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid sparable partition map");
+
+  part->packet_len = U16 (pm->spar.packet_length);
+  if (!part->packet_len || (part->packet_len & (part->packet_len - 1)))
+    return grub_error (GRUB_ERR_BAD_FS, "invalid sparing packet length");
+
+  n = pm->spar.num_sparing_tables;
+  if (n > GRUB_UDF_MAX_SPARING_TABLES)
+    return grub_error (GRUB_ERR_BAD_FS, "too many sparing tables");
+
+  size = U32 (pm->spar.size_sparing_table);
+  if (size < sizeof (struct grub_udf_sparing_table) || size > bsize)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid sparing table size");
+
+  buf = grub_malloc (bsize);
+  if (!buf)
+    return grub_errno;
+
+  for (i = 0; i < n; i++)
+    {
+      struct grub_udf_sparing_table *st = (struct grub_udf_sparing_table *) buf;
+      grub_uint32_t loc = U32 (pm->spar.loc_sparing_table[i]);
+      grub_uint32_t entries;
+
+      if (grub_disk_read (data->disk, (grub_disk_addr_t) loc << data->lbshift,
+			  0, size, buf))
+	{
+	  grub_errno = GRUB_ERR_NONE;
+	  continue;
+	}
+
+      if (U32 (st->tag.tag_location) != loc
+	  || grub_memcmp (st->sparing_ident.ident, GRUB_UDF_ID_SPARING,
+			  sizeof (GRUB_UDF_ID_SPARING) - 1))
+	continue;
+
+      entries = U16 (st->rt_len);
+      if (sizeof (*st) + (grub_uint64_t) entries
+	  * sizeof (struct grub_udf_sparing_entry) > size)
+	continue;
+
+      if (entries)
+	{
+	  part->spar_table =
+	    grub_calloc (entries, sizeof (struct grub_udf_sparing_entry));
+	  if (!part->spar_table)
+	    {
+	      err = grub_errno;
+	      break;
+	    }
+
+	  grub_memcpy (part->spar_table, buf + sizeof (*st),
+		       entries * sizeof (struct grub_udf_sparing_entry));
+	}
+
+      part->spar_entries = entries;
+      break;
+    }
+
+  grub_free (buf);
+  return err;
+}
+
+static grub_err_t
+grub_udf_parse_partmap (struct grub_udf_data *data, struct grub_udf_part *part,
+			struct grub_udf_partmap *pm)
+{
+  const grub_uint8_t *ident;
+
+  if (pm->type == GRUB_UDF_PARTMAP_TYPE_1)
+    {
+      if (pm->length < 6)
+	return grub_error (GRUB_ERR_BAD_FS, "invalid type 1 partition map");
+
+      part->type = GRUB_UDF_PMAP_PHYSICAL;
+      part->part_num = U16 (pm->type1.part_num);
+      return GRUB_ERR_NONE;
+    }
+
+  if (pm->type != GRUB_UDF_PARTMAP_TYPE_2 || pm->length < 40)
+    return grub_error (GRUB_ERR_BAD_FS, "partmap type not supported");
+
+  ident = pm->type2.part_ident.ident;
+  part->part_num = U16 (pm->type2.part_num);
+
+  if (!grub_memcmp (ident, GRUB_UDF_ID_VIRTUAL,
+		    sizeof (GRUB_UDF_ID_VIRTUAL) - 1))
+    {
+      part->type = GRUB_UDF_PMAP_VIRTUAL;
+      /* The identifier suffix opens with the UDF revision.  */
+      part->vat20 = ((pm->type2.part_ident.ident_suffix[0]
+		      | (pm->type2.part_ident.ident_suffix[1] << 8)) >= 0x0200);
+      return GRUB_ERR_NONE;
+    }
+
+  if (!grub_memcmp (ident, GRUB_UDF_ID_SPARABLE,
+		    sizeof (GRUB_UDF_ID_SPARABLE) - 1))
+    {
+      part->type = GRUB_UDF_PMAP_SPARABLE;
+      return grub_udf_load_sparing (data, part, pm);
+    }
+
+  if (!grub_memcmp (ident, GRUB_UDF_ID_METADATA,
+		    sizeof (GRUB_UDF_ID_METADATA) - 1))
+    {
+      if (pm->length < 64)
+	return grub_error (GRUB_ERR_BAD_FS, "invalid metadata partition map");
+
+      part->type = GRUB_UDF_PMAP_METADATA;
+      part->meta_file_loc = U32 (pm->meta.meta_file_loc);
+      part->meta_mirror_loc = U32 (pm->meta.meta_mirror_file_loc);
+      return GRUB_ERR_NONE;
+    }
+
+  /*
+   * Keep the slot: a partition reference number indexes the map table,
+   * so dropping an unknown map would shift every later reference.  Using
+   * it is what fails, not merely having it around.
+   */
+  part->type = GRUB_UDF_PMAP_NONE;
+  return GRUB_ERR_NONE;
+}
+
+/* Walk one Volume Descriptor Sequence, collecting the PVD, PDs and LVD.  */
+static grub_err_t
+grub_udf_load_vds (struct grub_udf_data *data, struct grub_udf_extent_ad *vds)
+{
+  grub_uint32_t block = U32 (vds->start);
+  grub_uint32_t count = (U32 (vds->length)
+			 >> (GRUB_DISK_SECTOR_BITS + data->lbshift));
+
+  if (!count)
+    return grub_error (GRUB_ERR_BAD_FS, "empty volume descriptor sequence");
+  if (count > 256)
+    count = 256;
+
+  for (; count; count--, block++)
+    {
+      struct grub_udf_tag tag;
+      grub_uint16_t ident;
+
+      if (grub_disk_read (data->disk,
+			  (grub_disk_addr_t) block << data->lbshift, 0,
+			  sizeof (struct grub_udf_tag), &tag))
+	return grub_errno;
+
+      ident = U16 (tag.tag_ident);
+      if (ident == GRUB_UDF_TAG_IDENT_TD)
+	break;
+
+      if (ident == GRUB_UDF_TAG_IDENT_PVD)
+	{
+	  if (grub_disk_read (data->disk,
+			      (grub_disk_addr_t) block << data->lbshift, 0,
+			      sizeof (struct grub_udf_pvd), &data->pvd))
+	    return grub_errno;
+	}
+      else if (ident == GRUB_UDF_TAG_IDENT_PD)
+	{
+	  if (data->npd >= GRUB_UDF_MAX_PDS)
+	    return grub_error (GRUB_ERR_BAD_FS, "too many PDs");
+
+	  if (grub_disk_read (data->disk,
+			      (grub_disk_addr_t) block << data->lbshift, 0,
+			      sizeof (struct grub_udf_pd),
+			      &data->pds[data->npd]))
+	    return grub_errno;
+
+	  data->npd++;
+	}
+      else if (ident == GRUB_UDF_TAG_IDENT_LVD)
+	{
+	  grub_uint32_t k, npm, table_len, offset;
+
+	  if (grub_disk_read (data->disk,
+			      (grub_disk_addr_t) block << data->lbshift, 0,
+			      sizeof (struct grub_udf_lvd), &data->lvd))
+	    return grub_errno;
+
+	  if (U32 (data->lvd.bsize)
+	      != (1U << (GRUB_DISK_SECTOR_BITS + data->lbshift)))
+	    return grub_error (GRUB_ERR_BAD_FS, "invalid logical block size");
+
+	  table_len = U32 (data->lvd.map_table_length);
+	  if (table_len > sizeof (data->lvd.part_maps)
+	      || (sizeof (data->lvd) - sizeof (data->lvd.part_maps) + table_len
+		  > U32 (data->lvd.bsize)))
+	    return grub_error (GRUB_ERR_BAD_FS, "partition table too long");
+
+	  npm = U32 (data->lvd.num_part_maps);
+	  if ((grub_uint32_t) data->npm + npm > GRUB_UDF_MAX_PMS)
+	    return grub_error (GRUB_ERR_BAD_FS, "too many partition maps");
+
+	  for (k = 0, offset = 0; k < npm; k++)
+	    {
+	      struct grub_udf_partmap *ppm;
+
+	      if (offset + 2 > table_len)
+		return grub_error (GRUB_ERR_BAD_FS, "truncated partition map");
+
+	      ppm = (struct grub_udf_partmap *) (data->lvd.part_maps + offset);
+	      if (ppm->length < 2 || offset + ppm->length > table_len)
+		return grub_error (GRUB_ERR_BAD_FS, "invalid partition map");
+
+	      if (grub_udf_parse_partmap (data, &data->parts[data->npm], ppm))
+		return grub_errno;
+
+	      data->npm++;
+	      offset += ppm->length;
+	    }
+	}
+      else if (ident > GRUB_UDF_TAG_IDENT_TD)
+	return grub_error (GRUB_ERR_BAD_FS, "invalid tag ident");
+    }
+
+  if (!data->npd || !data->npm)
+    return grub_error (GRUB_ERR_BAD_FS, "no partition found");
+
+  return GRUB_ERR_NONE;
+}
+
+/*
+ * Load the file entry of the metadata file of a metadata partition,
+ * falling back on the mirror copy.
+ */
+static grub_err_t
+grub_udf_load_metadata (struct grub_udf_data *data, struct grub_udf_part *part)
+{
+  struct grub_fshelp_node *node;
+
+  node = grub_malloc (get_fshelp_size (data));
+  if (!node)
+    return grub_errno;
+
+  if (grub_udf_read_icb (data, part->phys_ref, part->meta_file_loc, node))
+    {
+      grub_errno = GRUB_ERR_NONE;
+
+      if (grub_udf_read_icb (data, part->phys_ref, part->meta_mirror_loc, node))
+	{
+	  grub_free (node);
+	  grub_errno = GRUB_ERR_NONE;
+	  return grub_error (GRUB_ERR_BAD_FS,
+			     "can\'t read the metadata file entry");
+	}
+    }
+
+  part->meta = node;
+  return GRUB_ERR_NONE;
+}
+
+/* Load the Virtual Allocation Table of a virtual partition.  */
+static grub_err_t
+grub_udf_load_vat (struct grub_udf_data *data, struct grub_udf_part *part)
+{
+  struct grub_udf_part *phys = &data->parts[part->phys_ref];
+  struct grub_fshelp_node *node;
+  struct grub_udf_vat20 vat20;
+  grub_uint64_t size;
+  int i, found = 0;
+
+  node = grub_malloc (get_fshelp_size (data));
+  if (!node)
+    return grub_errno;
+
+  /*
+   * The VAT file entry is the last thing written to the medium.  Some
+   * writers leave a few blocks of slack, so search backwards a bit.
+   */
+  for (i = 0; i < GRUB_UDF_VAT_SEARCH_BACK; i++)
+    {
+      grub_uint32_t blk;
+
+      if (data->last_block < (grub_uint32_t) i)
+	break;
+
+      blk = data->last_block - i;
+      if (blk < phys->start)
+	break;
+
+      if (!grub_udf_read_icb (data, part->phys_ref, blk - phys->start, node))
+	{
+	  found = 1;
+	  break;
+	}
+
+      grub_errno = GRUB_ERR_NONE;
+    }
+
+  if (!found)
+    {
+      grub_free (node);
+      return grub_error (GRUB_ERR_BAD_FS, "can\'t find the VAT");
+    }
+
+  size = U64 (node->block.fe.file_size);
+  if (size > 0xffffffffULL)
+    goto fail;
+
+  if (part->vat20
+      || node->block.fe.icbtag.file_type == GRUB_UDF_ICBTAG_TYPE_VAT20)
+    {
+      if (size < sizeof (vat20)
+	  || (grub_udf_read_file (node, 0, 0, 0, sizeof (vat20),
+				  (char *) &vat20)
+	      != (grub_ssize_t) sizeof (vat20)))
+	goto fail;
+
+      part->vat_offset = U16 (vat20.length_header);
+      if (part->vat_offset < sizeof (vat20) || part->vat_offset > size)
+	goto fail;
+    }
+  else
+    {
+      /* UDF 1.50 puts the entries first and a 36 byte trailer last.  */
+      if (size < 36)
+	goto fail;
+
+      part->vat_offset = 0;
+      size -= 36;
+    }
+
+  part->vat_entries = (grub_uint32_t) ((size - part->vat_offset) >> 2);
+  part->vat = node;
+  return GRUB_ERR_NONE;
+
+fail:
+  grub_free (node);
+  grub_errno = GRUB_ERR_NONE;
+  return grub_error (GRUB_ERR_BAD_FS, "invalid VAT");
+}
+
+static grub_err_t
+grub_udf_setup_partitions (struct grub_udf_data *data)
+{
+  int i, j;
+
+  /* Bind every map to the partition descriptor carrying its number.  */
+  for (i = 0; i < data->npm; i++)
+    {
+      struct grub_udf_part *part = &data->parts[i];
+
+      if (part->type == GRUB_UDF_PMAP_NONE)
+	continue;
+
+      for (j = 0; j < data->npd; j++)
+	if (U16 (data->pds[j].part_num) == part->part_num)
+	  break;
+
+      if (j == data->npd)
+	return grub_error (GRUB_ERR_BAD_FS, "can\'t find PD");
+
+      part->start = U32 (data->pds[j].start);
+      part->length = U32 (data->pds[j].length);
+    }
+
+  /*
+   * Virtual and metadata maps are layered on top of the physical or
+   * sparable map that shares their partition number.
+   */
+  for (i = 0; i < data->npm; i++)
+    {
+      struct grub_udf_part *part = &data->parts[i];
+
+      if (part->type != GRUB_UDF_PMAP_VIRTUAL
+	  && part->type != GRUB_UDF_PMAP_METADATA)
+	continue;
+
+      for (j = 0; j < data->npm; j++)
+	if (j != i && data->parts[j].part_num == part->part_num
+	    && (data->parts[j].type == GRUB_UDF_PMAP_PHYSICAL
+		|| data->parts[j].type == GRUB_UDF_PMAP_SPARABLE))
+	  break;
+
+      if (j == data->npm)
+	return grub_error (GRUB_ERR_BAD_FS, "can\'t find the backing partition");
+
+      part->phys_ref = (grub_uint32_t) j;
+    }
+
+  /* With the physical mapping in place the metadata can be read.  */
+  for (i = 0; i < data->npm; i++)
+    {
+      struct grub_udf_part *part = &data->parts[i];
+
+      if (part->type == GRUB_UDF_PMAP_METADATA
+	  && grub_udf_load_metadata (data, part))
+	return grub_errno;
+
+      if (part->type == GRUB_UDF_PMAP_VIRTUAL
+	  && grub_udf_load_vat (data, part))
+	return grub_errno;
+    }
+
+  return GRUB_ERR_NONE;
+}
 
 static struct grub_udf_data *
 grub_udf_mount (grub_disk_t disk)
 {
   struct grub_udf_data *data = 0;
   struct grub_udf_fileset root_fs;
-  unsigned *sblklist;
+  struct grub_udf_avdp avdp;
+  grub_uint64_t total;
   grub_uint32_t block, vblock;
-  int i, lbshift;
+  int lbshift;
 
-  data = grub_malloc (sizeof (struct grub_udf_data));
+  data = grub_zalloc (sizeof (struct grub_udf_data));
   if (!data)
     return 0;
 
   data->disk = disk;
+  total = grub_disk_native_sectors (disk);
 
   /* Search for Anchor Volume Descriptor Pointer (AVDP)
    * and determine logical block size.  */
-  block = 0;
   for (lbshift = 0; lbshift < 4; lbshift++)
-    {
-      for (sblklist = sblocklist; *sblklist; sblklist++)
-        {
-	  struct grub_udf_avdp avdp;
+    if (grub_udf_scan_anchor (disk, lbshift, total, &avdp, &data->last_block))
+      break;
 
-	  if (grub_disk_read (disk, *sblklist << lbshift, 0,
-			      sizeof (struct grub_udf_avdp), &avdp))
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
-	      goto fail;
-	    }
-
-	  if (U16 (avdp.tag.tag_ident) == GRUB_UDF_TAG_IDENT_AVDP &&
-	      U32 (avdp.tag.tag_location) == *sblklist)
-	    {
-	      block = U32 (avdp.vds.start);
-	      break;
-	    }
-	}
-
-      if (block)
-	break;
-    }
-
-  if (!block)
+  if (lbshift == 4)
     {
       grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
       goto fail;
@@ -775,119 +1534,28 @@ grub_udf_mount (grub_disk_t disk)
 	}
     }
 
-  data->npd = data->npm = 0;
   /* Locate Partition Descriptor (PD) and Logical Volume Descriptor (LVD).  */
-  while (1)
+  if (grub_udf_load_vds (data, &avdp.vds))
     {
-      struct grub_udf_tag tag;
+      /* The main sequence is unusable, fall back on the reserve one.  */
+      grub_errno = GRUB_ERR_NONE;
+      grub_udf_free_parts (data);
 
-      if (grub_disk_read (disk, block << lbshift, 0,
-			  sizeof (struct grub_udf_tag), &tag))
-	{
-	  grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
-	  goto fail;
-	}
-
-      tag.tag_ident = U16 (tag.tag_ident);
-      if (tag.tag_ident == GRUB_UDF_TAG_IDENT_PVD)
-	{
-	  if (grub_disk_read (disk, block << lbshift, 0,
-			      sizeof (struct grub_udf_pvd),
-			      &data->pvd))
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
-	      goto fail;
-	    }
-	}
-      else if (tag.tag_ident == GRUB_UDF_TAG_IDENT_PD)
-	{
-	  if (data->npd >= GRUB_UDF_MAX_PDS)
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "too many PDs");
-	      goto fail;
-	    }
-
-	  if (grub_disk_read (disk, block << lbshift, 0,
-			      sizeof (struct grub_udf_pd),
-			      &data->pds[data->npd]))
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
-	      goto fail;
-	    }
-
-	  data->npd++;
-	}
-      else if (tag.tag_ident == GRUB_UDF_TAG_IDENT_LVD)
-	{
-	  int k;
-
-	  struct grub_udf_partmap *ppm;
-
-	  if (grub_disk_read (disk, block << lbshift, 0,
-			      sizeof (struct grub_udf_lvd),
-			      &data->lvd))
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
-	      goto fail;
-	    }
-
-	  if (data->npm + U32 (data->lvd.num_part_maps) > GRUB_UDF_MAX_PMS)
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "too many partition maps");
-	      goto fail;
-	    }
-
-	  ppm = (struct grub_udf_partmap *) &data->lvd.part_maps;
-	  for (k = U32 (data->lvd.num_part_maps); k > 0; k--)
-	    {
-	      if (ppm->type != GRUB_UDF_PARTMAP_TYPE_1)
-		{
-		  grub_error (GRUB_ERR_BAD_FS, "partmap type not supported");
-		  goto fail;
-		}
-
-	      data->pms[data->npm++] = ppm;
-	      ppm = (struct grub_udf_partmap *) ((char *) ppm +
-                                                 U32 (ppm->length));
-	    }
-	}
-      else if (tag.tag_ident > GRUB_UDF_TAG_IDENT_TD)
-	{
-	  grub_error (GRUB_ERR_BAD_FS, "invalid tag ident");
-	  goto fail;
-	}
-      else if (tag.tag_ident == GRUB_UDF_TAG_IDENT_TD)
-	break;
-
-      block++;
+      if (grub_udf_load_vds (data, &avdp.rvds))
+	goto fail;
     }
 
-  for (i = 0; i < data->npm; i++)
-    {
-      int j;
-
-      for (j = 0; j < data->npd; j++)
-	if (data->pms[i]->type1.part_num == data->pds[j].part_num)
-	  {
-	    data->pms[i]->type1.part_num = j;
-	    break;
-	  }
-
-      if (j == data->npd)
-	{
-	  grub_error (GRUB_ERR_BAD_FS, "can\'t find PD");
-	  goto fail;
-	}
-    }
+  if (grub_udf_setup_partitions (data))
+    goto fail;
 
   block = grub_udf_get_block (data,
-			      data->lvd.root_fileset.block.part_ref,
-			      data->lvd.root_fileset.block.block_num);
+			      U16 (data->lvd.root_fileset.block.part_ref),
+			      U32 (data->lvd.root_fileset.block.block_num), 0);
 
   if (grub_errno)
     goto fail;
 
-  if (grub_disk_read (disk, block << lbshift, 0,
+  if (grub_disk_read (disk, (grub_disk_addr_t) block << lbshift, 0,
 		      sizeof (struct grub_udf_fileset), &root_fs))
     {
       grub_error (GRUB_ERR_BAD_FS, "not an UDF filesystem");
@@ -905,7 +1573,7 @@ grub_udf_mount (grub_disk_t disk)
   return data;
 
 fail:
-  grub_free (data);
+  grub_udf_free_data (data);
   return 0;
 }
 
@@ -920,9 +1588,9 @@ grub_udf_get_cluster_sector (grub_disk_t disk, grub_uint64_t *sec_per_lcn)
   if (!data)
     return 0;
 
-  ret = U32 (data->pds[data->pms[0]->type1.part_num].start);
+  ret = data->parts[0].start;
   *sec_per_lcn = 1ULL << data->lbshift;
-  grub_free (data);
+  grub_udf_free_data (data);
   return ret;
 }
 #endif
@@ -1033,7 +1701,7 @@ grub_udf_iterate_dir (grub_fshelp_node_t dir,
 	  if (!child)
 	    return 0;
 
-          if (grub_udf_read_icb (dir->data, &dirent.icb, child))
+          if (grub_udf_read_icb_ad (dir->data, &dirent.icb, child))
 	    {
 	      grub_free (child);
 	      return 0;
@@ -1252,7 +1920,7 @@ grub_udf_dir (grub_device_t device, const char *path,
   if (!rootnode)
     goto fail;
 
-  if (grub_udf_read_icb (data, &data->root_icb, rootnode))
+  if (grub_udf_read_icb_ad (data, &data->root_icb, rootnode))
     goto fail;
 
   if (grub_fshelp_find_file (path, rootnode,
@@ -1269,7 +1937,7 @@ grub_udf_dir (grub_device_t device, const char *path,
 fail:
   grub_free (rootnode);
 
-  grub_free (data);
+  grub_udf_free_data (data);
 
   grub_dl_unref (my_mod);
 
@@ -1293,7 +1961,7 @@ grub_udf_open (struct grub_file *file, const char *name)
   if (!rootnode)
     goto fail;
 
-  if (grub_udf_read_icb (data, &data->root_icb, rootnode))
+  if (grub_udf_read_icb_ad (data, &data->root_icb, rootnode))
     goto fail;
 
   if (grub_fshelp_find_file (name, rootnode,
@@ -1313,7 +1981,7 @@ grub_udf_open (struct grub_file *file, const char *name)
 fail:
   grub_dl_unref (my_mod);
 
-  grub_free (data);
+  grub_udf_free_data (data);
   grub_free (rootnode);
 
   return grub_errno;
@@ -1335,7 +2003,7 @@ grub_udf_close (grub_file_t file)
     {
       struct grub_fshelp_node *node = (struct grub_fshelp_node *) file->data;
 
-      grub_free (node->data);
+      grub_udf_free_data (node->data);
       grub_free (node);
     }
 
@@ -1353,7 +2021,7 @@ grub_udf_label (grub_device_t device, char **label)
   if (data)
     {
       *label = read_dstring (data->lvd.ident, sizeof (data->lvd.ident));
-      grub_free (data);
+      grub_udf_free_data (data);
     }
   else
     *label = 0;
@@ -1434,7 +2102,7 @@ grub_udf_uuid (grub_device_t device, char **uuid)
         }
       else
         *uuid = 0;
-      grub_free (data);
+      grub_udf_free_data (data);
     }
   else
     *uuid = 0;

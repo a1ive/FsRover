@@ -371,14 +371,23 @@ sessions of a multi-session disc are not picked up.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved
 
-Covers media whose volume recognition sequence carries `NSR02` (UDF 1.5) or
-`NSR03` (UDF 2.x).
+**Supported versions:** UDF 1.02 through 2.60.
 
-**Only partition map type 1 (physical) is supported.** A type 2 map — which is
-what sparable, virtual and metadata partitions use — is refused with
-*"partmap type not supported"*. In practice plain UDF discs and images read
-fine, while packet-written / incompletely closed media and UDF 2.5+
-metadata-partition layouts may not mount.
+**Supported partition maps:**
+
+| Map | Written by | How a block is found |
+| --- | --- | --- |
+| type 1, physical | hard disks, DVD-ROM, plain images | directly, at the partition's start |
+| virtual (VAT) | CD-R, DVD-R, BD-R and other write-once media | through the Virtual Allocation Table |
+| sparable | CD-RW, DVD-RW | through the sparing table |
+| metadata | UDF 2.50 / 2.60, Blu-ray | through the metadata file's extents |
+
+Files the medium marks hidden are listed rather than filtered, so a sparable
+disc shows its `Non-Allocatable Space` placeholder alongside real files.
+
+**Not supported:** sessions other than the first — the volume recognition
+sequence is read from the start of the medium, so a multi-session disc is read
+as its first session. Named streams and extended attributes are not exposed.
 
 ---
 
