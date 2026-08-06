@@ -1367,17 +1367,22 @@ grub_vmfs_mount(grub_disk_t disk)
 		if (grub_vmfs_bitmap_open(&data->fdc, &data->fdc_inode))
 			goto fail;
 
-		if (grub_vmfs_open_meta(data, VMFS_SBC_FILENAME, &data->sbc,
-			&data->sbc_inode))
-			goto fail;
-		data->have_sbc = 1;
-
-		/* the second pointer level is only used by huge files */
+		/*
+		 * .pb2.sf must come before .sbc.sf: on a real volume
+		 * .sbc.sf is itself addressed through second level
+		 * pointer blocks (zla = PB2), while .pb2.sf uses direct
+		 * blocks and so depends on nothing.
+		 */
 		if (grub_vmfs_open_meta(data, VMFS_PB2_FILENAME, &data->pb2,
 			&data->pb2_inode) == GRUB_ERR_NONE)
 			data->have_pb2 = 1;
 		else
 			grub_errno = GRUB_ERR_NONE;
+
+		if (grub_vmfs_open_meta(data, VMFS_SBC_FILENAME, &data->sbc,
+			&data->sbc_inode))
+			goto fail;
+		data->have_sbc = 1;
 	}
 	else
 	{
