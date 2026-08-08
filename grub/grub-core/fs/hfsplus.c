@@ -500,12 +500,25 @@ grub_hfsplus_cmp_extkey (struct grub_hfsplus_key *keya,
   return 0;
 }
 
+/*
+ * A symlink target is a path.  node->size comes straight from the disk's
+ * catalog file record, so reject absurd values instead of trying to allocate a
+ * buffer for them; 1024 matches macOS PATH_MAX.
+ */
+#define GRUB_HFSPLUS_SYMLINK_MAXLEN	1024
+
 static char *
 grub_hfsplus_read_symlink (grub_fshelp_node_t node)
 {
   char *symlink;
   grub_ssize_t numread;
   grub_size_t sz = node->size;
+
+  if (node->size > GRUB_HFSPLUS_SYMLINK_MAXLEN)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink is too long");
+      return NULL;
+    }
 
   if (grub_add (sz, 1, &sz))
     return NULL;

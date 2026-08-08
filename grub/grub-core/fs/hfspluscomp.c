@@ -296,19 +296,28 @@ hfsplus_open_compressed_real (struct grub_hfsplus_file *node)
 
   node->cbuf = grub_malloc (node->size);
   if (!node->cbuf)
-    return grub_errno;
+    {
+      grub_free (attr_node);
+      return grub_errno;
+    }
 
+  /* The inline compressed data lives inside attr_node, so it can only be freed
+     once decompression is done.  */
   if (grub_zlib_decompress ((char *) (cmp_head + 1),
 			    grub_cpu_to_be64 (attr_head->size)
 			    - sizeof (*cmp_head), 0,
 			    node->cbuf, node->size)
       != (grub_ssize_t) node->size)
     {
+      grub_free (attr_node);
+      grub_free (node->cbuf);
+      node->cbuf = 0;
       if (!grub_errno)
 	grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
 		    "premature end of compressed");
       return grub_errno;
     }
+  grub_free (attr_node);
   node->compressed = 1;
   return 0;
 }

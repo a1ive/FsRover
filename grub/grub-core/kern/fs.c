@@ -256,12 +256,20 @@ grub_fs_blocklist_read (grub_file_t file, char *buf, grub_size_t len)
   return ret;
 }
 
+static grub_err_t
+grub_fs_blocklist_close (grub_file_t file)
+{
+  grub_free (file->data);
+  file->data = 0;
+  return GRUB_ERR_NONE;
+}
+
 struct grub_fs grub_fs_blocklist =
   {
     .name = "blocklist",
     .fs_dir = 0,
     .fs_open = grub_fs_blocklist_open,
     .fs_read = grub_fs_blocklist_read,
-    .fs_close = 0,
+    .fs_close = grub_fs_blocklist_close,
     .next = 0
   };

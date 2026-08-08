@@ -570,6 +570,13 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 
 	  node->cur_cluster = next_cluster;
 	  node->cur_cluster_num++;
+
+	  /* More hops than clusters exist means the chain is cyclic. */
+	  if (node->cur_cluster_num >= node->data->num_clusters)
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, "cyclic FAT cluster chain");
+	      return -1;
+	    }
 	}
 
       /* Read the data here.  */
@@ -846,6 +853,8 @@ grub_fat_iterate_dir_next (grub_fshelp_node_t node,
 	}
 
       /* Convert the 8.3 file name.  */
+      /* Ensure checks for dot later do not read uninitialized memory. */
+      grub_memset(ctxt->filename, 0, sizeof(ctxt->dir.name));
       filep = ctxt->filename;
       if (ctxt->dir.attr & GRUB_FAT_ATTR_VOLUME_ID)
 	{
@@ -1163,13 +1172,17 @@ grub_fat_label (grub_device_t device, char **label)
 	  grub_size_t chc;
 	  grub_uint16_t t[ARRAY_SIZE (dir.type_specific.volume_label.str)];
 	  grub_size_t i;
-	  *label = grub_malloc (ARRAY_SIZE (dir.type_specific.volume_label.str)
-				* GRUB_MAX_UTF8_PER_UTF16 + 1);
-	  if (!*label)
+	  char *new_label;
+	  grub_free (*label);
+          *label = NULL;
+	  new_label = grub_malloc (ARRAY_SIZE (dir.type_specific.volume_label.str)
+				   * GRUB_MAX_UTF8_PER_UTF16 + 1);
+	  if (!new_label)
 	    {
 	      grub_free (root.data);
 	      return grub_errno;
 	    }
+	  *label = new_label;
 	  chc = dir.type_specific.volume_label.character_count;
 	  if (chc > ARRAY_SIZE (dir.type_specific.volume_label.str))
 	    chc = ARRAY_SIZE (dir.type_specific.volume_label.str);

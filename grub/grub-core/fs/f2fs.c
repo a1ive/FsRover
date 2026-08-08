@@ -53,6 +53,15 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define F2FS_BLKSIZE              (1 << F2FS_BLK_BITS)
 #define F2FS_BLK_SEC_BITS         (F2FS_BLK_BITS - GRUB_DISK_SECTOR_BITS)
 
+/*
+ * F2FS conventionally uses 512 (1 << 9) blocks per 2 MiB segment.  Rather than
+ * hard-requiring that exact value, only reject a log_blocks_per_seg large
+ * enough to break the "1 << log_blocks_per_seg" computation in
+ * grub_f2fs_mount(): the unsigned shift stays a well-defined, non-zero
+ * grub_uint32_t for any exponent up to 31.
+ */
+#define F2FS_MAX_LOG_BLKS_PER_SEG 31
+
 #define VERSION_LEN               256
 #define F2FS_MAX_EXTENSION        64
 
@@ -473,6 +482,14 @@ grub_f2fs_sanity_check_sb (struct grub_f2fs_superblock *sb)
   if (sb->log_blocksize != grub_cpu_to_le32_compile_time (F2FS_BLK_BITS))
     return -1;
 
+  /*
+   * Bound log_blocks_per_seg so the "1 << log_blocks_per_seg" shift in
+   * grub_f2fs_mount() cannot invoke undefined behaviour or yield a zero
+   * segment size; the value is otherwise trusted.
+   */
+  if (grub_le_to_cpu32 (sb->log_blocks_per_seg) > F2FS_MAX_LOG_BLKS_PER_SEG)
+    return -1;
+
   log_sectorsize = grub_le_to_cpu32 (sb->log_sectorsize);
   log_sectors_per_block = grub_le_to_cpu32 (sb->log_sectors_per_block);
 
@@ -817,7 +834,16 @@ grub_f2fs_read_node (struct grub_f2fs_data *data,
 
   blkaddr = get_node_blkaddr (data, nid);
   if (!blkaddr)
-    return grub_errno;
+    {
+      /*
+       * A node id that resolves to block address 0 (NULL_ADDR) has no node
+       * block on disk.  Returning success here would leave *np uninitialised
+       * for the caller to read, so report an error instead.
+       */
+      if (grub_errno == GRUB_ERR_NONE)
+        grub_error (GRUB_ERR_BAD_FS, N_("invalid F2FS node address"));
+      return grub_errno;
+    }
 
   return grub_f2fs_block_read (data, blkaddr, np);
 }
@@ -848,7 +874,7 @@ grub_f2fs_mount (grub_disk_t disk)
   data->root_ino = grub_le_to_cpu32 (data->sblock.root_ino);
   data->cp_blkaddr = grub_le_to_cpu32 (data->sblock.cp_blkaddr);
   data->nat_blkaddr = grub_le_to_cpu32 (data->sblock.nat_blkaddr);
-  data->blocks_per_seg = 1 <<
+  data->blocks_per_seg = 1U <<
     grub_le_to_cpu32 (data->sblock.log_blocks_per_seg);
 
   err = grub_f2fs_read_cp (data);
@@ -955,6 +981,9 @@ grub_f2fs_read_file (grub_fshelp_node_t node,
                                 F2FS_BLK_SEC_BITS, 0);
 }
 
+/* Linux PATH_MAX: the longest symlink target any real F2FS image stores. */
+#define GRUB_F2FS_SYMLINK_MAX 4096
+
 static char *
 grub_f2fs_read_symlink (grub_fshelp_node_t node)
 {
@@ -971,6 +1000,17 @@ grub_f2fs_read_symlink (grub_fshelp_node_t node)
     }
 
   filesize = grub_f2fs_file_size(&diro->inode.i);
+
+  /*
+   * A symlink target is a path; reject the absurd sizes a crafted inode can
+   * put in i_size instead of trying to allocate a buffer for them.  4096 is
+   * Linux PATH_MAX, above any target a real F2FS image stores.
+   */
+  if (filesize > GRUB_F2FS_SYMLINK_MAX)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink is too long");
+      return 0;
+    }
 
   if (grub_add (filesize, 1, &sz))
     {
@@ -1017,7 +1057,12 @@ grub_f2fs_check_dentries (struct grub_f2fs_dir_iter_ctx *ctx)
       ftype = ctx->dentry[i].file_type;
       name_len = grub_le_to_cpu16 (ctx->dentry[i].name_len);
 
-      if (name_len >= F2FS_NAME_LEN)
+      /*
+       * A zero name_len would leave "i" unchanged below ((0 + F2FS_SLOT_LEN
+       * - 1) / F2FS_SLOT_LEN == 0), spinning forever on the same bitmap slot
+       * for a crafted image that has the bit set but no real name stored.
+       */
+      if (name_len == 0 || name_len >= F2FS_NAME_LEN)
         return 0;
 
       if (grub_add (name_len, 1, &sz))
@@ -1089,6 +1134,8 @@ grub_f2fs_iterate_dir (grub_fshelp_node_t dir,
     .hook_data = hook_data
   };
   grub_off_t fpos = 0;
+  grub_off_t dir_size;
+  grub_uint64_t user_blocks, dir_blocks;
 
   if (!diro->inode_read)
     {
@@ -1102,7 +1149,27 @@ grub_f2fs_iterate_dir (grub_fshelp_node_t dir,
   if (inode->i_inline & F2FS_INLINE_DENTRY)
     return grub_f2fs_iterate_inline_dir (inode, &ctx);
 
-  while (fpos < grub_f2fs_file_size (inode))
+  dir_size = grub_f2fs_file_size (inode);
+
+  /*
+   * A directory is a file whose data blocks are a subset of the volume's
+   * user blocks, so a valid directory can never span more blocks than the
+   * filesystem itself has.  A crafted inode can instead declare an enormous
+   * i_size while none of its blocks are allocated; grub_fshelp_read_file()
+   * treats such holes as zero-filled blocks (see fshelp.c) rather than an
+   * error, so without this bound a single directory could turn listing into
+   * a near endless scan.  Reject anything larger than user_block_count.
+   */
+  user_blocks = grub_le_to_cpu64 (diro->data->ckpt.user_block_count);
+  dir_blocks = (dir_size >> F2FS_BLK_BITS)
+               + ((dir_size & (F2FS_BLKSIZE - 1)) ? 1 : 0);
+  if (dir_blocks > user_blocks)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "directory is too large");
+      return 0;
+    }
+
+  while (fpos < dir_size)
     {
       struct grub_f2fs_dentry_block *de_blk;
       char *buf;
@@ -1190,7 +1257,7 @@ grub_f2fs_dir (grub_device_t device, const char *path,
   grub_f2fs_iterate_dir (fdiro, grub_f2fs_dir_iter, &ctx);
 
  fail:
-  if (fdiro != &ctx.data->diropen)
+  if (ctx.data != NULL && fdiro != &ctx.data->diropen)
     grub_free (fdiro);
   grub_free (ctx.data);
   grub_dl_unref (my_mod);
@@ -1239,7 +1306,7 @@ grub_f2fs_open (struct grub_file *file, const char *name)
   return 0;
 
  fail:
-  if (fdiro != &data->diropen)
+  if (data != NULL && fdiro != &data->diropen)
     grub_free (fdiro);
   grub_free (data);
 

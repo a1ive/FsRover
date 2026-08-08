@@ -296,6 +296,8 @@ static const char *spa_feature_names[] = {
   "com.klarasystems:vdev_zaps_v2",
   "com.delphix:head_errlog",
   "org.freebsd:zstd_compress",
+  "com.datto:bookmark_v2",
+  "com.delphix:bookmark_written",
   NULL
 };
 

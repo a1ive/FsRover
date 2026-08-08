@@ -307,11 +307,25 @@ grub_fshelp_find_file_real (const char *path, grub_fshelp_node_t rootnode,
 
   /* Check if the node that was found was of the expected type.  */
   if (expecttype == GRUB_FSHELP_REG && foundtype != expecttype)
-    return grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a regular file"));
+    err = grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a regular file"));
   else if (expecttype == GRUB_FSHELP_DIR && foundtype != expecttype)
-    return grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a directory"));
+    err = grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a directory"));
+  else
+    return 0;
 
-  return 0;
+  /*
+   * The type does not match.  The found node was detached from the stack
+   * above (so free_stack did not release it) and ownership was handed to
+   * the caller via *foundnode -- but callers treat a non-zero return as a
+   * failure and do not free *foundnode, so it would leak.  Release it here
+   * and clear the output.  The root node is owned by the caller, so leave
+   * it alone.
+   */
+  if (*foundnode != rootnode)
+    grub_free (*foundnode);
+  *foundnode = NULL;
+
+  return err;
 }
 
 /* Lookup the node PATH.  The node ROOTNODE describes the root of the
