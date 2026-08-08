@@ -111,6 +111,14 @@ struct grub_cryptodisk
    * underlying disk, where sectors are the size noted by log_sector_size.
    */
   grub_disk_addr_t offset_sectors;
+  /*
+   * Rover: dm-crypt's iv_offset, which upstream grub does not model.  The
+   * PLAIN/PLAIN64 IV is normally the sector number relative to the start of
+   * this cryptodisk; formats that number their IVs from the start of the
+   * underlying disk instead (VeraCrypt) set this to the same offset in
+   * GRUB_CRYPTODISK_IV_LOG_SIZE units and it is added to the IV.
+   */
+  grub_disk_addr_t iv_offset;
   /* Total number of encrypted sectors of size (1 << log_sector_size). */
   grub_disk_addr_t total_sectors;
   grub_disk_t source_disk;

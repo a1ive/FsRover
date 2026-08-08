@@ -298,8 +298,9 @@ grub_cryptodisk_endecrypt (struct grub_cryptodisk *dev,
 	  {
 	    grub_uint64_t iv64;
 
-	    iv64 = grub_cpu_to_le64 (sector << (log_sector_size
-						 - GRUB_CRYPTODISK_IV_LOG_SIZE));
+	    iv64 = grub_cpu_to_le64 ((sector << (log_sector_size
+						 - GRUB_CRYPTODISK_IV_LOG_SIZE))
+				     + dev->iv_offset);
 	    grub_set_unaligned64 (iv, iv64);
 	    if (dev->mode_iv == GRUB_CRYPTODISK_MODE_IV_PLAIN)
 	      iv[1] = 0;
