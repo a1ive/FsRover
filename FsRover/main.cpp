@@ -106,6 +106,7 @@ constexpr int IDM_TEXT = 11;
 constexpr int IDM_IMAGE = 12;
 constexpr int IDM_EXPORT = 13;
 constexpr int IDM_MARKDOWN = 14;
+constexpr int IDM_VERACRYPT = 15;
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -1111,6 +1112,11 @@ on_tree_rclick (void)
 	   blocklist, which spans the whole device, so they need a known
 	   device size; pseudo-devices report none.  */
 	bool can_raw = d.size != BACKEND_SIZE_UNKNOWN;
+	/* A VeraCrypt volume needs at least its two header slots plus some
+	   data, and unlocking one that is itself an unlocked volume is not
+	   something the backend supports.  */
+	bool can_vc = can_raw && d.size >= 256 * 1024
+		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
 	UINT busy = g_extracting ? MF_GRAYED : 0u;
 
 	HMENU menu = CreatePopupMenu ();
@@ -1119,6 +1125,10 @@ on_tree_rclick (void)
 		AppendMenuW (menu, MF_STRING, IDM_DOKAN_UNMOUNT, res_str (IDS_MENU_DOKAN_UNMOUNT).c_str ());
 	if (is_loop)
 		AppendMenuW (menu, MF_STRING | busy, IDM_UNMOUNT, res_str (IDS_MENU_UNMOUNT).c_str ());
+	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
+	/* VeraCrypt volumes are not detectable, so the item is offered on any
+	   device with a known size that is not already an unlocked one.  */
+	AppendMenuW (menu, MF_STRING | busy | (can_vc ? 0u : MF_GRAYED), IDM_VERACRYPT, res_str (IDS_MENU_VERACRYPT).c_str ());
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
@@ -1150,6 +1160,10 @@ on_tree_rclick (void)
 			backend_post (std::move (task));
 			set_status (IDS_STATUS_UNMOUNTING);
 		}
+		break;
+	case IDM_VERACRYPT:
+		if (can_vc)
+			prompt_unlock_veracrypt (d.name);
 		break;
 	case IDM_HEX:
 		if (can_raw)
@@ -1386,6 +1400,9 @@ on_task_done (backend_result *raw)
 	case backend_task_type::crypto_unlock:
 		crypto_unlock_done (res.get ());
 		return;
+	case backend_task_type::veracrypt_unlock:
+		veracrypt_unlock_done (res.get ());
+		return;
 	}
 
 	if (!res->error.empty ())
@@ -1471,7 +1488,8 @@ on_task_progress (backend_progress *raw)
 	std::unique_ptr<backend_progress> p (raw);
 
 	/* The properties hash and the crypto unlock own their bars.  */
-	if (props_on_progress (p.get ()) || crypto_on_progress (p.get ()))
+	if (props_on_progress (p.get ()) || crypto_on_progress (p.get ())
+		|| veracrypt_on_progress (p.get ()))
 		return;
 	if (!g_extracting || p->seq != g_seq_extract)
 		return;

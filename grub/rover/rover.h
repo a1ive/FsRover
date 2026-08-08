@@ -235,6 +235,36 @@ int rover_crypto_unlock (const char *device,
 	char *out_dev, unsigned long long out_size);
 
 /*
+ * VeraCrypt / TrueCrypt volumes, which are not auto-detected: nothing about
+ * such a volume is plaintext, so it can only be recognised by decrypting its
+ * header, and the parameters that are not stored in it have to be supplied.
+ *
+ * PASS is the passphrase as typed; when key files are used the caller folds
+ * them into the passphrase first (the 64/128 byte pool of VeraCrypt's key
+ * file algorithm) and passes the pool.  PIM is the personal iterations
+ * multiplier (0 = the volume's default), PRF one of ROVER_VC_PRF_* with
+ * ROVER_VC_PRF_AUTO meaning "try all five", which can take tens of seconds.
+ * FLAGS is a combination of ROVER_VC_*.  On success returns 0 and writes the
+ * crypto device name ("crypto0") into OUT_DEV; a wrong passphrase (or wrong
+ * PIM, or wrong mode) returns nonzero.
+ */
+#define ROVER_VC_PRF_AUTO	0
+#define ROVER_VC_PRF_SHA512	1
+#define ROVER_VC_PRF_WHIRLPOOL	2
+#define ROVER_VC_PRF_SHA256	3
+#define ROVER_VC_PRF_RIPEMD160	4
+#define ROVER_VC_PRF_STREEBOG	5
+
+#define ROVER_VC_TRUECRYPT	0x1	/* TrueCrypt volume ('TRUE' magic) */
+#define ROVER_VC_HIDDEN		0x2	/* unlock the hidden volume only */
+#define ROVER_VC_BACKUP		0x4	/* use the backup headers */
+
+int rover_veracrypt_unlock (const char *device,
+	const void *pass, unsigned long long pass_len,
+	unsigned int pim, int prf, unsigned int flags,
+	char *out_dev, unsigned long long out_size);
+
+/*
  * Progress for the slow unlock key derivation (PBKDF2/Argon2).  The
  * callback fires from inside rover_crypto_unlock() with the done/total
  * step count of the current KDF pass (not bytes).  Pass NULL to disable.

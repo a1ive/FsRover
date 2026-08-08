@@ -992,37 +992,40 @@ physical drives requires **File ▸ Run as Administrator**.
 ## 4. Encrypted volumes
 
 When FsRover recognises an encrypted volume it shows it with a padlock icon and
-asks for the passphrase, or a key file, the first time you browse it. Unlocking
-runs asynchronously with a progress bar, because Argon2 can take several
-seconds. A successful unlock creates a `cryptoN` device in the tree, whose
+asks for the passphrase, or a key file, the first time you browse it. A successful unlock creates a `cryptoN` device in the tree, whose
 plaintext filesystem is then browsed like any other.
 
-After unlocking, the recovered keys are readable under the `(proc)` device —
-`luks_script` for LUKS volumes, `fve_keys` for BitLocker volumes.
+**VeraCrypt and TrueCrypt volumes: they cannot be recognised
+at all**, so they never get a padlock and are unlocked from the tree's
+right-click menu instead. See [VeraCrypt / TrueCrypt](#veracrypt--truecrypt--veracrypt)
+below.
 
 ### LUKS1 — `luks`
 
 > Origin: GRUB
 
-**Ciphers:** AES-128/192/256 in CBC and XTS mode.
-**Hashes:** SHA-1, SHA-256, SHA-512.
+**Ciphers:** AES-128/192/256, Serpent, Twofish and Camellia, in CBC and XTS mode.
+**Hashes:** SHA-1, SHA-256, SHA-384, SHA-512, RIPEMD-160, Whirlpool.
 **Key derivation:** PBKDF2.
 
 A key file up to 8 MiB may be used instead of a passphrase.
 
-**Not supported:** volumes using Serpent, Twofish or RIPEMD-160 — those
-primitives are not built in.
+**Not supported:** CAST5, Blowfish and 3DES volumes — those primitives are not
+built in.
 
 ### LUKS2 — `luks2`
 
 > Origin: GRUB
 
-**Ciphers:** AES-128/192/256 in CBC and XTS mode.
-**Hashes:** SHA-1, SHA-256, SHA-512.
+**Ciphers:** AES-128/192/256, Serpent, Twofish and Camellia, in CBC and XTS mode.
+
+**Hashes:** SHA-1, SHA-256, SHA-384, SHA-512, RIPEMD-160, Whirlpool.
+
 **Key derivation:** PBKDF2, Argon2i, Argon2id.
 
-The JSON metadata area and its base64 fields are parsed in full. As with LUKS1,
-Serpent / Twofish / RIPEMD-160 volumes cannot be unlocked.
+The JSON metadata area and its base64 fields are parsed in full. The 256-bit
+restriction on Serpent, Twofish and Camellia, and the missing CAST5 / Blowfish /
+3DES, are the same as for LUKS1 above.
 
 ### BitLocker — `bitlocker`
 
@@ -1043,6 +1046,52 @@ Boot-sector relocation, zeroed in-place metadata regions and partially converted
 
 **Not supported:** Vista-era and EOW volumes — Windows 7 and later only.
 
+### VeraCrypt / TrueCrypt — `veracrypt`
+
+> Origin: FsRover
+
+**Not auto-detected.** Everything past a VeraCrypt volume's 64-byte salt is
+ciphertext, with no magic and no plaintext structure to probe for, so the volume
+is indistinguishable from unused space until a passphrase has actually decrypted
+its header.
+
+**Ciphers:** AES, Serpent, Twofish, Camellia, Kuznyechik, and the ten cascades
+of two or three of them (AES-Twofish, AES-Twofish-Serpent, Serpent-AES,
+Twofish-Serpent, Kuznyechik-Serpent-Camellia, …). All are 256-bit keys in XTS
+mode, which is the only mode VeraCrypt has ever written. A cascade is not a
+chained block cipher: each layer is a complete XTS pass with its own key pair.
+
+**Hashes (PRF):** SHA-512, SHA-256, Whirlpool, RIPEMD-160, Streebog.
+
+**Key derivation:** PBKDF2, with VeraCrypt's own iteration counts — 500 000 for
+most hashes, 655 331 for RIPEMD-160 — or `15000 + PIM × 1000` when a PIM is
+given. Leaving the hash set to **Try all** works, but that is up to five
+derivations of half a million iterations each and takes tens of seconds; naming
+the right hash is several times faster.
+
+**PIM.** The Personal Iterations Multiplier is not stored anywhere in the
+volume, so it has to be entered exactly as it was at creation. Leave the box
+empty for volumes made without one.
+
+**Key files:** any number of them. They are folded into the passphrase with
+VeraCrypt's CRC-32 pool algorithm — over the first megabyte of each file — before
+the key is derived, so the result is the same 64- or 128-byte pool VeraCrypt
+itself would build.
+
+**Volume layouts:** normal volumes, hidden volumes, the backup headers in the
+last 128 KiB of the host, and the legacy 512-byte header written before
+VeraCrypt 1.0b.
+
+**TrueCrypt mode** reads TrueCrypt 6.0 – 7.1a volumes: the `TRUE` magic,
+TrueCrypt's much lower iteration counts, and no PIM. Only SHA-512, Whirlpool and
+RIPEMD-160 are tried, as TrueCrypt never had the others. Volumes older than
+TrueCrypt 6.0 used LRW or CBC mode and cannot be read — VeraCrypt itself dropped
+support for them.
+
+**Not supported:** system-encrypted partitions, whose header lives outside the
+partition on sector 62 of the whole drive; and GOST89 volumes, which VeraCrypt
+has been unable to mount itself since 1.19.
+
 ### FreeBSD GELI — `geli`
 
 > Origin: GRUB
@@ -1055,8 +1104,9 @@ Metadata versions 1–7 are read. The metadata lives in the volume's **last**
 sector, and the UUID is not stored but derived —
 `hex(HMAC-SHA256(salt, "uuid"))`.
 
-**Not supported:** volumes using DES/3DES, Blowfish, CAST5 or Camellia. Those
-ciphers are not built in, so the scan fails cleanly rather than mounting garbage.
+**Not supported:** volumes using DES/3DES, Blowfish or CAST5, which are not
+built in; and GELI's Camellia (algorithm `0x15`), which is the 128-bit variant
+that the Camellia here does not key.
 
 ---
 

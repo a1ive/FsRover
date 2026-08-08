@@ -33,6 +33,7 @@
 #include <grub/partition.h>
 #include <grub/diskfilter.h>
 #include <grub/cryptodisk.h>
+#include <grub/veracrypt.h>
 
 #include "rover.h"
 
@@ -801,6 +802,29 @@ rover_crypto_unlock (const char *device, const void *key,
 
 	grub_errno = GRUB_ERR_NONE;
 	err = grub_cryptodisk_mount_by_name (device, key, (grub_size_t) key_len, out_dev, (grub_size_t) out_size);
+	if (err == GRUB_ERR_NONE)
+		grub_errno = GRUB_ERR_NONE;
+	return (int) err;
+}
+
+int
+rover_veracrypt_unlock (const char *device, const void *pass,
+			unsigned long long pass_len,
+			unsigned int pim, int prf, unsigned int flags,
+			char *out_dev, unsigned long long out_size)
+{
+	grub_err_t err;
+
+	COMPILE_TIME_ASSERT (ROVER_VC_PRF_STREEBOG == GRUB_VERACRYPT_PRF_STREEBOG);
+	COMPILE_TIME_ASSERT (ROVER_VC_TRUECRYPT == GRUB_VERACRYPT_TRUECRYPT);
+	COMPILE_TIME_ASSERT (ROVER_VC_HIDDEN == GRUB_VERACRYPT_HIDDEN);
+	COMPILE_TIME_ASSERT (ROVER_VC_BACKUP == GRUB_VERACRYPT_BACKUP);
+
+	grub_errno = GRUB_ERR_NONE;
+	err = grub_veracrypt_mount (device, pass, (grub_size_t) pass_len,
+				    (grub_uint32_t) pim, prf,
+				    (grub_uint32_t) flags,
+				    out_dev, (grub_size_t) out_size);
 	if (err == GRUB_ERR_NONE)
 		grub_errno = GRUB_ERR_NONE;
 	return (int) err;

@@ -1095,6 +1095,9 @@
     <ClCompile Include="grub-core\disk\bitlocker.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\disk\veracrypt.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\disk\geli.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
@@ -1203,6 +1206,9 @@
       <Filter>grub-core\lib</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\cryptodisk.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\veracrypt.h">
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\json\json.h">

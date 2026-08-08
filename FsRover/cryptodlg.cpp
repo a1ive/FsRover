@@ -16,13 +16,25 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Cryptodisk unlock dialog (LUKS/LUKS2): collect a passphrase or key
-   file and hand the bytes to grub via rover_crypto_unlock().  */
+/* Cryptodisk unlock dialogs.
+ *
+ * Two of them.  LUKS/LUKS2 volumes are detected while enumerating devices,
+ * so that dialog only has to collect a passphrase or key file and hand the
+ * bytes to rover_crypto_unlock().
+ *
+ * VeraCrypt/TrueCrypt volumes carry nothing in plaintext, so they cannot be
+ * detected at all: the second dialog is reached from the tree's context menu
+ * on any device and additionally collects everything the volume does not
+ * store -- the PIM, which key derivation function to try, whether to read
+ * the volume as TrueCrypt, and whether to look at the hidden volume or the
+ * backup headers.  Key files are folded into the passphrase here rather than
+ * in grub, following VeraCrypt's own algorithm.  */
 
 #include <windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -189,6 +201,355 @@ crypto_unlock_done (backend_result *res)
 	HWND dlg = g_crypto;
 	g_crypto = nullptr;
 	EndDialog (dlg, 1);
+}
+
+/* VeraCrypt / TrueCrypt */
+
+namespace
+{
+
+HWND g_vc;	/* unlock dialog, null when closed */
+UINT g_seq_vc;	/* in-flight veracrypt_unlock task */
+std::string g_vc_dev;
+std::string g_vc_newdev;
+std::vector<std::wstring> g_vc_keyfiles;
+
+/* The PRF combo, in the order VeraCrypt lists them; index 0 is "auto".  */
+const int VC_PRF_ORDER[] =
+{
+	BACKEND_VC_PRF_AUTO,
+	BACKEND_VC_PRF_SHA512,
+	BACKEND_VC_PRF_WHIRLPOOL,
+	BACKEND_VC_PRF_SHA256,
+	BACKEND_VC_PRF_RIPEMD160,
+	BACKEND_VC_PRF_STREEBOG,
+};
+const wchar_t *const VC_PRF_NAMES[] =
+{
+	nullptr,	/* filled from IDS_VC_PRF_AUTO */
+	L"SHA-512", L"Whirlpool", L"SHA-256", L"RIPEMD-160", L"Streebog",
+};
+
+/*
+ * Fold a key file into the pool:
+ * run a CRC-32 over the first megabyte and add the four bytes of
+ * the running register (not the finished checksum) into successive pool bytes,
+ * wrapping at the end of the pool.
+ */
+bool
+vc_apply_keyfile (const std::wstring &path, std::vector<unsigned char> &pool)
+{
+	static UINT32 tab[256];
+	static bool tab_ready;
+
+	if (!tab_ready)
+	{
+		for (UINT32 i = 0; i < 256; i++)
+		{
+			UINT32 c = i;
+			for (int k = 0; k < 8; k++)
+				c = (c & 1) ? (0xedb88320u ^ (c >> 1)) : (c >> 1);
+			tab[i] = c;
+		}
+		tab_ready = true;
+	}
+
+	HANDLE h = CreateFileW (path.c_str (), GENERIC_READ, FILE_SHARE_READ,
+				nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h == INVALID_HANDLE_VALUE)
+		return false;
+
+	UINT32 crc = 0xffffffffu;
+	size_t pos = 0, total = 0;
+	std::vector<char> buf (65536);
+	DWORD got = 0;
+	bool ok = true;
+
+	while (total < (1u << 20) && ReadFile (h, buf.data (), (DWORD) buf.size (), &got, nullptr) && got)
+	{
+		for (DWORD i = 0; i < got; i++)
+		{
+			crc = tab[(crc ^ (unsigned char) buf[i]) & 0xff] ^ (crc >> 8);
+			pool[pos++] += (unsigned char) (crc >> 24);
+			pool[pos++] += (unsigned char) (crc >> 16);
+			pool[pos++] += (unsigned char) (crc >> 8);
+			pool[pos++] += (unsigned char) crc;
+			if (pos >= pool.size ())
+				pos = 0;
+			if (++total >= (1u << 20))
+				break;
+		}
+	}
+	CloseHandle (h);
+
+	/* VeraCrypt rejects an empty key file rather than ignoring it.  */
+	if (total == 0)
+		ok = false;
+	return ok;
+}
+
+/*
+ * Build the secret the volume header is unlocked with.  Without key files
+ * that is the passphrase as typed; with them it is the 64 or 128 byte pool
+ * the passphrase was mixed into, which is what VeraCrypt hands to PBKDF2.
+ */
+std::vector<char>
+vc_gather_key (HWND dlg)
+{
+	wchar_t pass[256] = {};
+	GetDlgItemTextW (dlg, IDC_VC_PASS, pass, 256);
+	std::string u = narrow (pass);
+	SecureZeroMemory (pass, sizeof (pass));
+
+	/* VeraCrypt's own limit; longer passphrases cannot open any volume.  */
+	if (u.size () > 128)
+		u.resize (128);
+
+	if (g_vc_keyfiles.empty ())
+		return std::vector<char> (u.begin (), u.end ());
+
+	std::vector<unsigned char> pool (u.size () <= 64 ? 64 : 128, 0);
+	std::copy (u.begin (), u.end (), pool.begin ());
+	for (const std::wstring &kf : g_vc_keyfiles)
+		if (!vc_apply_keyfile (kf, pool))
+			return {};
+
+	return std::vector<char> (pool.begin (), pool.end ());
+}
+
+void
+vc_show_keyfiles (HWND dlg)
+{
+	std::wstring s;
+
+	for (const std::wstring &kf : g_vc_keyfiles)
+	{
+		size_t slash = kf.find_last_of (L'\\');
+		if (!s.empty ())
+			s += L"; ";
+		s += slash == std::wstring::npos ? kf : kf.substr (slash + 1);
+	}
+	SetDlgItemTextW (dlg, IDC_VC_KEYFILES, s.c_str ());
+	EnableWindow (GetDlgItem (dlg, IDC_VC_CLEARKEYS), !g_vc_keyfiles.empty ());
+}
+
+void
+vc_enable_inputs (HWND dlg, BOOL on)
+{
+	const int ids[] =
+	{
+		IDOK, IDC_VC_PASS, IDC_VC_BROWSE, IDC_VC_CLEARKEYS, IDC_VC_PIM,
+		IDC_VC_PRF, IDC_VC_TRUECRYPT, IDC_VC_HIDDEN, IDC_VC_BACKUP,
+	};
+
+	for (int id : ids)
+		EnableWindow (GetDlgItem (dlg, id), on);
+	if (on)
+		EnableWindow (GetDlgItem (dlg, IDC_VC_CLEARKEYS), !g_vc_keyfiles.empty ());
+	/* TrueCrypt volumes have no PIM, so that field follows the checkbox.  */
+	if (on && IsDlgButtonChecked (dlg, IDC_VC_TRUECRYPT) == BST_CHECKED)
+		EnableWindow (GetDlgItem (dlg, IDC_VC_PIM), FALSE);
+}
+
+/* Read the PIM box.
+   Returns false (and leaves *pim alone) if it holds
+   something that is not a number in range.  */
+bool
+vc_read_pim (HWND dlg, UINT *pim)
+{
+	wchar_t buf[16] = {};
+	GetDlgItemTextW (dlg, IDC_VC_PIM, buf, 16);
+	if (!buf[0])
+	{
+		*pim = 0;
+		return true;
+	}
+
+	unsigned long v = 0;
+	for (const wchar_t *p = buf; *p; p++)
+	{
+		if (*p < L'0' || *p > L'9')
+			return false;
+		v = v * 10 + (unsigned long) (*p - L'0');
+		if (v > 2147468ul)	/* VeraCrypt's MAX_PIM_VALUE */
+			return false;
+	}
+	*pim = (UINT) v;
+	return true;
+}
+
+INT_PTR CALLBACK
+vc_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+	{
+		wchar_t title[128];
+		std::wstring autos = res_str (IDS_VC_PRF_AUTO);
+
+		g_vc = dlg;
+		swprintf (title, 128, res_str (IDS_FMT_VC_TITLE).c_str (), widen (g_vc_dev).c_str ());
+		SetWindowTextW (dlg, title);
+		SetDlgItemTextW (dlg, IDC_VC_INFO, widen (g_vc_dev).c_str ());
+
+		for (size_t i = 0; i < ARRAYSIZE (VC_PRF_ORDER); i++)
+			SendDlgItemMessageW (dlg, IDC_VC_PRF, CB_ADDSTRING, 0,
+				(LPARAM) (i == 0 ? autos.c_str () : VC_PRF_NAMES[i]));
+		SendDlgItemMessageW (dlg, IDC_VC_PRF, CB_SETCURSEL, 0, 0);
+
+		vc_show_keyfiles (dlg);
+		SendDlgItemMessageW (dlg, IDC_VC_PROGRESS, PBM_SETRANGE32, 0, 100);
+		SetFocus (GetDlgItem (dlg, IDC_VC_PASS));
+		return FALSE;	/* focus was set explicitly */
+	}
+	case WM_COMMAND:
+		switch (LOWORD (wp))
+		{
+		case IDC_VC_TRUECRYPT:
+			/* TrueCrypt volumes predate the PIM.  */
+			EnableWindow (GetDlgItem (dlg, IDC_VC_PIM),
+				IsDlgButtonChecked (dlg, IDC_VC_TRUECRYPT) != BST_CHECKED);
+			return TRUE;
+		case IDC_VC_BROWSE:
+		{
+			/* Several key files may be combined, so allow a multi
+			   selection; the buffer holds the directory then the
+			   names, each NUL terminated.  */
+			std::vector<wchar_t> path (32768, 0);
+			OPENFILENAMEW ofn = { sizeof (ofn) };
+			std::wstring t = res_str (IDS_VC_KEYFILES);
+
+			ofn.hwndOwner = dlg;
+			ofn.lpstrFile = path.data ();
+			ofn.nMaxFile = (DWORD) path.size ();
+			ofn.lpstrTitle = t.c_str ();
+			ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST
+				| OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+			if (!GetOpenFileNameW (&ofn))
+				return TRUE;
+
+			const wchar_t *p = path.data ();
+			std::wstring dir = p;
+			p += dir.size () + 1;
+			if (!*p)
+			{
+				g_vc_keyfiles.push_back (dir);	/* single selection */
+			}
+			else
+			{
+				if (!dir.empty () && dir.back () != L'\\')
+					dir += L'\\';
+				for (; *p; p += wcslen (p) + 1)
+					g_vc_keyfiles.push_back (dir + p);
+			}
+			vc_show_keyfiles (dlg);
+			return TRUE;
+		}
+		case IDC_VC_CLEARKEYS:
+			g_vc_keyfiles.clear ();
+			vc_show_keyfiles (dlg);
+			return TRUE;
+		case IDOK:
+		{
+			backend_task task;
+			UINT pim = 0;
+
+			if (!vc_read_pim (dlg, &pim))
+			{
+				MessageBoxW (dlg, res_str (IDS_VC_BADPIM).c_str (),
+					nullptr, MB_ICONWARNING | MB_OK);
+				SetFocus (GetDlgItem (dlg, IDC_VC_PIM));
+				return TRUE;
+			}
+
+			task.key = vc_gather_key (dlg);
+			if (task.key.empty ())
+				return TRUE;	/* nothing entered; keep waiting */
+
+			task.type = backend_task_type::veracrypt_unlock;
+			task.path = g_vc_dev;
+			task.pim = pim;
+			task.prf = VC_PRF_ORDER[SendDlgItemMessageW (dlg, IDC_VC_PRF,
+								    CB_GETCURSEL, 0, 0)];
+			if (IsDlgButtonChecked (dlg, IDC_VC_TRUECRYPT) == BST_CHECKED)
+			{
+				task.vc_flags |= BACKEND_VC_TRUECRYPT;
+				task.pim = 0;
+			}
+			if (IsDlgButtonChecked (dlg, IDC_VC_HIDDEN) == BST_CHECKED)
+				task.vc_flags |= BACKEND_VC_HIDDEN;
+			if (IsDlgButtonChecked (dlg, IDC_VC_BACKUP) == BST_CHECKED)
+				task.vc_flags |= BACKEND_VC_BACKUP;
+
+			/* Trying every PRF runs five key derivations of up to
+			   half a million iterations each, so this can take tens
+			   of seconds; the progress bar is driven by the KDF.  */
+			vc_enable_inputs (dlg, FALSE);
+			SendDlgItemMessageW (dlg, IDC_VC_PROGRESS, PBM_SETPOS, 0, 0);
+			ShowWindow (GetDlgItem (dlg, IDC_VC_PROGRESS), SW_SHOW);
+			g_seq_vc = backend_post (std::move (task));
+			return TRUE;
+		}
+		case IDCANCEL:
+			g_vc = nullptr;
+			EndDialog (dlg, 0);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+} // namespace
+
+/* Called from WM_APP_TASK_DONE when a veracrypt_unlock finishes.  */
+void
+veracrypt_unlock_done (backend_result *res)
+{
+	if (!g_vc || res->seq != g_seq_vc)
+		return;
+	if (!res->error.empty ())
+	{
+		vc_enable_inputs (g_vc, TRUE);
+		ShowWindow (GetDlgItem (g_vc, IDC_VC_PROGRESS), SW_HIDE);
+		MessageBoxW (g_vc, res_str (IDS_VC_BADKEY).c_str (), nullptr, MB_ICONWARNING | MB_OK);
+		SetFocus (GetDlgItem (g_vc, IDC_VC_PASS));
+		return;
+	}
+	g_vc_newdev = res->path;
+	HWND dlg = g_vc;
+	g_vc = nullptr;
+	EndDialog (dlg, 1);
+}
+
+void
+prompt_unlock_veracrypt (const std::string &devname)
+{
+	g_vc_dev = devname;
+	g_vc_newdev.clear ();
+	g_vc_keyfiles.clear ();
+
+	INT_PTR r;
+	{
+		modal_scope hold;
+		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_VERACRYPT), g_main, vc_dlg_proc, 0);
+	}
+	if (r == 1 && !g_vc_newdev.empty ())
+	{
+		refresh ();
+		navigate ("(" + g_vc_newdev + ")/");
+	}
+}
+
+/* WM_APP_TASK_PROGRESS routing; true = the update was this dialog's.  */
+bool
+veracrypt_on_progress (backend_progress *p)
+{
+	if (!g_vc || p->seq != g_seq_vc)
+		return false;
+	SendDlgItemMessageW (g_vc, IDC_VC_PROGRESS, PBM_SETPOS, (WPARAM) p->percent, 0);
+	return true;
 }
 
 void

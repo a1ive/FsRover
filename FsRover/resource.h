@@ -70,6 +70,10 @@
 /* Markdown preview: one read-only RichEdit filling the client area.  */
 #define IDD_MD			110
 
+/* VeraCrypt/TrueCrypt unlock: passphrase plus the parameters such a
+   volume does not store (PIM, PRF, TrueCrypt mode, hidden/backup header).  */
+#define IDD_VERACRYPT		111
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303
@@ -93,6 +97,18 @@
 #define IDC_CRYPTO_KEYFILE	1204
 #define IDC_CRYPTO_BROWSE	1205
 #define IDC_CRYPTO_PROGRESS	1206
+
+#define IDC_VC_INFO		1221
+#define IDC_VC_PASS		1222
+#define IDC_VC_KEYFILES		1223
+#define IDC_VC_BROWSE		1224
+#define IDC_VC_CLEARKEYS	1225
+#define IDC_VC_PIM		1226
+#define IDC_VC_PRF		1227
+#define IDC_VC_TRUECRYPT	1228
+#define IDC_VC_HIDDEN		1229
+#define IDC_VC_BACKUP		1230
+#define IDC_VC_PROGRESS		1231
 
 #define IDC_ABOUT_ICON		1401
 #define IDC_ABOUT_NAME		1402
@@ -259,5 +275,11 @@
 #define IDS_CMDLINE_USAGE	135
 #define IDS_FMT_CMDLINE_ARG	136
 #define IDS_MENU_HELPDOC	137
+#define IDS_MENU_VERACRYPT	138
+#define IDS_FMT_VC_TITLE	139
+#define IDS_VC_BADKEY		140
+#define IDS_VC_KEYFILES		141
+#define IDS_VC_PRF_AUTO		142
+#define IDS_VC_BADPIM		143
 
 #endif /* ! FSROVER_RESOURCE_H */

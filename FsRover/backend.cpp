@@ -120,6 +120,17 @@ static_assert (BACKEND_DEV_OTHER == ROVER_DEV_OTHER
 	&& BACKEND_DEV_WINFILE == ROVER_DEV_WINFILE,
 	"BACKEND_DEV_* must match ROVER_DEV_*");
 
+static_assert (BACKEND_VC_PRF_AUTO == ROVER_VC_PRF_AUTO
+	&& BACKEND_VC_PRF_SHA512 == ROVER_VC_PRF_SHA512
+	&& BACKEND_VC_PRF_WHIRLPOOL == ROVER_VC_PRF_WHIRLPOOL
+	&& BACKEND_VC_PRF_SHA256 == ROVER_VC_PRF_SHA256
+	&& BACKEND_VC_PRF_RIPEMD160 == ROVER_VC_PRF_RIPEMD160
+	&& BACKEND_VC_PRF_STREEBOG == ROVER_VC_PRF_STREEBOG
+	&& BACKEND_VC_TRUECRYPT == ROVER_VC_TRUECRYPT
+	&& BACKEND_VC_HIDDEN == ROVER_VC_HIDDEN
+	&& BACKEND_VC_BACKUP == ROVER_VC_BACKUP,
+	"BACKEND_VC_* must match ROVER_VC_*");
+
 int
 enum_disk_hook (const struct rover_disk_info *info, void *data)
 {
@@ -976,6 +987,24 @@ run_crypto_unlock (const backend_task &task, backend_result *res)
 	rover_set_crypto_progress (nullptr, nullptr);
 }
 
+/* For VeraCrypt/TrueCrypt volumes, which additionally need the
+   parameters that are not stored in the volume.
+   Key files were already folded into task.key by the dialog.  */
+void
+run_veracrypt_unlock (const backend_task &task, backend_result *res)
+{
+	char dev[64] = { 0 };
+	crypto_prog_ctx ctx = { res->seq, 0 };
+
+	rover_set_crypto_progress (crypto_progress, &ctx);
+	if (rover_veracrypt_unlock (task.path.c_str (), task.key.data (), task.key.size (),
+		task.pim, task.prf, task.vc_flags, dev, sizeof (dev)))
+		set_error (res, "cannot unlock volume");
+	else
+		res->path = dev;
+	rover_set_crypto_progress (nullptr, nullptr);
+}
+
 backend_result *
 run_task (queued_task &item)
 {
@@ -1053,6 +1082,9 @@ run_task (queued_task &item)
 	case backend_task_type::read_chunk:
 		res->path = item.task.path;
 		run_read_chunk (item.task, res);
+		break;
+	case backend_task_type::veracrypt_unlock:
+		run_veracrypt_unlock (item.task, res);
 		break;
 	case backend_task_type::crypto_unlock:
 		run_crypto_unlock (item.task, res);

@@ -15,7 +15,7 @@ FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRU
 - Extract files or mount a filesystem as a Windows drive through the bundled Dokany runtime.
 - Open nested and compressed disk images as virtual disks.
 - Inspect files with built-in properties, hashes, text, image, and hex views.
-- Unlock LUKS1, LUKS2, BitLocker, and GELI volumes.
+- Unlock LUKS1, LUKS2, BitLocker, GELI, and VeraCrypt/TrueCrypt volumes.
 
 ## Download
 

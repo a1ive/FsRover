@@ -62,7 +62,21 @@ enum class backend_task_type
 	hash_file,	/* path + hash_mask -> result.hash[] */
 	read_chunk,	/* path + offset/length -> result.data, file_size */
 	crypto_unlock,	/* path (source device) + key -> result.path = "cryptoN" */
+	veracrypt_unlock,	/* like crypto_unlock, plus pim/prf/vc_flags */
 };
+
+/* veracrypt_unlock: key derivation function, matching ROVER_VC_PRF_*.  */
+constexpr int BACKEND_VC_PRF_AUTO = 0;
+constexpr int BACKEND_VC_PRF_SHA512 = 1;
+constexpr int BACKEND_VC_PRF_WHIRLPOOL = 2;
+constexpr int BACKEND_VC_PRF_SHA256 = 3;
+constexpr int BACKEND_VC_PRF_RIPEMD160 = 4;
+constexpr int BACKEND_VC_PRF_STREEBOG = 5;
+
+/* veracrypt_unlock: vc_flags bits, matching ROVER_VC_*.  */
+constexpr UINT BACKEND_VC_TRUECRYPT = 0x1;
+constexpr UINT BACKEND_VC_HIDDEN = 0x2;
+constexpr UINT BACKEND_VC_BACKUP = 0x4;
 
 /* hash_file algorithms; result.hash[] is indexed by the bit number.  */
 constexpr UINT BACKEND_HASH_MD5 = 1u << 0;
@@ -86,7 +100,12 @@ struct backend_task
 	UINT64 offset = 0;	/* read_chunk: file position */
 	UINT length = 0;	/* read_chunk: bytes wanted */
 	UINT64 limit = ~0ULL;	/* read_chunk, export_image: logical EOF */
-	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes */
+	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes;
+				   veracrypt_unlock: the passphrase with any key
+				   files already folded in */
+	UINT pim = 0;		/* veracrypt_unlock: 0 = the volume's default */
+	int prf = BACKEND_VC_PRF_AUTO;	/* veracrypt_unlock: BACKEND_VC_PRF_* */
+	UINT vc_flags = 0;	/* veracrypt_unlock: BACKEND_VC_* bits */
 	bool decompress = false;	/* loopback_add, winfile_add: decode gzip/xz/... transparently */
 	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
 };

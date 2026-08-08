@@ -128,6 +128,9 @@ void show_disk_props (const backend_diskent &d,
 void prompt_unlock (const std::string &devname, const std::string &uuid);
 void crypto_unlock_done (backend_result *res);
 bool crypto_on_progress (backend_progress *p);
+void prompt_unlock_veracrypt (const std::string &devname);
+void veracrypt_unlock_done (backend_result *res);
+bool veracrypt_on_progress (backend_progress *p);
 
 /* hexview.cpp */
 void show_hex (const std::string &path, const std::wstring &title = {}, UINT64 known_size = BACKEND_SIZE_UNKNOWN);

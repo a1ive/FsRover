@@ -341,6 +341,12 @@ BEGIN
 	IDS_CMDLINE_USAGE	"Usage: FsRover.exe [options]\n\n  -m, --minimize\t\tStart minimized.\n  -f, --file=FILE\t\tMount FILE as a virtual disk.\n  -d, --file-dec=FILE\t\tThe same, decompressing the image on the fly.\n  -h, --help\t\tShow this message."
 	IDS_FMT_CMDLINE_ARG	"Unexpected argument -- '%s'"
 	IDS_MENU_HELPDOC	"&Help Document"
+	IDS_MENU_VERACRYPT	"Unlock as VeraCrypt"
+	IDS_FMT_VC_TITLE	"Unlock VeraCrypt Volume - %s"
+	IDS_VC_BADKEY		"Could not unlock the volume. Check the passphrase, key files, PIM and the hash, and whether this is a TrueCrypt or hidden volume."
+	IDS_VC_KEYFILES		"Select key files"
+	IDS_VC_PRF_AUTO		"Try all (slow)"
+	IDS_VC_BADPIM		"The PIM must be a number between 0 and 2147468. Leave it empty for the default."
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -358,6 +364,32 @@ BEGIN
 	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
 	DEFPUSHBUTTON	"OK", IDOK, 128, 100, 50, 14
 	PUSHBUTTON	"Cancel", IDCANCEL, 183, 100, 50, 14
+END
+
+// VeraCrypt/TrueCrypt unlock.  Nothing about such a volume is plaintext, so
+// besides the secret this collects the parameters it does not store.
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Unlock VeraCrypt Volume"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"Passphrase:", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"Key files:", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 105, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"Add", IDC_VC_BROWSE, 178, 39, 27, 14
+	PUSHBUTTON	"Clear", IDC_VC_CLEARKEYS, 206, 39, 27, 14, WS_DISABLED
+	LTEXT		"PIM:", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Hash:", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"TrueCrypt volume", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"Hidden volume", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"Use backup header", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"Cancel", IDCANCEL, 183, 138, 50, 14
 END
 
 // File properties: libmagic description on top, hash calculator below
@@ -528,6 +560,12 @@ BEGIN
 	IDS_CMDLINE_USAGE	"用法：FsRover.exe [选项]\n\n  -m, --minimize\t\t最小化启动。\n  -f, --file=文件\t\t将“文件”挂载为虚拟磁盘。\n  -d, --file-dec=文件\t\t同上，并在读取时透明解压。\n  -h, --help\t\t显示本说明。"
 	IDS_FMT_CMDLINE_ARG	"多余的参数 -- “%s”"
 	IDS_MENU_HELPDOC	"帮助文档(&H)"
+	IDS_MENU_VERACRYPT	"作为 VeraCrypt 卷解锁"
+	IDS_FMT_VC_TITLE	"解锁 VeraCrypt 卷 - %s"
+	IDS_VC_BADKEY		"无法解锁该卷。请检查密码、密钥文件、PIM 与哈希算法，以及是否为 TrueCrypt 卷或隐藏卷。"
+	IDS_VC_KEYFILES		"选择密钥文件"
+	IDS_VC_PRF_AUTO		"全部尝试（慢）"
+	IDS_VC_BADPIM		"PIM 必须是 0 到 2147468 之间的数字。留空表示使用默认值。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -544,6 +582,30 @@ BEGIN
 	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
 	DEFPUSHBUTTON	"确定", IDOK, 128, 100, 50, 14
 	PUSHBUTTON	"取消", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "解锁 VeraCrypt 卷"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"密码：", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"密钥文件：", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 105, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"添加", IDC_VC_BROWSE, 178, 39, 27, 14
+	PUSHBUTTON	"清除", IDC_VC_CLEARKEYS, 206, 39, 27, 14, WS_DISABLED
+	LTEXT		"PIM：", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"哈希：", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"TrueCrypt 卷", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"隐藏卷", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"使用备份卷头", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"确定", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"取消", IDCANCEL, 183, 138, 50, 14
 END
 
 IDD_PROPS DIALOGEX 0, 0, 227, 196
@@ -712,6 +774,12 @@ BEGIN
 	IDS_CMDLINE_USAGE	"用法：FsRover.exe [選項]\n\n  -m, --minimize\t\t最小化啟動。\n  -f, --file=檔案\t\t將「檔案」掛載為虛擬磁碟。\n  -d, --file-dec=檔案\t\t同上，並在讀取時透明解壓縮。\n  -h, --help\t\t顯示本說明。"
 	IDS_FMT_CMDLINE_ARG	"多餘的參數 -- 「%s」"
 	IDS_MENU_HELPDOC	"說明文件(&H)"
+	IDS_MENU_VERACRYPT	"以 VeraCrypt 磁碟區解鎖"
+	IDS_FMT_VC_TITLE	"解鎖 VeraCrypt 磁碟區 - %s"
+	IDS_VC_BADKEY		"無法解鎖此磁碟區。請檢查密碼、金鑰檔案、PIM 與雜湊演算法，以及是否為 TrueCrypt 磁碟區或隱藏磁碟區。"
+	IDS_VC_KEYFILES		"選擇金鑰檔案"
+	IDS_VC_PRF_AUTO		"全部嘗試（慢）"
+	IDS_VC_BADPIM		"PIM 必須是 0 到 2147468 之間的數字。留空表示使用預設值。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -728,6 +796,30 @@ BEGIN
 	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
 	DEFPUSHBUTTON	"確定", IDOK, 128, 100, 50, 14
 	PUSHBUTTON	"取消", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "解鎖 VeraCrypt 磁碟區"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"密碼：", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"金鑰檔案：", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 105, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"新增", IDC_VC_BROWSE, 178, 39, 27, 14
+	PUSHBUTTON	"清除", IDC_VC_CLEARKEYS, 206, 39, 27, 14, WS_DISABLED
+	LTEXT		"PIM：", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"雜湊：", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"TrueCrypt 磁碟區", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"隱藏磁碟區", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"使用備份磁碟區標頭", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"確定", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"取消", IDCANCEL, 183, 138, 50, 14
 END
 
 IDD_PROPS DIALOGEX 0, 0, 227, 196
@@ -896,6 +988,12 @@ BEGIN
 	IDS_CMDLINE_USAGE	"使い方: FsRover.exe [オプション]\n\n  -m, --minimize\t\t最小化した状態で起動します。\n  -f, --file=ファイル\t\t指定したファイルを仮想ディスクとしてマウントします。\n  -d, --file-dec=ファイル\t\t同上。イメージを透過的に展開します。\n  -h, --help\t\tこのメッセージを表示します。"
 	IDS_FMT_CMDLINE_ARG	"不明な引数です -- 「%s」"
 	IDS_MENU_HELPDOC	"ヘルプ ドキュメント(&H)"
+	IDS_MENU_VERACRYPT	"VeraCrypt ボリュームとしてロック解除"
+	IDS_FMT_VC_TITLE	"VeraCrypt ボリュームのロック解除 - %s"
+	IDS_VC_BADKEY		"ボリュームのロックを解除できませんでした。パスフレーズ、キーファイル、PIM、ハッシュ、および TrueCrypt ボリュームか隠しボリュームかを確認してください。"
+	IDS_VC_KEYFILES		"キーファイルを選択"
+	IDS_VC_PRF_AUTO		"すべて試す (低速)"
+	IDS_VC_BADPIM		"PIM は 0 から 2147468 の数値で指定してください。空欄は既定値です。"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -912,6 +1010,30 @@ BEGIN
 	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
 	DEFPUSHBUTTON	"OK", IDOK, 128, 100, 50, 14
 	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "VeraCrypt ボリュームのロック解除"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"パスフレーズ：", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"キーファイル：", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 105, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"追加", IDC_VC_BROWSE, 178, 39, 27, 14
+	PUSHBUTTON	"クリア", IDC_VC_CLEARKEYS, 206, 39, 27, 14, WS_DISABLED
+	LTEXT		"PIM：", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"ハッシュ：", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"TrueCrypt ボリューム", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"隠しボリューム", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"バックアップヘッダーを使用", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 138, 50, 14
 END
 
 IDD_PROPS DIALOGEX 0, 0, 227, 196

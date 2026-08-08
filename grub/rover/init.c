@@ -61,11 +61,12 @@
 	mod (mdraid1x)	\
 	mod (raid5rec)	\
 	mod (raid6rec)	\
-	/* encrypted volumes (LUKS1/LUKS2/BitLocker/GELI) + procfs for luks_script */	\
+	/* encrypted volumes (LUKS/BitLocker/VeraCrypt/GELI) + procfs for luks_script */	\
 	mod (cryptodisk)	\
 	mod (luks)	\
 	mod (luks2)	\
 	mod (bitlocker)	\
+	mod (veracrypt)	\
 	mod (geli)	\
 	mod (procfs)	\
 	/* partition maps */	\
