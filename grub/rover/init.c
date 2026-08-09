@@ -26,20 +26,28 @@
 
 #include "rover.h"
 
-extern gcry_md_spec_t _gcry_digest_spec_crc32;
-extern gcry_md_spec_t _gcry_digest_spec_md5;
-extern gcry_md_spec_t _gcry_digest_spec_sha1;
-extern gcry_md_spec_t _gcry_digest_spec_sha256;
-extern gcry_md_spec_t _gcry_digest_spec_sha512;
-extern gcry_md_spec_t _gcry_digest_spec_sha384;
-extern gcry_cipher_spec_t _gcry_cipher_spec_aes;
-extern gcry_cipher_spec_t _gcry_cipher_spec_aes192;
-extern gcry_cipher_spec_t _gcry_cipher_spec_aes256;
-
 #define ROVER_MODULE_LIST(mod)	\
 	/* message digests (io modules look them up at open time) */	\
 	mod (adler32)	\
 	mod (crc64)	\
+	/* libgcrypt */	\
+	mod (gcry_blake2)	\
+	mod (gcry_blowfish)	\
+	mod (gcry_camellia)	\
+	mod (gcry_cast5)	\
+	mod (gcry_crc)	\
+	mod (gcry_des)	\
+	mod (gcry_kuznyechik)	\
+	mod (gcry_md5)	\
+	mod (gcry_rijndael)	\
+	mod (gcry_rmd160)	\
+	mod (gcry_serpent)	\
+	mod (gcry_sha1)	\
+	mod (gcry_sha256)	\
+	mod (gcry_sha512)	\
+	mod (gcry_stribog)	\
+	mod (gcry_twofish)	\
+	mod (gcry_whirlpool)	\
 	/* disks: physical (windisk) is optional and rover_init calls it */	\
 	/* itself; here come the rest, then volume managers / RAID */	\
 	mod (loopdisk)	\
@@ -183,18 +191,6 @@ ROVER_MOD_DECLARE (windisk)
 void
 rover_init (int flags)
 {
-	grub_md_register (&_gcry_digest_spec_crc32);
-	grub_md_register (&_gcry_digest_spec_md5);
-	grub_md_register (&_gcry_digest_spec_sha1);
-	grub_md_register (&_gcry_digest_spec_sha256);
-	grub_md_register (&_gcry_digest_spec_sha512);
-	grub_md_register (&_gcry_digest_spec_sha384);
-
-	/* Block ciphers for cryptodisk (LUKS is almost always AES).  */
-	grub_cipher_register (&_gcry_cipher_spec_aes);
-	grub_cipher_register (&_gcry_cipher_spec_aes192);
-	grub_cipher_register (&_gcry_cipher_spec_aes256);
-
 	if (!(flags & ROVER_INIT_NO_WINDISK))
 		grub_windisk_init ();
 	ROVER_MODULE_LIST (ROVER_MOD_INIT)
@@ -205,14 +201,4 @@ rover_fini (void)
 {
 	grub_windisk_fini ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)
-
-	grub_cipher_unregister (&_gcry_cipher_spec_aes256);
-	grub_cipher_unregister (&_gcry_cipher_spec_aes192);
-	grub_cipher_unregister (&_gcry_cipher_spec_aes);
-	grub_md_unregister (&_gcry_digest_spec_sha384);
-	grub_md_unregister (&_gcry_digest_spec_sha512);
-	grub_md_unregister (&_gcry_digest_spec_sha256);
-	grub_md_unregister (&_gcry_digest_spec_sha1);
-	grub_md_unregister (&_gcry_digest_spec_md5);
-	grub_md_unregister (&_gcry_digest_spec_crc32);
 }

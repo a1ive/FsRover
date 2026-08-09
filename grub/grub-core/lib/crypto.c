@@ -24,6 +24,7 @@
 #include <grub/dl.h>
 #include <grub/i18n.h>
 #include <grub/env.h>
+#include "../lib/libgcrypt/gcry_wrap.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -337,9 +338,8 @@ grub_crypto_cipher_set_key (grub_crypto_cipher_handle_t cipher,
 			    const unsigned char *key,
 			    unsigned keylen)
 {
-  /* TODO: Fix this. It's ugly as hell.  */
-  void *bulk_ops[100];
-  return cipher->cipher->setkey (cipher->ctx, key, keylen, (void *) bulk_ops);
+  cipher_bulk_ops_t bulk_ops = {0};
+  return cipher->cipher->setkey (cipher->ctx, key, keylen, &bulk_ops);
 }
 
 gcry_err_code_t

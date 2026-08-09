@@ -1,4 +1,35 @@
-/* blake2.c - BLAKE2b hash function
+/*
+ *  Rover -- Filesystem browser for Windows
+ *  Copyright (C) 2026  A1ive
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <grub/types.h>
+#include <grub/crypto.h>
+#include <grub/misc.h>
+#include <grub/dl.h>
+#include "gcry_wrap.h"
+
+GRUB_MOD_LICENSE ("GPLv3+");
+
+#define U64_C(c) (c ## ULL)
+#define gcry_assert(x) ((void) 0)
+#define memset grub_memset
+#define memcpy grub_memcpy
+
+/* blake2.c - BLAKE2b and BLAKE2s hash functions (RFC 7693)
  * Copyright (C) 2017  Jussi Kivilinna <jussi.kivilinna@iki.fi>
  *
  * This file is part of Libgcrypt.
@@ -17,27 +48,13 @@
  * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * BLAKE2b for Rover, reduced to the generic (no-AVX) blake2b core plus
- * the variable-length hash H' (blake2b_vl_hash) that argon2 needs.  The
- * blake2b algorithm code below is spliced verbatim from grub
- * cipher/blake2.c; only the libgcrypt internal-header dependencies are
- * shimmed here (gcry_wrap.h supplies buf_get/put_le64 and u64/byte).
+/* The code is based on public-domain/CC0 BLAKE2 reference implementation
+ * by Samual Neves, at https://github.com/BLAKE2/BLAKE2/tree/master/ref
+ * Copyright 2012, Samuel Neves <sneves@dei.uc.pt>
  */
 
-#include <grub/types.h>
-#include <grub/crypto.h>
-#include <grub/misc.h>
-#include "gcry_wrap.h"
-
-#define U64_C(c) (c ## ULL)
+#define ASM_FUNC_ABI
 #define ASM_EXTRA_STACK 0
-#define gcry_assert(x) ((void) 0)
-#define memset grub_memset
-#define buf_cpy(d, s, n) grub_memcpy ((d), (s), (n))
-#define wipememory(ptr, len) grub_memset ((ptr), 0, (len))
-
-/* ==== begin blake2b core spliced from libgcrypt cipher/blake2.c ==== */
 
 #define BLAKE2B_BLOCKBYTES 128
 #define BLAKE2B_OUTBYTES 64
@@ -76,13 +93,38 @@ typedef struct BLAKE2B_CONTEXT_S
   byte buf[BLAKE2B_BLOCKBYTES];
   size_t buflen;
   size_t outlen;
-#ifdef USE_AVX2
-  unsigned int use_avx2:1;
-#endif
-#ifdef USE_AVX512
-  unsigned int use_avx512:1;
-#endif
 } BLAKE2B_CONTEXT;
+
+typedef struct
+{
+  u32 h[8];
+  u32 t[2];
+  u32 f[2];
+} BLAKE2S_STATE;
+
+struct blake2s_param_s
+{
+  byte digest_length;
+  byte key_length;
+  byte fanout;
+  byte depth;
+  byte leaf_length[4];
+  byte node_offset[4];
+  byte xof_length[2];
+  byte node_depth;
+  byte inner_length;
+  /* byte reserved[0]; */
+  byte salt[8];
+  byte personal[8];
+};
+
+typedef struct BLAKE2S_CONTEXT_S
+{
+  BLAKE2S_STATE state;
+  byte buf[BLAKE2S_BLOCKBYTES];
+  size_t buflen;
+  size_t outlen;
+} BLAKE2S_CONTEXT;
 
 typedef unsigned int (*blake2_transform_t)(void *S, const void *inblk,
 					   size_t nblks);
@@ -94,6 +136,12 @@ static const u64 blake2b_IV[8] =
   U64_C(0x3c6ef372fe94f82b), U64_C(0xa54ff53a5f1d36f1),
   U64_C(0x510e527fade682d1), U64_C(0x9b05688c2b3e6c1f),
   U64_C(0x1f83d9abfb41bd6b), U64_C(0x5be0cd19137e2179)
+};
+
+static const u32 blake2s_IV[8] =
+{
+  0x6A09E667UL, 0xBB67AE85UL, 0x3C6EF372UL, 0xA54FF53AUL,
+  0x510E527FUL, 0x9B05688CUL, 0x1F83D9ABUL, 0x5BE0CD19UL
 };
 
 static byte zero_block[BLAKE2B_BLOCKBYTES] = { 0, };
@@ -292,14 +340,6 @@ static unsigned int blake2b_transform(void *ctx, const void *inblks,
 
   if (0)
     {}
-#ifdef USE_AVX512
-  else if (c->use_avx512)
-    nburn = _gcry_blake2b_transform_amd64_avx512(&c->state, inblks, nblks);
-#endif
-#ifdef USE_AVX2
-  else if (c->use_avx2)
-    nburn = _gcry_blake2b_transform_amd64_avx2(&c->state, inblks, nblks);
-#endif
   else
     nburn = blake2b_transform_generic(&c->state, inblks, nblks);
 
@@ -407,13 +447,6 @@ static gcry_err_code_t blake2b_init_ctx(void *ctx, unsigned int flags,
 
   memset (c, 0, sizeof (*c));
 
-#ifdef USE_AVX2
-  c->use_avx2 = !!(features & HWF_INTEL_AVX2);
-#endif
-#ifdef USE_AVX512
-  c->use_avx512 = !!(features & HWF_INTEL_AVX512);
-#endif
-
   c->outlen = dbits / 8;
   c->buflen = 0;
   return blake2b_init(c, key, keylen);
@@ -478,22 +511,327 @@ blake2b_vl_hash (const void *in, size_t inlen, size_t outputlen, void *output)
   return 0;
 }
 
-/* ==== end blake2b core ==== */
-
-/*
- * BLAKE2b-512 over an iov vector.  libgcrypt exposes this through
- * _gcry_digest_spec_blake2b_512.hash_buffers, but grub declares that
- * spec field as a plain void*, so argon2 (gcry_kdf.c) calls this typed
- * helper directly instead.
- */
-void
-grub_blake2b_512_hash_buffers (void *out, const gcry_buffer_t *iov, int iovcnt)
+static inline void blake2s_set_lastblock(BLAKE2S_STATE *S)
 {
-  BLAKE2B_CONTEXT hd;
+  S->f[0] = 0xFFFFFFFFUL;
+}
 
-  blake2b_init_ctx (&hd, 0, NULL, 0, 512);
-  for (; iovcnt > 0; iov++, iovcnt--)
-    blake2b_write (&hd, (const char *) iov[0].data + iov[0].off, iov[0].len);
-  blake2b_final (&hd);
-  grub_memcpy (out, blake2b_read (&hd), 512 / 8);
+static inline int blake2s_is_lastblock(BLAKE2S_STATE *S)
+{
+  return S->f[0] != 0;
+}
+
+static inline void blake2s_increment_counter(BLAKE2S_STATE *S, const int inc)
+{
+  S->t[0] += (u32)inc;
+  S->t[1] += (S->t[0] < (u32)inc) - (inc < 0);
+}
+
+static unsigned int blake2s_transform_generic(BLAKE2S_STATE *S,
+                                              const void *inblks,
+                                              size_t nblks)
+{
+  static const byte blake2s_sigma[10][16] =
+  {
+    {  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },
+    { 14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3 },
+    { 11,  8, 12,  0,  5,  2, 15, 13, 10, 14,  3,  6,  7,  1,  9,  4 },
+    {  7,  9,  3,  1, 13, 12, 11, 14,  2,  6,  5, 10,  4,  0, 15,  8 },
+    {  9,  0,  5,  7,  2,  4, 10, 15, 14,  1, 11, 12,  6,  8,  3, 13 },
+    {  2, 12,  6, 10,  0, 11,  8,  3,  4, 13,  7,  5, 15, 14,  1,  9 },
+    { 12,  5,  1, 15, 14, 13,  4, 10,  0,  7,  6,  3,  9,  2,  8, 11 },
+    { 13, 11,  7, 14, 12,  1,  3,  9,  5,  0, 15,  4,  8,  6,  2, 10 },
+    {  6, 15, 14,  9, 11,  3,  0,  8, 12,  2, 13,  7,  1,  4, 10,  5 },
+    { 10,  2,  8,  4,  7,  6,  1,  5, 15, 11,  9, 14,  3, 12, 13 , 0 },
+  };
+  unsigned int burn = 0;
+  const byte* in = inblks;
+  u32 m[16];
+  u32 v[16];
+
+  while (nblks--)
+    {
+      /* Increment counter */
+      blake2s_increment_counter (S, BLAKE2S_BLOCKBYTES);
+
+      /* Compress */
+      m[0] = buf_get_le32 (in + 0 * sizeof(m[0]));
+      m[1] = buf_get_le32 (in + 1 * sizeof(m[0]));
+      m[2] = buf_get_le32 (in + 2 * sizeof(m[0]));
+      m[3] = buf_get_le32 (in + 3 * sizeof(m[0]));
+      m[4] = buf_get_le32 (in + 4 * sizeof(m[0]));
+      m[5] = buf_get_le32 (in + 5 * sizeof(m[0]));
+      m[6] = buf_get_le32 (in + 6 * sizeof(m[0]));
+      m[7] = buf_get_le32 (in + 7 * sizeof(m[0]));
+      m[8] = buf_get_le32 (in + 8 * sizeof(m[0]));
+      m[9] = buf_get_le32 (in + 9 * sizeof(m[0]));
+      m[10] = buf_get_le32 (in + 10 * sizeof(m[0]));
+      m[11] = buf_get_le32 (in + 11 * sizeof(m[0]));
+      m[12] = buf_get_le32 (in + 12 * sizeof(m[0]));
+      m[13] = buf_get_le32 (in + 13 * sizeof(m[0]));
+      m[14] = buf_get_le32 (in + 14 * sizeof(m[0]));
+      m[15] = buf_get_le32 (in + 15 * sizeof(m[0]));
+
+      v[ 0] = S->h[0];
+      v[ 1] = S->h[1];
+      v[ 2] = S->h[2];
+      v[ 3] = S->h[3];
+      v[ 4] = S->h[4];
+      v[ 5] = S->h[5];
+      v[ 6] = S->h[6];
+      v[ 7] = S->h[7];
+      v[ 8] = blake2s_IV[0];
+      v[ 9] = blake2s_IV[1];
+      v[10] = blake2s_IV[2];
+      v[11] = blake2s_IV[3];
+      v[12] = S->t[0] ^ blake2s_IV[4];
+      v[13] = S->t[1] ^ blake2s_IV[5];
+      v[14] = S->f[0] ^ blake2s_IV[6];
+      v[15] = S->f[1] ^ blake2s_IV[7];
+
+#define G(r,i,a,b,c,d)                      \
+  do {                                      \
+    a = a + b + m[blake2s_sigma[r][2*i+0]]; \
+    d = ror(d ^ a, 16);                     \
+    c = c + d;                              \
+    b = ror(b ^ c, 12);                     \
+    a = a + b + m[blake2s_sigma[r][2*i+1]]; \
+    d = ror(d ^ a, 8);                      \
+    c = c + d;                              \
+    b = ror(b ^ c, 7);                      \
+  } while(0)
+
+#define ROUND(r)                    \
+  do {                              \
+    G(r,0,v[ 0],v[ 4],v[ 8],v[12]); \
+    G(r,1,v[ 1],v[ 5],v[ 9],v[13]); \
+    G(r,2,v[ 2],v[ 6],v[10],v[14]); \
+    G(r,3,v[ 3],v[ 7],v[11],v[15]); \
+    G(r,4,v[ 0],v[ 5],v[10],v[15]); \
+    G(r,5,v[ 1],v[ 6],v[11],v[12]); \
+    G(r,6,v[ 2],v[ 7],v[ 8],v[13]); \
+    G(r,7,v[ 3],v[ 4],v[ 9],v[14]); \
+  } while(0)
+
+      ROUND(0);
+      ROUND(1);
+      ROUND(2);
+      ROUND(3);
+      ROUND(4);
+      ROUND(5);
+      ROUND(6);
+      ROUND(7);
+      ROUND(8);
+      ROUND(9);
+
+#undef G
+#undef ROUND
+
+      S->h[0] = S->h[0] ^ v[0] ^ v[0 + 8];
+      S->h[1] = S->h[1] ^ v[1] ^ v[1 + 8];
+      S->h[2] = S->h[2] ^ v[2] ^ v[2 + 8];
+      S->h[3] = S->h[3] ^ v[3] ^ v[3 + 8];
+      S->h[4] = S->h[4] ^ v[4] ^ v[4 + 8];
+      S->h[5] = S->h[5] ^ v[5] ^ v[5 + 8];
+      S->h[6] = S->h[6] ^ v[6] ^ v[6 + 8];
+      S->h[7] = S->h[7] ^ v[7] ^ v[7 + 8];
+
+      in += BLAKE2S_BLOCKBYTES;
+    }
+
+  return burn;
+}
+
+static unsigned int blake2s_transform(void *ctx, const void *inblks,
+                                      size_t nblks)
+{
+  BLAKE2S_CONTEXT *c = ctx;
+  unsigned int nburn;
+
+  if (0)
+    { }
+  else
+    nburn = blake2s_transform_generic(&c->state, inblks, nblks);
+
+  if (nburn)
+    nburn += ASM_EXTRA_STACK;
+
+  return nburn;
+}
+
+static void blake2s_final(void *ctx)
+{
+  BLAKE2S_CONTEXT *c = ctx;
+  BLAKE2S_STATE *S = &c->state;
+  unsigned int burn;
+  size_t i;
+
+  gcry_assert (sizeof(c->buf) >= c->outlen);
+  if (blake2s_is_lastblock(S))
+    return;
+
+  if (c->buflen < BLAKE2S_BLOCKBYTES)
+    memset (c->buf + c->buflen, 0, BLAKE2S_BLOCKBYTES - c->buflen); /* Padding */
+  blake2s_set_lastblock (S);
+  blake2s_increment_counter (S, (int)c->buflen - BLAKE2S_BLOCKBYTES);
+  burn = blake2s_transform (ctx, c->buf, 1);
+
+  /* Output full hash to buffer */
+  for (i = 0; i < 8; ++i)
+    buf_put_le32 (c->buf + sizeof(S->h[i]) * i, S->h[i]);
+
+  /* Zero out extra buffer bytes. */
+  if (c->outlen < sizeof(c->buf))
+    memset (c->buf + c->outlen, 0, sizeof(c->buf) - c->outlen);
+
+  if (burn)
+    _gcry_burn_stack (burn);
+}
+
+static byte *blake2s_read(void *ctx)
+{
+  BLAKE2S_CONTEXT *c = ctx;
+  return c->buf;
+}
+
+static void blake2s_write(void *ctx, const void *inbuf, size_t inlen)
+{
+  BLAKE2S_CONTEXT *c = ctx;
+  BLAKE2S_STATE *S = &c->state;
+  blake2_write(S, inbuf, inlen, c->buf, &c->buflen, BLAKE2S_BLOCKBYTES,
+	       blake2s_transform);
+}
+
+static inline void blake2s_init_param(BLAKE2S_STATE *S,
+				      const struct blake2s_param_s *P)
+{
+  const byte *p = (const byte *)P;
+  size_t i;
+
+  /* init2 xors IV with input parameter block */
+
+  /* IV XOR ParamBlock */
+  for (i = 0; i < 8; ++i)
+    S->h[i] ^= blake2s_IV[i] ^ buf_get_le32(&p[i * 4]);
+}
+
+static inline gcry_err_code_t blake2s_init(BLAKE2S_CONTEXT *ctx,
+					   const byte *key, size_t keylen)
+{
+  struct blake2s_param_s P[1] = { { 0, } };
+  BLAKE2S_STATE *S = &ctx->state;
+
+  if (!ctx->outlen || ctx->outlen > BLAKE2S_OUTBYTES)
+    return GPG_ERR_INV_ARG;
+  if (sizeof(P[0]) != sizeof(u32) * 8)
+    return GPG_ERR_INTERNAL;
+  if (keylen && (!key || keylen > BLAKE2S_KEYBYTES))
+    return GPG_ERR_INV_KEYLEN;
+
+  P->digest_length = ctx->outlen;
+  P->key_length = keylen;
+  P->fanout = 1;
+  P->depth = 1;
+
+  blake2s_init_param (S, P);
+  wipememory (P, sizeof(P));
+
+  if (key)
+    {
+      blake2s_write (ctx, key, keylen);
+      blake2s_write (ctx, zero_block, BLAKE2S_BLOCKBYTES - keylen);
+    }
+
+  return 0;
+}
+
+static gcry_err_code_t blake2s_init_ctx(void *ctx, unsigned int flags,
+					const byte *key, size_t keylen,
+					unsigned int dbits)
+{
+  BLAKE2S_CONTEXT *c = ctx;
+  unsigned int features = _gcry_get_hw_features ();
+
+  (void)features;
+  (void)flags;
+
+  memset (c, 0, sizeof (*c));
+
+  c->outlen = dbits / 8;
+  c->buflen = 0;
+  return blake2s_init(c, key, keylen);
+}
+
+#define DEFINE_BLAKE2_VARIANT(bs, BS, dbits, oid_branch) \
+  static void blake2##bs##_##dbits##_init(void *ctx, unsigned int flags) \
+  { \
+    int err = blake2##bs##_init_ctx (ctx, flags, NULL, 0, dbits); \
+    gcry_assert (err == 0); \
+  } \
+  static void \
+  _gcry_blake2##bs##_##dbits##_hash_buffers(void *outbuf, size_t nbytes, \
+        const gcry_buffer_t *iov, int iovcnt) \
+  { \
+    BLAKE2##BS##_CONTEXT hd; \
+    (void)nbytes; \
+    blake2##bs##_##dbits##_init (&hd, 0); \
+    for (;iovcnt > 0; iov++, iovcnt--) \
+      blake2##bs##_write (&hd, (const char*)iov[0].data + iov[0].off, \
+                          iov[0].len); \
+    blake2##bs##_final (&hd); \
+    memcpy (outbuf, blake2##bs##_read (&hd), dbits / 8); \
+  } \
+  static const byte blake2##bs##_##dbits##_asn[] = { 0x30 }; \
+  static const gcry_md_oid_spec_t oid_spec_blake2##bs##_##dbits[] = \
+    { \
+      { " 1.3.6.1.4.1.1722.12.2." oid_branch }, \
+      { NULL } \
+    }; \
+gcry_md_spec_t _gcry_digest_spec_blake2##bs##_##dbits = \
+    { \
+      GCRY_MD_BLAKE2##BS##_##dbits, {0, 0}, \
+      "BLAKE2" #BS "_" #dbits, blake2##bs##_##dbits##_asn, \
+      DIM (blake2##bs##_##dbits##_asn), oid_spec_blake2##bs##_##dbits, \
+      dbits / 8, blake2##bs##_##dbits##_init, blake2##bs##_write, \
+      blake2##bs##_final, blake2##bs##_read, NULL, \
+      _gcry_blake2##bs##_##dbits##_hash_buffers, \
+      sizeof (BLAKE2##BS##_CONTEXT) \
+    , \
+    GRUB_UTIL_MODNAME("gcry_blake2") \
+    .blocksize = GRUB_BLAKE2 ## BS ## _BLOCK_SIZE \
+    };
+
+DEFINE_BLAKE2_VARIANT(b, B, 512, "1.16")
+DEFINE_BLAKE2_VARIANT(b, B, 384, "1.12")
+DEFINE_BLAKE2_VARIANT(b, B, 256, "1.8")
+DEFINE_BLAKE2_VARIANT(b, B, 160, "1.5")
+
+DEFINE_BLAKE2_VARIANT(s, S, 256, "2.8")
+DEFINE_BLAKE2_VARIANT(s, S, 224, "2.7")
+DEFINE_BLAKE2_VARIANT(s, S, 160, "2.5")
+DEFINE_BLAKE2_VARIANT(s, S, 128, "2.4")
+
+
+GRUB_MOD_INIT(gcry_blake2)
+{
+  grub_md_register (&_gcry_digest_spec_blake2b_512);
+  grub_md_register (&_gcry_digest_spec_blake2b_384);
+  grub_md_register (&_gcry_digest_spec_blake2b_256);
+  grub_md_register (&_gcry_digest_spec_blake2b_160);
+  grub_md_register (&_gcry_digest_spec_blake2s_256);
+  grub_md_register (&_gcry_digest_spec_blake2s_224);
+  grub_md_register (&_gcry_digest_spec_blake2s_160);
+  grub_md_register (&_gcry_digest_spec_blake2s_128);
+}
+
+GRUB_MOD_FINI(gcry_blake2)
+{
+  grub_md_unregister (&_gcry_digest_spec_blake2b_512);
+  grub_md_unregister (&_gcry_digest_spec_blake2b_384);
+  grub_md_unregister (&_gcry_digest_spec_blake2b_256);
+  grub_md_unregister (&_gcry_digest_spec_blake2b_160);
+  grub_md_unregister (&_gcry_digest_spec_blake2s_256);
+  grub_md_unregister (&_gcry_digest_spec_blake2s_224);
+  grub_md_unregister (&_gcry_digest_spec_blake2s_160);
+  grub_md_unregister (&_gcry_digest_spec_blake2s_128);
 }

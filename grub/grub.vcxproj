@@ -157,6 +157,11 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="grub-core\lib\libgcrypt\const-time.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_blowfish.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_cast5.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_des.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\hash-common.c" />
     <ClCompile Include="rover\init.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
@@ -440,6 +445,13 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha512.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_blake2.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_kdf.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_serpent.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_twofish.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_rmd160.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_whirlpool.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_stribog.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_camellia.c" />
+    <ClCompile Include="grub-core\lib\libgcrypt\gcry_kuznyechik.c" />
     <ClCompile Include="grub-core\disk\cryptodisk.c" />
     <ClCompile Include="grub-core\disk\luks.c" />
     <ClCompile Include="grub-core\disk\luks2.c">
@@ -556,6 +568,8 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha256.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="grub-core\lib\libgcrypt\const-time.h" />
+    <ClInclude Include="grub-core\lib\libgcrypt\hash-common.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\rover.h" />
     <ClInclude Include="include\grub\cryptodisk.h" />

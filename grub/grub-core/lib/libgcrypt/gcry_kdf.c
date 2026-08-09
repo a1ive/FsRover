@@ -1,6 +1,44 @@
+/*
+ *  Rover -- Filesystem browser for Windows
+ *  Copyright (C) 2026  A1ive
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <stddef.h>	/* offsetof */
+
+#include <grub/types.h>
+#include <grub/crypto.h>
+#include <grub/misc.h>
+#include <grub/mm.h>
+#include <grub/dl.h>
+#include "gcry_wrap.h"
+
+GRUB_MOD_LICENSE ("GPLv3+");
+
+#define U64_C(c) (c ## ULL)
+#define SIZE_MAX GRUB_SIZE_MAX
+#define memset grub_memset
+#define memcpy grub_memcpy
+#define xtrymalloc(n) grub_malloc (n)
+#define xfree(p) grub_free (p)
+
+#pragma warning(disable:4018)	/* signed/unsigned mismatch (<)  */
+
 /* kdf.c  - Key Derivation Functions
- * Copyright (C) 1998, 2011 Free Software Foundation, Inc.
- * Copyright (C) 2013 Jussi Kivilinna <jussi.kivilinna@iki.fi>
+ * Copyright (C) 1998, 2008, 2011 Free Software Foundation, Inc.
+ * Copyright (C) 2013 g10 Code GmbH
  *
  * This file is part of Libgcrypt.
  *
@@ -18,57 +56,32 @@
  * License along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * Argon2 KDF for Rover.  Only the Argon2 (d/i/id) portion of libgcrypt's
- * kdf.c is kept; the PBKDF2 / scrypt / balloon / onestep / HKDF / X9.63
- * KDFs are dropped (grub does the same via its 11-kdf-remove-unsupported
- * -kdfs patch).  The Argon2 core is spliced verbatim from grub
- * cipher/kdf.c; only the header web and the BLAKE2b hash_buffers call are
- * shimmed.  Single-threaded only (grub always passes ops == NULL).
- */
+/* Transform a passphrase into a suitable key of length KEYSIZE and
+   store this key in the caller provided buffer KEYBUFFER.  The caller
+   must provide an HASHALGO, a valid ALGO and depending on that algo a
+   SALT of 8 bytes and the number of ITERATIONS.  Code taken from
+   gnupg/agent/protect.c:hash_passphrase.  */
 
-#include <stddef.h>	/* offsetof */
 
-#include <grub/types.h>
-#include <grub/crypto.h>
-#include <grub/misc.h>
-#include <grub/mm.h>
-#include "gcry_wrap.h"
+/* Transform a passphrase into a suitable key of length KEYSIZE and
+   store this key in the caller provided buffer KEYBUFFER.  The caller
+   must provide PRFALGO which indicates the pseudorandom function to
+   use: This shall be the algorithms id of a hash algorithm; it is
+   used in HMAC mode.  SALT is a salt of length SALTLEN and ITERATIONS
+   gives the number of iterations.  */
 
-#pragma warning(disable:4018)	/* signed/unsigned mismatch (<)  */
-#pragma warning(disable:4245)	/* signed/unsigned conversion    */
-#pragma warning(disable:4389)	/* signed/unsigned mismatch (==) */
 
-#define U64_C(c) (c ## ULL)
-#define SIZE_MAX GRUB_SIZE_MAX
-#define memset grub_memset
-#define memcpy grub_memcpy
-#define wipememory(_ptr, _len) grub_memset ((_ptr), 0, (_len))
-#define xtrymalloc(n) grub_malloc (n)
-#define xfree(p) grub_free (p)
-#define gpg_err_code_from_errno(e) GPG_ERR_ENOMEM
-
-/* Map libgcrypt's Argon2 constants onto grub's (values match: d/i/id =
-   0/1/2, which is also the Argon2 on-disk type number).  */
-#define GCRY_KDF_ARGON2   GRUB_GCRY_KDF_ARGON2
-#define GCRY_KDF_ARGON2D  GRUB_GCRY_KDF_ARGON2D
-#define GCRY_KDF_ARGON2I  GRUB_GCRY_KDF_ARGON2I
-#define GCRY_KDF_ARGON2ID GRUB_GCRY_KDF_ARGON2ID
-
-/*
- * libgcrypt's threaded-job interface.  grub always calls with ops == NULL
- * (single threaded), but argon2_compute() references these members, so the
- * type must be complete.
- */
-struct gcry_kdf_thread_ops
-{
-  void *jobs_context;
-  int (*dispatch_job) (void *jobs_context, void (*job) (void *w),
-		       void *thread_data);
-  int (*wait_all_jobs) (void *jobs_context);
-};
-
-/* ==== begin Argon2 core spliced from libgcrypt cipher/kdf.c ==== */
+/* Derive a key from a passphrase.  KEYSIZE gives the requested size
+   of the keys in octets.  KEYBUFFER is a caller provided buffer
+   filled on success with the derived key.  The input passphrase is
+   taken from (PASSPHRASE,PASSPHRASELEN) which is an arbitrary memory
+   buffer.  ALGO specifies the KDF algorithm to use; these are the
+   constants GCRY_KDF_*.  SUBALGO specifies an algorithm used
+   internally by the KDF algorithms; this is usually a hash algorithm
+   but certain KDF algorithm may use it differently.  {SALT,SALTLEN}
+   is a salt as needed by most KDF algorithms.  ITERATIONS is a
+   positive integer parameter to most KDFs.  0 is returned on success,
+   or an error code on failure.  */
 
 typedef struct argon2_context *argon2_ctx_t;
 
@@ -142,10 +155,31 @@ beswap64_block (u64 *dst)
 #endif
 }
 
+/* Implementation of _gcry_blake2b_512_hash_buffers */
+static gcry_err_code_t
+argon2_blake2b_512_hash_buffers (void *outbuf, const gcry_buffer_t *iov, int iovcnt)
+{
+  void *hd;
+
+  hd = xtrymalloc (_gcry_digest_spec_blake2b_512.contextsize);
+  if (!hd)
+    return GPG_ERR_OUT_OF_MEMORY;
+
+  _gcry_digest_spec_blake2b_512.init (hd, 0);
+  for (;iovcnt > 0; iov++, iovcnt--)
+    _gcry_digest_spec_blake2b_512.write (hd, (const char*)iov[0].data + iov[0].off, iov[0].len);
+  _gcry_digest_spec_blake2b_512.final (hd);
+  grub_memcpy (outbuf, _gcry_digest_spec_blake2b_512.read (hd), 512 / 8);
+
+  xfree (hd);
+
+  return GPG_ERR_NO_ERROR;
+}
 
 static gpg_err_code_t
 argon2_fill_first_blocks (argon2_ctx_t a)
 {
+  gpg_err_code_t err;
   unsigned char h0_01_i[72];
   unsigned char buf[10][4];
   gcry_buffer_t iov[8];
@@ -208,7 +242,9 @@ argon2_fill_first_blocks (argon2_ctx_t a)
       iov_count++;
     }
 
-  grub_blake2b_512_hash_buffers (h0_01_i, iov, iov_count);
+  err = argon2_blake2b_512_hash_buffers (h0_01_i, iov, iov_count);
+  if (err != GPG_ERR_NO_ERROR)
+    return err;
 
   for (i = 0; i < a->lanes; i++)
     {
@@ -260,7 +296,7 @@ argon2_init (argon2_ctx_t a, unsigned int parallelism,
   block = xtrymalloc (memory_bytes);
   if (!block)
     {
-      ec = gpg_err_code_from_errno (errno);
+      ec = GPG_ERR_OUT_OF_MEMORY;
       return ec;
     }
   memset (block, 0, memory_bytes);
@@ -268,7 +304,7 @@ argon2_init (argon2_ctx_t a, unsigned int parallelism,
   thread_data = xtrymalloc (a->lanes * sizeof (struct argon2_thread_data));
   if (!thread_data)
     {
-      ec = gpg_err_code_from_errno (errno);
+      ec = GPG_ERR_OUT_OF_MEMORY;
       xfree (block);
       return ec;
     }
@@ -633,7 +669,7 @@ argon2_open (gcry_kdf_hd_t *hd, int subalgo,
   n = offsetof (struct argon2_context, out) + taglen;
   a = xtrymalloc (n);
   if (!a)
-    return gpg_err_code_from_errno (errno);
+    return GPG_ERR_OUT_OF_MEMORY;
 
   a->algo = GCRY_KDF_ARGON2;
   a->hash_type = hash_type;
@@ -665,55 +701,89 @@ argon2_open (gcry_kdf_hd_t *hd, int subalgo,
   return 0;
 }
 
-/* ==== end Argon2 core ==== */
-
-/* Public KDF handle: a common { int algo; } prefix shared with
-   struct argon2_context.  */
-struct gcry_kdf_handle
-{
+struct gcry_kdf_handle {
   int algo;
+  /* And algo specific parts come.  */
 };
 
 gpg_err_code_t
 _gcry_kdf_open (gcry_kdf_hd_t *hd, int algo, int subalgo,
-		const unsigned long *param, unsigned int paramlen,
-		const void *input, size_t inputlen,
-		const void *salt, size_t saltlen,
-		const void *key, size_t keylen,
-		const void *ad, size_t adlen)
+                const unsigned long *param, unsigned int paramlen,
+                const void *input, size_t inputlen,
+                const void *salt, size_t saltlen,
+                const void *key, size_t keylen,
+                const void *ad, size_t adlen)
 {
-  if (algo != GCRY_KDF_ARGON2)
-    return GPG_ERR_UNKNOWN_ALGORITHM;
+  gpg_err_code_t ec;
 
-  if (!saltlen)
-    return GPG_ERR_INV_VALUE;
+  switch (algo)
+    {
+    case GCRY_KDF_ARGON2:
+      if (!saltlen)
+        ec = GPG_ERR_INV_VALUE;
+      else
+        ec = argon2_open (hd, subalgo, param, paramlen,
+                          input, inputlen, salt, saltlen,
+                          key, keylen, ad, adlen);
+      break;
 
-  return argon2_open (hd, subalgo, param, paramlen,
-		      input, inputlen, salt, saltlen,
-		      key, keylen, ad, adlen);
+    default:
+      ec = GPG_ERR_UNKNOWN_ALGORITHM;
+      break;
+    }
+
+  return ec;
 }
 
 gpg_err_code_t
 _gcry_kdf_compute (gcry_kdf_hd_t h, const struct gcry_kdf_thread_ops *ops)
 {
-  if (h->algo != GCRY_KDF_ARGON2)
-    return GPG_ERR_UNKNOWN_ALGORITHM;
+  gpg_err_code_t ec;
 
-  return argon2_compute ((argon2_ctx_t) (void *) h, ops);
+  switch (h->algo)
+    {
+    case GCRY_KDF_ARGON2:
+      ec = argon2_compute ((argon2_ctx_t)(void *)h, ops);
+      break;
+
+    default:
+      ec = GPG_ERR_UNKNOWN_ALGORITHM;
+      break;
+    }
+
+  return ec;
 }
+
 
 gpg_err_code_t
 _gcry_kdf_final (gcry_kdf_hd_t h, size_t resultlen, void *result)
 {
-  if (h->algo != GCRY_KDF_ARGON2)
-    return GPG_ERR_UNKNOWN_ALGORITHM;
+  gpg_err_code_t ec;
 
-  return argon2_final ((argon2_ctx_t) (void *) h, resultlen, result);
+  switch (h->algo)
+    {
+    case GCRY_KDF_ARGON2:
+      ec = argon2_final ((argon2_ctx_t)(void *)h, resultlen, result);
+      break;
+
+    default:
+      ec = GPG_ERR_UNKNOWN_ALGORITHM;
+      break;
+    }
+
+  return ec;
 }
 
 void
 _gcry_kdf_close (gcry_kdf_hd_t h)
 {
-  if (h->algo == GCRY_KDF_ARGON2)
-    argon2_close ((argon2_ctx_t) (void *) h);
+  switch (h->algo)
+    {
+    case GCRY_KDF_ARGON2:
+      argon2_close ((argon2_ctx_t)(void *)h);
+      break;
+
+    default:
+      break;
+    }
 }
