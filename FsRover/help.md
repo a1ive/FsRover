@@ -73,9 +73,7 @@ back as stored ciphertext.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved
 
-Inline data and inline directories are handled.
-
-**Not supported: F2FS transparent compression** (LZO, LZ4, Zstandard).
+**Compression:** LZO, LZ4, Zstandard.
 
 #### JFFS2 — `jffs2`
 

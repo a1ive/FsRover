@@ -30,6 +30,11 @@
 #include <grub/fshelp.h>
 #include <grub/safemath.h>
 
+#include <minilzo.h>
+#include <lz4.h>
+#define ZSTD_STATIC_LINKING_ONLY
+#include <zstd.h>
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 /* F2FS Magic Number. */
@@ -52,6 +57,14 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define F2FS_BLK_BITS             12
 #define F2FS_BLKSIZE              (1 << F2FS_BLK_BITS)
 #define F2FS_BLK_SEC_BITS         (F2FS_BLK_BITS - GRUB_DISK_SECTOR_BITS)
+
+#define F2FS_NULL_ADDR            0
+#define F2FS_NEW_ADDR             0xffffffffU
+#define F2FS_COMPRESS_ADDR        0xfffffffeU
+
+#define F2FS_MIN_COMPRESS_LOG_SIZE 2
+#define F2FS_MAX_COMPRESS_LOG_SIZE 8
+#define F2FS_MAX_COMPRESS_CLUSTER_BLOCKS (1U << F2FS_MAX_COMPRESS_LOG_SIZE)
 
 /*
  * F2FS conventionally uses 512 (1 << 9) blocks per 2 MiB segment.  Rather than
@@ -109,17 +122,6 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define NODE_IND2_BLOCK           (DEF_ADDRS_PER_INODE + 4)
 #define NODE_DIND_BLOCK           (DEF_ADDRS_PER_INODE + 5)
 
-#define MAX_INLINE_DATA           (4 * (DEF_ADDRS_PER_INODE - \
-                                        F2FS_INLINE_XATTR_ADDRS - 1))
-#define NR_INLINE_DENTRY          (MAX_INLINE_DATA * BITS_PER_BYTE / \
-                                        ((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) * \
-                                        BITS_PER_BYTE + 1))
-#define INLINE_DENTRY_BITMAP_SIZE ((NR_INLINE_DENTRY + BITS_PER_BYTE - 1) / \
-                                        BITS_PER_BYTE)
-#define INLINE_RESERVED_SIZE      (MAX_INLINE_DATA - \
-                                        ((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) * \
-                                        NR_INLINE_DENTRY + \
-                                        INLINE_DENTRY_BITMAP_SIZE))
 #define CURSEG_HOT_DATA           0
 
 #define CKPT_FLAG_SET(ckpt, f)    (ckpt)->ckpt_flags & \
@@ -130,6 +132,17 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define F2FS_INLINE_DENTRY        0x04  /* File inline dentry flag. */
 #define F2FS_DATA_EXIST           0x08  /* File inline data exist flag. */
 #define F2FS_INLINE_DOTS          0x10  /* File having implicit dot dentries. */
+#define F2FS_EXTRA_ATTR           0x20  /* File having extra attribute. */
+#define F2FS_COMPRESS_RELEASED    0x80  /* File released compressed blocks. */
+
+#define F2FS_COMPR_FL             0x00000004
+#define F2FS_COMPR_CHKSUM         0x0001
+
+#define F2FS_FEATURE_FLEXIBLE_INLINE_XATTR 0x00000040
+
+#define F2FS_COMPRESS_LZO         0
+#define F2FS_COMPRESS_LZ4         1
+#define F2FS_COMPRESS_ZSTD        2
 
 #define MAX_VOLUME_NAME           512
 #define MAX_NAT_BITMAP_SIZE       3900
@@ -170,6 +183,7 @@ struct grub_f2fs_superblock
   grub_uint32_t                   cp_payload;
   grub_uint8_t                    version[VERSION_LEN];
   grub_uint8_t                    init_version[VERSION_LEN];
+  grub_uint32_t                   feature;
 } GRUB_PACKED;
 
 struct grub_f2fs_checkpoint
@@ -229,14 +243,6 @@ struct grub_f2fs_dir_entry
   grub_uint8_t                    file_type;
 } GRUB_PACKED;
 
-struct grub_f2fs_inline_dentry
-{
-  grub_uint8_t                    dentry_bitmap[INLINE_DENTRY_BITMAP_SIZE];
-  grub_uint8_t                    reserved[INLINE_RESERVED_SIZE];
-  struct grub_f2fs_dir_entry      dentry[NR_INLINE_DENTRY];
-  grub_uint8_t                    filename[NR_INLINE_DENTRY][F2FS_SLOT_LEN];
-} GRUB_PACKED;
-
 struct grub_f2fs_dentry_block {
   grub_uint8_t                    dentry_bitmap[SIZE_OF_DENTRY_BITMAP];
   grub_uint8_t                    reserved[SIZE_OF_RESERVED];
@@ -271,6 +277,28 @@ struct grub_f2fs_inode
   grub_uint8_t                    i_ext[12];
   grub_uint32_t                   i_addr[DEF_ADDRS_PER_INODE];
   grub_uint32_t                   i_nid[5];
+} GRUB_PACKED;
+
+struct grub_f2fs_inode_extra
+{
+  grub_uint16_t                   i_extra_isize;
+  grub_uint16_t                   i_inline_xattr_size;
+  grub_uint32_t                   i_projid;
+  grub_uint32_t                   i_inode_checksum;
+  grub_uint64_t                   i_crtime;
+  grub_uint32_t                   i_crtime_nsec;
+  grub_uint64_t                   i_compr_blocks;
+  grub_uint8_t                    i_compress_algorithm;
+  grub_uint8_t                    i_log_cluster_size;
+  grub_uint16_t                   i_compress_flag;
+} GRUB_PACKED;
+
+struct grub_f2fs_compress_data
+{
+  grub_uint32_t                   clen;
+  grub_uint32_t                   chksum;
+  grub_uint32_t                   reserved[4];
+  grub_uint8_t                    cdata[0];
 } GRUB_PACKED;
 
 struct grub_direct_node {
@@ -340,6 +368,14 @@ struct grub_f2fs_dir_ctx
   struct grub_f2fs_data           *data;
 };
 
+struct grub_f2fs_compress_info
+{
+  grub_uint32_t                   cluster_size;
+  grub_uint16_t                   flags;
+  grub_uint8_t                    algorithm;
+  grub_uint8_t                    log_cluster_size;
+};
+
 static grub_dl_t my_mod;
 
 static int
@@ -348,10 +384,77 @@ grub_f2fs_test_bit_le (int nr, const grub_uint8_t *addr)
   return addr[nr >> 3] & (1 << (nr & 7));
 }
 
-static char *
-get_inline_addr (struct grub_f2fs_inode *inode)
+static grub_err_t
+grub_f2fs_get_inode_addr_layout (struct grub_f2fs_data *data,
+                                 struct grub_f2fs_inode *inode,
+                                 grub_uint32_t *extra_slots,
+                                 grub_uint32_t *direct_addrs)
 {
-  return (char *) &inode->i_addr[1];
+  grub_uint32_t extra_isize = 0;
+  grub_uint32_t inline_xattr_addrs = 0;
+  int flexible_inline_xattr =
+    (grub_le_to_cpu32 (data->sblock.feature) &
+     F2FS_FEATURE_FLEXIBLE_INLINE_XATTR) != 0;
+
+  if (inode->i_inline & F2FS_EXTRA_ATTR)
+    {
+      struct grub_f2fs_inode_extra *extra =
+        (struct grub_f2fs_inode_extra *) inode->i_addr;
+
+      extra_isize = grub_le_to_cpu16 (extra->i_extra_isize);
+      if ((extra_isize & (sizeof (grub_uint32_t) - 1)) ||
+          extra_isize > DEF_ADDRS_PER_INODE * sizeof (grub_uint32_t))
+        return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS extra inode size");
+
+      if (flexible_inline_xattr && (inode->i_inline & F2FS_INLINE_XATTR))
+        {
+          if (extra_isize < sizeof (grub_uint32_t))
+            return grub_error (GRUB_ERR_BAD_FS,
+                               "invalid F2FS inline xattr size");
+          inline_xattr_addrs =
+            grub_le_to_cpu16 (extra->i_inline_xattr_size);
+        }
+    }
+  else if (flexible_inline_xattr && (inode->i_inline & F2FS_INLINE_XATTR))
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS inline xattr layout");
+
+  if (!flexible_inline_xattr &&
+      (inode->i_inline & (F2FS_INLINE_XATTR | F2FS_INLINE_DENTRY)))
+    inline_xattr_addrs = F2FS_INLINE_XATTR_ADDRS;
+
+  extra_isize /= sizeof (grub_uint32_t);
+  if (inline_xattr_addrs > DEF_ADDRS_PER_INODE - extra_isize)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS inline xattr size");
+
+  *extra_slots = extra_isize;
+  *direct_addrs = DEF_ADDRS_PER_INODE - extra_isize - inline_xattr_addrs;
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_f2fs_get_inline_data_layout (struct grub_f2fs_data *data,
+                                  struct grub_f2fs_inode *inode,
+                                  char **inline_addr,
+                                  grub_size_t *inline_size)
+{
+  grub_uint32_t extra_slots;
+  grub_uint32_t direct_addrs;
+
+  if (grub_f2fs_get_inode_addr_layout (data, inode, &extra_slots, &direct_addrs))
+    return grub_errno;
+
+  if (direct_addrs < 1)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS inline data layout");
+
+  *inline_addr = (char *) &inode->i_addr[extra_slots + 1];
+  *inline_size = (direct_addrs - 1) * sizeof (inode->i_addr[0]);
+  return GRUB_ERR_NONE;
+}
+
+static int
+grub_f2fs_is_compressed (struct grub_f2fs_inode *inode)
+{
+  return (grub_le_to_cpu32 (inode->i_flags) & F2FS_COMPR_FL) != 0;
 }
 
 static grub_uint64_t
@@ -738,20 +841,79 @@ get_node_blkaddr (struct grub_f2fs_data *data, grub_uint32_t nid)
   return blkaddr;
 }
 
+static grub_err_t
+grub_f2fs_get_compress_info (struct grub_f2fs_data *data,
+                             struct grub_f2fs_inode *inode,
+                             struct grub_f2fs_compress_info *info)
+{
+  struct grub_f2fs_inode_extra *extra;
+  grub_uint32_t extra_slots;
+  grub_uint32_t direct_addrs;
+  grub_uint32_t extra_isize;
+
+  if (!(inode->i_inline & F2FS_EXTRA_ATTR))
+    return grub_error (GRUB_ERR_BAD_FS, "compressed F2FS inode lacks extra attributes");
+
+  if (inode->i_inline & F2FS_COMPRESS_RELEASED)
+    return grub_error (GRUB_ERR_BAD_FS, "F2FS compressed data was released");
+
+  if (grub_f2fs_get_inode_addr_layout (data, inode, &extra_slots, &direct_addrs))
+    return grub_errno;
+
+  extra = (struct grub_f2fs_inode_extra *) inode->i_addr;
+  extra_isize = extra_slots * sizeof (grub_uint32_t);
+  if (extra_isize < sizeof (*extra))
+    return grub_error (GRUB_ERR_BAD_FS, "F2FS compression attributes are truncated");
+
+  info->algorithm = extra->i_compress_algorithm;
+  info->log_cluster_size = extra->i_log_cluster_size;
+  info->flags = grub_le_to_cpu16 (extra->i_compress_flag);
+
+  if (info->algorithm != F2FS_COMPRESS_LZO &&
+      info->algorithm != F2FS_COMPRESS_LZ4 &&
+      info->algorithm != F2FS_COMPRESS_ZSTD)
+    return grub_error (GRUB_ERR_BAD_FS, "unsupported F2FS compression algorithm %u", info->algorithm);
+
+  if (info->log_cluster_size < F2FS_MIN_COMPRESS_LOG_SIZE ||
+      info->log_cluster_size > F2FS_MAX_COMPRESS_LOG_SIZE)
+    return grub_error (GRUB_ERR_BAD_FS, "unsupported F2FS compression cluster size %u", info->log_cluster_size);
+
+  info->cluster_size = 1U << info->log_cluster_size;
+  if (direct_addrs < info->cluster_size)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS compression address layout");
+
+  return GRUB_ERR_NONE;
+}
+
 static int
-grub_get_node_path (struct grub_f2fs_inode *inode, grub_uint32_t block,
+grub_get_node_path (struct grub_f2fs_data *data,
+                    struct grub_f2fs_inode *inode, grub_uint32_t block,
                     grub_uint32_t offset[4], grub_uint32_t noffset[4])
 {
   grub_uint32_t direct_blks = ADDRS_PER_BLOCK;
   grub_uint32_t dptrs_per_blk = NIDS_PER_BLOCK;
   grub_uint32_t indirect_blks = ADDRS_PER_BLOCK * NIDS_PER_BLOCK;
   grub_uint32_t dindirect_blks = indirect_blks * NIDS_PER_BLOCK;
-  grub_uint32_t direct_index = DEF_ADDRS_PER_INODE;
+  grub_uint32_t direct_index;
+  grub_uint32_t extra_slots;
+  struct grub_f2fs_compress_info info;
   int n = 0;
   int level = -1;
 
-  if (inode->i_inline & F2FS_INLINE_XATTR)
-    direct_index -= F2FS_INLINE_XATTR_ADDRS;
+  if (grub_f2fs_get_inode_addr_layout (data, inode, &extra_slots, &direct_index))
+    return -1;
+  (void) extra_slots;
+
+  if (grub_f2fs_is_compressed (inode))
+    {
+      if (grub_f2fs_get_compress_info (data, inode, &info))
+        return -1;
+
+      direct_index -= direct_index % info.cluster_size;
+      direct_blks -= direct_blks % info.cluster_size;
+      indirect_blks = direct_blks * NIDS_PER_BLOCK;
+      dindirect_blks = indirect_blks * NIDS_PER_BLOCK;
+    }
 
   noffset[0] = 0;
 
@@ -910,47 +1072,431 @@ grub_f2fs_mount (grub_disk_t disk)
 }
 
 /* Guarantee inline_data was handled by caller. */
-static grub_disk_addr_t
-grub_f2fs_get_block (grub_fshelp_node_t node, grub_disk_addr_t block_ofs)
+static grub_err_t
+grub_f2fs_get_block_addr (grub_fshelp_node_t node, grub_disk_addr_t block_ofs, grub_uint32_t *block_addr)
 {
   struct grub_f2fs_data *data = node->data;
   struct grub_f2fs_inode *inode = &node->inode.i;
   grub_uint32_t offset[4], noffset[4], nids[4];
   struct grub_f2fs_node *node_block;
-  grub_uint32_t block_addr = -1;
+  grub_uint32_t extra_slots;
+  grub_uint32_t direct_addrs;
   int level, i;
 
-  level = grub_get_node_path (inode, block_ofs, offset, noffset);
+  if (block_ofs >= F2FS_COMPRESS_ADDR)
+    return grub_error (GRUB_ERR_BAD_FS, "F2FS file block is out of range");
+
+  level = grub_get_node_path (data, inode, block_ofs, offset, noffset);
 
   if (level < 0)
-    return -1;
+    {
+      if (grub_errno == GRUB_ERR_NONE)
+        grub_error (GRUB_ERR_BAD_FS, "invalid F2FS file block");
+      return grub_errno;
+    }
 
   if (level == 0)
-    return grub_le_to_cpu32 (inode->i_addr[offset[0]]);
+    {
+      if (grub_f2fs_get_inode_addr_layout (data, inode, &extra_slots,
+                                           &direct_addrs))
+        return grub_errno;
+      if (offset[0] >= direct_addrs)
+        return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS direct block");
+      *block_addr = grub_le_to_cpu32 (inode->i_addr[extra_slots + offset[0]]);
+      return GRUB_ERR_NONE;
+    }
 
   node_block = grub_malloc (F2FS_BLKSIZE);
   if (!node_block)
-    return -1;
+    return grub_errno;
 
   nids[1] = get_node_id (&node->inode, offset[0], 1);
 
   /* Get indirect or direct nodes. */
   for (i = 1; i <= level; i++)
     {
-      grub_f2fs_read_node (data, nids[i], node_block);
-      if (grub_errno)
+      if (grub_f2fs_read_node (data, nids[i], node_block))
         goto fail;
 
       if (i < level)
         nids[i + 1] = get_node_id (node_block, offset[i], 0);
     }
 
-  block_addr = grub_le_to_cpu32 (node_block->dn.addr[offset[level]]);
+  *block_addr = grub_le_to_cpu32 (node_block->dn.addr[offset[level]]);
+  grub_free (node_block);
+
+  return GRUB_ERR_NONE;
 
  fail:
   grub_free (node_block);
 
+  return grub_errno;
+}
+
+static grub_disk_addr_t
+grub_f2fs_get_block (grub_fshelp_node_t node, grub_disk_addr_t block_ofs)
+{
+  grub_uint32_t block_addr;
+
+  if (grub_f2fs_get_block_addr (node, block_ofs, &block_addr))
+    return -1;
+
   return block_addr;
+}
+
+static grub_err_t
+grub_f2fs_read_data_block (struct grub_f2fs_data *data,
+                           grub_uint32_t block_addr, unsigned offset,
+                           unsigned length, char *buf,
+                           grub_disk_read_hook_t read_hook,
+                           void *read_hook_data)
+{
+  grub_err_t err;
+
+  data->disk->read_hook = read_hook;
+  data->disk->read_hook_data = read_hook_data;
+  err = grub_disk_read (data->disk,
+                        ((grub_disk_addr_t) block_addr) << F2FS_BLK_SEC_BITS,
+                        offset, length, buf);
+  data->disk->read_hook = 0;
+  return err;
+}
+
+static grub_err_t
+grub_f2fs_decompress_lzo (const char *src, grub_size_t src_size,
+                          char *dest, grub_size_t dest_size)
+{
+  lzo_uint out_size = (lzo_uint) dest_size;
+
+  if (lzo1x_decompress_safe ((const lzo_bytep) src, (lzo_uint) src_size,
+                              (lzo_bytep) dest, &out_size, NULL) != LZO_E_OK ||
+      out_size != dest_size)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS LZO compressed data");
+
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_f2fs_decompress_lz4 (const char *src, grub_size_t src_size,
+                          char *dest, grub_size_t dest_size)
+{
+  int ret;
+
+  ret = LZ4_decompress_safe (src, dest, (int) src_size, (int) dest_size);
+  if (ret != (int) dest_size)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS LZ4 compressed data");
+
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_f2fs_decompress_zstd (const char *src, grub_size_t src_size,
+                           char *dest, grub_size_t dest_size)
+{
+  ZSTD_DStream *stream = NULL;
+  ZSTD_inBuffer input;
+  ZSTD_outBuffer output;
+  grub_size_t result = 0;
+  grub_err_t err = GRUB_ERR_NONE;
+
+  stream = ZSTD_createDStream ();
+  if (stream == NULL)
+    return grub_error (GRUB_ERR_OUT_OF_MEMORY,
+                       "cannot allocate F2FS zstd decompressor");
+
+  result = ZSTD_initDStream (stream);
+  if (ZSTD_isError (result))
+    {
+      err = grub_error (GRUB_ERR_BAD_FS,
+                        "cannot initialize F2FS zstd decompressor");
+      goto out;
+    }
+
+  result = ZSTD_DCtx_setMaxWindowSize ((ZSTD_DCtx *) stream, dest_size);
+  if (ZSTD_isError (result))
+    {
+      err = grub_error (GRUB_ERR_BAD_FS, "invalid F2FS zstd window size");
+      goto out;
+    }
+
+  input.src = src;
+  input.size = src_size;
+  input.pos = 0;
+  output.dst = dest;
+  output.size = dest_size;
+  output.pos = 0;
+
+  while (output.pos < output.size)
+    {
+      grub_size_t input_pos = input.pos;
+      grub_size_t output_pos = output.pos;
+
+      result = ZSTD_decompressStream (stream, &output, &input);
+      if (ZSTD_isError (result))
+        {
+          err = grub_error (GRUB_ERR_BAD_FS, "F2FS zstd decompress failed: %s",
+                            ZSTD_getErrorName (result));
+          goto out;
+        }
+      if (output.pos == output.size)
+        break;
+      if (result == 0 || input.pos == input.size ||
+          (input_pos == input.pos && output_pos == output.pos))
+        {
+          err = grub_error (GRUB_ERR_BAD_FS,
+                            "invalid F2FS zstd compressed data");
+          goto out;
+        }
+    }
+
+  if (output.pos != output.size || result != 0 || input.pos != input.size)
+    err = grub_error (GRUB_ERR_BAD_FS, "invalid F2FS zstd compressed data");
+
+ out:
+  ZSTD_freeDStream (stream);
+  return err;
+}
+
+static grub_err_t
+grub_f2fs_decompress_cluster (const struct grub_f2fs_compress_info *info,
+                              const char *src, grub_size_t src_size,
+                              char *dest, grub_size_t dest_size)
+{
+  switch (info->algorithm)
+    {
+    case F2FS_COMPRESS_LZO:
+      return grub_f2fs_decompress_lzo (src, src_size, dest, dest_size);
+    case F2FS_COMPRESS_LZ4:
+      return grub_f2fs_decompress_lz4 (src, src_size, dest, dest_size);
+    case F2FS_COMPRESS_ZSTD:
+      return grub_f2fs_decompress_zstd (src, src_size, dest, dest_size);
+    default:
+      return grub_error (GRUB_ERR_BAD_FS,
+                         "unsupported F2FS compression algorithm %u",
+                         info->algorithm);
+    }
+}
+
+static grub_err_t
+grub_f2fs_read_compressed_cluster (grub_fshelp_node_t node,
+                                   const struct grub_f2fs_compress_info *info,
+                                   grub_uint32_t cluster_start,
+                                   grub_disk_read_hook_t read_hook,
+                                   void *read_hook_data, char *dest)
+{
+  struct grub_f2fs_data *data = node->data;
+  grub_uint32_t block_addrs[F2FS_MAX_COMPRESS_CLUSTER_BLOCKS - 1];
+  struct grub_f2fs_compress_data *header;
+  grub_uint32_t block_addr;
+  grub_uint32_t clen;
+  grub_size_t compressed_size;
+  grub_size_t cluster_size;
+  unsigned int nr_cpages = 0;
+  int cluster_end = 0;
+  int i;
+  char *compressed = NULL;
+  grub_err_t err = GRUB_ERR_NONE;
+
+  if (cluster_start % info->cluster_size)
+    return grub_error (GRUB_ERR_BAD_FS,
+                       "unaligned F2FS compressed cluster");
+
+  for (i = 1; i < (int) info->cluster_size; i++)
+    {
+      err = grub_f2fs_get_block_addr (node, cluster_start + i, &block_addr);
+      if (err)
+        return err;
+
+      if (block_addr == F2FS_COMPRESS_ADDR)
+        return grub_error (GRUB_ERR_BAD_FS,
+                           "invalid nested F2FS compressed cluster");
+      if (block_addr == F2FS_NULL_ADDR || block_addr == F2FS_NEW_ADDR)
+        {
+          cluster_end = 1;
+          continue;
+        }
+      if (cluster_end)
+        return grub_error (GRUB_ERR_BAD_FS,
+                           "invalid F2FS compressed cluster layout");
+
+      block_addrs[nr_cpages++] = block_addr;
+    }
+
+  cluster_size = info->cluster_size * F2FS_BLKSIZE;
+  if (nr_cpages == 0)
+    {
+      grub_memset (dest, 0, cluster_size);
+      return GRUB_ERR_NONE;
+    }
+
+  compressed_size = nr_cpages * F2FS_BLKSIZE;
+  compressed = grub_malloc (compressed_size);
+  if (compressed == NULL)
+    return grub_errno;
+
+  for (i = 0; i < (int) nr_cpages; i++)
+    {
+      err = grub_f2fs_read_data_block (data, block_addrs[i], 0, F2FS_BLKSIZE,
+                                       compressed + i * F2FS_BLKSIZE,
+                                       read_hook, read_hook_data);
+      if (err)
+        goto fail;
+    }
+
+  header = (struct grub_f2fs_compress_data *) compressed;
+  clen = grub_le_to_cpu32 (header->clen);
+  if (clen > compressed_size - sizeof (*header))
+    {
+      err = grub_error (GRUB_ERR_BAD_FS,
+                        "invalid F2FS compressed data size");
+      goto fail;
+    }
+
+  if ((info->flags & F2FS_COMPR_CHKSUM) &&
+      !grub_f2fs_crc_valid (grub_le_to_cpu32 (header->chksum),
+                            header->cdata, clen))
+    {
+      err = grub_error (GRUB_ERR_BAD_FS,
+                        "invalid F2FS compressed data checksum");
+      goto fail;
+    }
+
+  err = grub_f2fs_decompress_cluster (info, (const char *) header->cdata,
+                                      clen, dest, cluster_size);
+
+ fail:
+  grub_free (compressed);
+  return err;
+}
+
+static grub_ssize_t
+grub_f2fs_read_compressed_file (grub_fshelp_node_t node,
+                                grub_disk_read_hook_t read_hook,
+                                void *read_hook_data, grub_off_t pos,
+                                grub_size_t len, char *buf)
+{
+  struct grub_f2fs_inode *inode = &node->inode.i;
+  struct grub_f2fs_compress_info info;
+  grub_uint64_t filesize = grub_f2fs_file_size (inode);
+  grub_size_t cluster_size;
+  char *cluster = NULL;
+  grub_size_t bytes_read = 0;
+  grub_uint32_t block_addr;
+  grub_err_t err;
+
+  if (pos < 0 || (grub_uint64_t) pos > filesize)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid F2FS file offset");
+      return -1;
+    }
+
+  if ((grub_uint64_t) len > filesize - (grub_uint64_t) pos)
+    len = (grub_size_t) (filesize - (grub_uint64_t) pos);
+
+  if (len == 0)
+    return 0;
+
+  err = grub_f2fs_get_compress_info (node->data, inode, &info);
+  if (err)
+    return -1;
+
+  cluster_size = info.cluster_size * F2FS_BLKSIZE;
+  while (bytes_read < len)
+    {
+      grub_uint64_t file_pos = (grub_uint64_t) pos + bytes_read;
+      grub_uint64_t block_index = file_pos >> F2FS_BLK_BITS;
+      grub_uint32_t block;
+      grub_uint32_t cluster_start;
+      grub_uint32_t cluster_addr;
+      grub_size_t copy_size;
+
+      if (block_index >= F2FS_COMPRESS_ADDR)
+        {
+          err = grub_error (GRUB_ERR_BAD_FS, "F2FS file block is out of range");
+          goto fail;
+        }
+      block = (grub_uint32_t) block_index;
+      cluster_start = block & ~(info.cluster_size - 1);
+
+      err = grub_f2fs_get_block_addr (node, cluster_start, &cluster_addr);
+      if (err)
+        goto fail;
+
+      if (cluster_addr == F2FS_COMPRESS_ADDR)
+        {
+          grub_uint64_t cluster_pos =
+            ((grub_uint64_t) cluster_start) << F2FS_BLK_BITS;
+          grub_size_t cluster_offset = (grub_size_t) (file_pos - cluster_pos);
+
+          if (cluster == NULL)
+            {
+              cluster = grub_malloc (cluster_size);
+              if (cluster == NULL)
+                {
+                  err = grub_errno;
+                  goto fail;
+                }
+            }
+
+          err = grub_f2fs_read_compressed_cluster (node, &info, cluster_start,
+                                                   read_hook, read_hook_data,
+                                                   cluster);
+          if (err)
+            goto fail;
+
+          copy_size = cluster_size - cluster_offset;
+          if (copy_size > len - bytes_read)
+            copy_size = len - bytes_read;
+          grub_memcpy (buf + bytes_read, cluster + cluster_offset, copy_size);
+        }
+      else
+        {
+          grub_size_t block_offset = (grub_size_t) (file_pos &
+                                                    (F2FS_BLKSIZE - 1));
+
+          if (block == cluster_start)
+            block_addr = cluster_addr;
+          else
+            {
+              err = grub_f2fs_get_block_addr (node, block, &block_addr);
+              if (err)
+                goto fail;
+            }
+
+          if (block_addr == F2FS_COMPRESS_ADDR)
+            {
+              err = grub_error (GRUB_ERR_BAD_FS,
+                                "invalid F2FS compressed cluster layout");
+              goto fail;
+            }
+
+          copy_size = F2FS_BLKSIZE - block_offset;
+          if (copy_size > len - bytes_read)
+            copy_size = len - bytes_read;
+
+          if (block_addr == F2FS_NULL_ADDR || block_addr == F2FS_NEW_ADDR)
+            grub_memset (buf + bytes_read, 0, copy_size);
+          else
+            {
+              err = grub_f2fs_read_data_block (node->data, block_addr,
+                                               (unsigned) block_offset,
+                                               (unsigned) copy_size,
+                                               buf + bytes_read, read_hook,
+                                               read_hook_data);
+              if (err)
+                goto fail;
+            }
+        }
+
+      bytes_read += copy_size;
+    }
+
+  grub_free (cluster);
+  return bytes_read;
+
+ fail:
+  grub_free (cluster);
+  return -1;
 }
 
 static grub_ssize_t
@@ -960,12 +1506,25 @@ grub_f2fs_read_file (grub_fshelp_node_t node,
 {
   struct grub_f2fs_inode *inode = &node->inode.i;
   grub_off_t filesize = grub_f2fs_file_size (inode);
-  char *inline_addr = get_inline_addr (inode);
 
   if (inode->i_inline & F2FS_INLINE_DATA)
     {
-      if (filesize > MAX_INLINE_DATA)
+      char *inline_addr;
+      grub_size_t inline_size;
+
+      if (grub_f2fs_get_inline_data_layout (node->data, inode, &inline_addr,
+                                             &inline_size))
         return -1;
+      if (filesize < 0 || (grub_uint64_t) filesize > inline_size)
+        {
+          grub_error (GRUB_ERR_BAD_FS, "invalid F2FS inline data size");
+          return -1;
+        }
+      if (pos < 0 || pos > filesize)
+        {
+          grub_error (GRUB_ERR_BAD_FS, "invalid F2FS file offset");
+          return -1;
+        }
 
       if (len > filesize - pos)
         len = filesize - pos;
@@ -973,6 +1532,10 @@ grub_f2fs_read_file (grub_fshelp_node_t node,
       grub_memcpy (buf, inline_addr + pos, len);
       return len;
     }
+
+  if (grub_f2fs_is_compressed (inode))
+    return grub_f2fs_read_compressed_file (node, read_hook, read_hook_data,
+                                           pos, len, buf);
 
   return grub_fshelp_read_file (node->data->disk, node,
                                 read_hook, read_hook_data,
@@ -1107,17 +1670,32 @@ grub_f2fs_check_dentries (struct grub_f2fs_dir_iter_ctx *ctx)
 }
 
 static int
-grub_f2fs_iterate_inline_dir (struct grub_f2fs_inode *dir,
+grub_f2fs_iterate_inline_dir (struct grub_f2fs_data *data,
+                              struct grub_f2fs_inode *dir,
                               struct grub_f2fs_dir_iter_ctx *ctx)
 {
-  struct grub_f2fs_inline_dentry *de_blk;
+  char *inline_addr;
+  grub_size_t inline_size;
+  grub_uint32_t max;
+  grub_uint32_t bitmap_size;
+  grub_uint32_t reserved_size;
 
-  de_blk = (struct grub_f2fs_inline_dentry *) get_inline_addr (dir);
+  if (grub_f2fs_get_inline_data_layout (data, dir, &inline_addr,
+                                         &inline_size))
+    return 0;
 
-  ctx->bitmap = de_blk->dentry_bitmap;
-  ctx->dentry = de_blk->dentry;
-  ctx->filename = de_blk->filename;
-  ctx->max = NR_INLINE_DENTRY;
+  max = (grub_uint32_t) (inline_size * BITS_PER_BYTE /
+                          ((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) *
+                           BITS_PER_BYTE + 1));
+  bitmap_size = (max + BITS_PER_BYTE - 1) / BITS_PER_BYTE;
+  reserved_size = (grub_uint32_t) (inline_size -
+                  ((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) * max + bitmap_size));
+
+  ctx->bitmap = (grub_uint8_t *) inline_addr;
+  ctx->dentry = (struct grub_f2fs_dir_entry *)
+                (inline_addr + bitmap_size + reserved_size);
+  ctx->filename = (grub_uint8_t (*)[F2FS_SLOT_LEN]) (ctx->dentry + max);
+  ctx->max = (int) max;
 
   return grub_f2fs_check_dentries (ctx);
 }
@@ -1147,7 +1725,7 @@ grub_f2fs_iterate_dir (grub_fshelp_node_t dir,
   inode = &diro->inode.i;
 
   if (inode->i_inline & F2FS_INLINE_DENTRY)
-    return grub_f2fs_iterate_inline_dir (inode, &ctx);
+    return grub_f2fs_iterate_inline_dir (diro->data, inode, &ctx);
 
   dir_size = grub_f2fs_file_size (inode);
 
@@ -1294,14 +1872,28 @@ grub_f2fs_open (struct grub_file *file, const char *name)
 
   grub_memcpy (data->inode, &fdiro->inode, sizeof (*data->inode));
   grub_free (fdiro);
+  fdiro = NULL;
 
   inode = &(data->inode->i);
   file->size = grub_f2fs_file_size (inode);
+
+  if (inode->i_inline & F2FS_INLINE_DATA)
+    {
+      char *inline_addr;
+      grub_size_t inline_size;
+
+      if (grub_f2fs_get_inline_data_layout (data, inode, &inline_addr,
+                                             &inline_size))
+        goto fail;
+      if ((grub_uint64_t) file->size > inline_size)
+        {
+          grub_error (GRUB_ERR_BAD_FS, "invalid F2FS inline data size");
+          goto fail;
+        }
+    }
+
   file->data = data;
   file->offset = 0;
-
-  if (inode->i_inline & F2FS_INLINE_DATA && file->size > MAX_INLINE_DATA)
-    grub_error (GRUB_ERR_BAD_FS, "corrupted inline_data: need fsck");
 
   return 0;
 
