@@ -172,15 +172,16 @@ Long file names (VFAT) are read.
 
 > Origin: GRUB · Label: yes · UUID: volume serial · Timestamps: per-file · Symlinks: resolved
 
-**Compression:** LZNT1. Sparse files, non-resident attribute lists
+**Compression:** LZNT1 and Windows Compact / WOF compression using XPRESS4K,
+XPRESS8K, XPRESS16K, or LZX32K. Sparse files, non-resident attribute lists
 and `$ATTRIBUTE_LIST` overflow are handled. Reparse points are read through
-the `$SYMLINK` attribute, which covers ordinary symbolic links and junctions.
+the `$SYMLINK` attribute, which covers ordinary symbolic links and junctions;
+supported WOF files are exposed as regular files.
 
 **Not supported:**
 
 - alternate data streams (ADS);
 - EFS-encrypted files — the contents come back as ciphertext;
-- Windows 10 "compact" / WOF compression (XPRESS, LZX);
 - reparse-point target resolution beyond symbolic links and junctions.
 
 #### ReFS — `refs`

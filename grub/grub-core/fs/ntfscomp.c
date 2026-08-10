@@ -23,6 +23,8 @@
 #include <grub/dl.h>
 #include <grub/ntfs.h>
 #include <grub/safemath.h>
+#include <lzx.h>
+#include <xca.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -439,12 +441,211 @@ quit:
   return ret;
 }
 
+static grub_err_t
+wof_read_offset (struct grub_ntfs_file *mft, grub_uint64_t offset,
+		 grub_size_t offset_len, grub_uint64_t *value)
+{
+  grub_uint8_t buf[sizeof (grub_uint64_t)];
+
+  if (grub_ntfs_read_attr (&mft->attr, buf, offset, offset_len))
+    return grub_errno;
+
+  if (offset_len == sizeof (grub_uint32_t))
+    *value = grub_le_to_cpu32 (grub_get_unaligned32 (buf));
+  else
+    *value = grub_le_to_cpu64 (grub_get_unaligned64 (buf));
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+wof_frame_info (struct grub_ntfs_file *mft, grub_uint64_t frame,
+		grub_uint64_t *data_offset, grub_size_t *ondisk_size,
+		grub_size_t *unc_size)
+{
+  grub_uint64_t frame_size;
+  grub_uint64_t last_frame;
+  grub_uint64_t table_size;
+  grub_uint64_t table_data_size;
+  grub_uint64_t offset_len;
+  grub_uint64_t offset;
+  grub_uint64_t start = 0;
+  grub_uint64_t end;
+
+  if (mft->wof_frame_bits < 12 || mft->wof_frame_bits > 15
+      || !mft->size)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid WOF frame size");
+
+  frame_size = 1ULL << mft->wof_frame_bits;
+  last_frame = (mft->size - 1) >> mft->wof_frame_bits;
+  if (frame > last_frame)
+    return grub_error (GRUB_ERR_BAD_FS, "WOF frame is out of range");
+
+  offset_len = (mft->size < 0x100000000ULL)
+    ? sizeof (grub_uint32_t) : sizeof (grub_uint64_t);
+  if (grub_mul (last_frame, offset_len, &table_size)
+      || table_size > mft->wof_size)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid WOF frame table");
+  table_data_size = mft->wof_size - table_size;
+
+  if (frame)
+    {
+      if (grub_mul (frame - 1, offset_len, &offset))
+	return grub_error (GRUB_ERR_BAD_FS, "invalid WOF frame table");
+      if (wof_read_offset (mft, offset, (grub_size_t) offset_len, &start))
+	return grub_errno;
+    }
+
+  if (frame < last_frame)
+    {
+      if (grub_mul (frame, offset_len, &offset))
+	return grub_error (GRUB_ERR_BAD_FS, "invalid WOF frame table");
+      if (wof_read_offset (mft, offset, (grub_size_t) offset_len, &end))
+	return grub_errno;
+    }
+  else
+    end = table_data_size;
+
+  if (end < start || end > table_data_size
+      || grub_add (table_size, start, data_offset))
+    return grub_error (GRUB_ERR_BAD_FS, "invalid WOF frame table");
+  if (end - start > frame_size)
+    return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+		       "WOF frame is larger than its output");
+
+  *ondisk_size = (grub_size_t) (end - start);
+  *unc_size = (frame == last_frame)
+    ? (grub_size_t) (mft->size - (frame << mft->wof_frame_bits))
+    : (grub_size_t) frame_size;
+  return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+wof_load_frame (struct grub_ntfs_file *mft, grub_uint64_t frame)
+{
+  grub_uint64_t frame_offset;
+  grub_uint64_t data_offset;
+  grub_size_t ondisk_size;
+  grub_size_t unc_size;
+  grub_uint8_t *cbuf = NULL;
+  grub_ssize_t out_len;
+  grub_err_t err;
+
+  frame_offset = frame << mft->wof_frame_bits;
+  if (mft->wof_sbuf && mft->wof_save_pos == frame_offset)
+    return GRUB_ERR_NONE;
+
+  if (wof_frame_info (mft, frame, &data_offset, &ondisk_size, &unc_size))
+    return grub_errno;
+  if (!ondisk_size)
+    return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "empty WOF frame");
+
+  if (!mft->wof_sbuf)
+    {
+      mft->wof_sbuf = grub_malloc (1U << mft->wof_frame_bits);
+      if (!mft->wof_sbuf)
+	return grub_errno;
+    }
+
+  if (ondisk_size == unc_size)
+    {
+      if (grub_ntfs_read_attr (&mft->attr, mft->wof_sbuf, data_offset,
+			      ondisk_size))
+	return grub_errno;
+    }
+  else
+    {
+      if (ondisk_size > (1U << mft->wof_frame_bits))
+	return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+			   "WOF frame is larger than its output");
+
+      cbuf = grub_malloc (ondisk_size + 8);
+      if (!cbuf)
+	return grub_errno;
+      grub_memset (cbuf + ondisk_size, 0, 8);
+      if (grub_ntfs_read_attr (&mft->attr, cbuf, data_offset, ondisk_size))
+	{
+	  err = grub_errno;
+	  goto fail;
+	}
+
+      switch (mft->wof_algorithm)
+	{
+	case GRUB_NTFS_WOF_XPRESS:
+	  out_len = xca_decompress (cbuf, ondisk_size, NULL);
+	  if (out_len == (grub_ssize_t) unc_size)
+	    out_len = xca_decompress (cbuf, ondisk_size, mft->wof_sbuf);
+	  break;
+	case GRUB_NTFS_WOF_LZX:
+	  out_len = lzx_decompress (cbuf, ondisk_size, NULL);
+	  if (out_len == (grub_ssize_t) unc_size)
+	    out_len = lzx_decompress (cbuf, ondisk_size, mft->wof_sbuf);
+	  break;
+	default:
+	  out_len = -1;
+	  break;
+	}
+      if (out_len != (grub_ssize_t) unc_size)
+	{
+	  err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+			    "WOF frame decompression failed");
+	  goto fail;
+	}
+    }
+
+  mft->wof_save_pos = frame_offset;
+  mft->wof_sbuf_len = unc_size;
+  grub_free (cbuf);
+  return GRUB_ERR_NONE;
+
+fail:
+  grub_free (cbuf);
+  return err;
+}
+
+static grub_err_t
+ntfswof (grub_uint8_t *dest, grub_disk_addr_t ofs, grub_size_t len,
+	 struct grub_ntfs_file *mft)
+{
+  grub_uint64_t pos = ofs;
+
+  if (!len)
+    return GRUB_ERR_NONE;
+  if (mft->wof_frame_bits < 12 || mft->wof_frame_bits > 15
+      || pos > mft->size || (grub_uint64_t) len > mft->size - pos)
+    return grub_error (GRUB_ERR_BAD_FS, "WOF read is out of range");
+
+  while (len)
+    {
+      grub_uint64_t frame = pos >> mft->wof_frame_bits;
+      grub_size_t frame_offset;
+      grub_size_t n;
+
+      if (wof_load_frame (mft, frame))
+	return grub_errno;
+      frame_offset = (grub_size_t) (pos - mft->wof_save_pos);
+      if (frame_offset >= mft->wof_sbuf_len)
+	return grub_error (GRUB_ERR_BAD_FS, "WOF frame is out of range");
+
+      n = mft->wof_sbuf_len - frame_offset;
+      if (n > len)
+	n = len;
+      grub_memcpy (dest, mft->wof_sbuf + frame_offset, n);
+      dest += n;
+      pos += n;
+      len -= n;
+    }
+
+  return GRUB_ERR_NONE;
+}
+
 GRUB_MOD_INIT (ntfscomp)
 {
   grub_ntfscomp_func = ntfscomp;
+  grub_ntfswof_func = ntfswof;
 }
 
 GRUB_MOD_FINI (ntfscomp)
 {
   grub_ntfscomp_func = NULL;
+  grub_ntfswof_func = NULL;
 }

@@ -158,11 +158,20 @@ struct grub_ntfs_attr
   int flags;
   grub_uint8_t *emft_buf, *edat_buf;
   grub_uint8_t *attr_cur, *attr_nxt, *attr_end;
+  const grub_uint8_t *name;
+  grub_size_t name_len;
   grub_uint32_t save_pos;
   grub_uint8_t *sbuf;
   grub_uint8_t *end;
   struct grub_ntfs_file *mft;
 };
+
+enum grub_ntfs_wof_algorithm
+  {
+    GRUB_NTFS_WOF_NONE,
+    GRUB_NTFS_WOF_XPRESS,
+    GRUB_NTFS_WOF_LZX
+  };
 
 struct grub_ntfs_file
 {
@@ -172,6 +181,12 @@ struct grub_ntfs_file
   grub_uint64_t mtime;
   grub_uint64_t ino;
   int inode_read;
+  grub_uint64_t wof_size;
+  grub_uint64_t wof_save_pos;
+  grub_size_t wof_sbuf_len;
+  grub_uint8_t *wof_sbuf;
+  grub_uint8_t wof_algorithm;
+  grub_uint8_t wof_frame_bits;
   struct grub_ntfs_attr attr;
 };
 
@@ -218,8 +233,17 @@ typedef grub_err_t (*grub_ntfscomp_func_t) (grub_uint8_t *dest,
 					    grub_size_t len,
 					    struct grub_ntfs_rlst * ctx);
 
+typedef grub_err_t (*grub_ntfswof_func_t) (grub_uint8_t *dest,
+					   grub_disk_addr_t ofs,
+					   grub_size_t len,
+					   struct grub_ntfs_file *mft);
+
 extern grub_ntfscomp_func_t grub_ntfscomp_func;
+extern grub_ntfswof_func_t grub_ntfswof_func;
 
 grub_err_t grub_ntfs_read_run_list (struct grub_ntfs_rlst *ctx);
+grub_err_t grub_ntfs_read_attr (struct grub_ntfs_attr *at,
+				grub_uint8_t *dest, grub_disk_addr_t ofs,
+				grub_size_t len);
 
 #endif /* ! GRUB_NTFS_H */

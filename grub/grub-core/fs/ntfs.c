@@ -33,6 +33,17 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 static grub_dl_t my_mod;
 
+#define GRUB_NTFS_REPARSE_TAG_COMPRESS 0x80000017U
+#define GRUB_NTFS_WOF_REPARSE_SIZE 24
+#define GRUB_NTFS_WOF_NAME_LEN 17
+
+static const grub_uint8_t grub_ntfs_wof_name[] =
+  {
+    'W', 0, 'o', 0, 'f', 0, 'C', 0, 'o', 0, 'm', 0, 'p', 0, 'r', 0,
+    'e', 0, 's', 0, 's', 0, 'e', 0, 'd', 0, 'D', 0, 'a', 0, 't', 0,
+    'a', 0
+  };
+
 #define grub_fshelp_node grub_ntfs_file
 
 static inline grub_uint16_t
@@ -246,6 +257,7 @@ next_attribute (grub_uint8_t *curr_attribute, void *end, bool validate)
 
 
 grub_ntfscomp_func_t grub_ntfscomp_func;
+grub_ntfswof_func_t grub_ntfswof_func;
 
 static grub_err_t
 fixup (grub_uint8_t *buf, grub_size_t len, const grub_uint8_t *magic)
@@ -310,6 +322,8 @@ init_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft)
     return grub_error (GRUB_ERR_BAD_FS, "attributes start outside the MFT");
 
   at->attr_end = at->emft_buf = at->edat_buf = at->sbuf = NULL;
+  at->name = NULL;
+  at->name_len = 0;
 
   return GRUB_ERR_NONE;
 }
@@ -320,6 +334,60 @@ free_attr (struct grub_ntfs_attr *at)
   grub_free (at->emft_buf);
   grub_free (at->edat_buf);
   grub_free (at->sbuf);
+}
+
+static int
+attr_name_matches (const struct grub_ntfs_attr *at, grub_uint8_t *pa, grub_uint8_t *end)
+{
+  grub_size_t attr_len;
+  grub_size_t name_offset;
+
+  if (at->name == NULL)
+    return 1;
+  if (pa >= end || (grub_size_t) (end - pa) < GRUB_NTFS_ATTRIBUTE_HEADER_SIZE)
+    return 0;
+
+  attr_len = u32at (pa, GRUB_NTFS_ATTRIBUTE_LENGTH);
+  if (attr_len < GRUB_NTFS_ATTRIBUTE_HEADER_SIZE
+      || attr_len > (grub_size_t) (end - pa)
+      || pa[GRUB_NTFS_ATTRIBUTE_NAME_LENGTH] != at->name_len)
+    return 0;
+  if (!at->name_len)
+    return 1;
+
+  name_offset = u16at (pa, GRUB_NTFS_ATTRIBUTE_NAME_OFFSET);
+  if (name_offset < GRUB_NTFS_ATTRIBUTE_HEADER_SIZE
+      || name_offset > attr_len
+      || at->name_len > (attr_len - name_offset) / 2)
+    return 0;
+
+  return grub_memcmp (pa + name_offset, at->name, at->name_len * 2) == 0;
+}
+
+static int
+attr_list_name_matches (const struct grub_ntfs_attr *at, grub_uint8_t *pa, grub_uint8_t *end)
+{
+  grub_size_t attr_len;
+  grub_size_t name_offset;
+
+  if (at->name == NULL)
+    return 1;
+  if (pa >= end || (grub_size_t) (end - pa) < 8)
+    return 0;
+
+  attr_len = u16at (pa, 4);
+  if (attr_len < 0x1a || attr_len > (grub_size_t) (end - pa)
+      || pa[6] != at->name_len)
+    return 0;
+  if (!at->name_len)
+    return 1;
+
+  name_offset = pa[7];
+  if (name_offset < 0x1a || name_offset > attr_len
+      || at->name_len > (attr_len - name_offset) / 2)
+    return 0;
+
+  return grub_memcmp (pa + name_offset, at->name, at->name_len * 2) == 0;
 }
 
 static grub_uint8_t *
@@ -342,7 +410,8 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 	   * because this is the attribute list type.
 	   */
 	  at->attr_nxt = next_attribute (at->attr_cur, at->attr_end, false);
-	  if ((*at->attr_cur == attr) || (attr == 0))
+	  if (((*at->attr_cur == attr) || (attr == 0))
+	      && attr_list_name_matches (at, at->attr_cur, at->attr_end))
 	    {
 	      grub_uint8_t *new_pos, *end;
 
@@ -394,7 +463,8 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 	      while (new_pos && *new_pos != 0xFF)
 		{
 		  if ((*new_pos == *at->attr_cur)
-		      && (u16at (new_pos, 0xE) == u16at (at->attr_cur, 0x18)))
+		      && (u16at (new_pos, 0xE) == u16at (at->attr_cur, 0x18))
+		      && attr_name_matches (at, new_pos, end))
 		    {
 		      return new_pos;
 		    }
@@ -433,7 +503,9 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 
       if (*at->attr_cur == GRUB_NTFS_AT_ATTRIBUTE_LIST)
 	at->attr_end = at->attr_cur;
-      if ((*at->attr_cur == attr) || (attr == 0) || (nsize == 0))
+      if ((nsize == 0)
+	  || (((*at->attr_cur == attr) || (attr == 0))
+	      && attr_name_matches (at, at->attr_cur, at->end)))
 	return at->attr_cur;
       at->attr_cur = at->attr_nxt;
     }
@@ -494,7 +566,8 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 
       while (at->attr_nxt)
 	{
-	  if ((*at->attr_nxt == attr) || (attr == 0))
+	  if (((*at->attr_nxt == attr) || (attr == 0))
+	      && attr_list_name_matches (at, at->attr_nxt, at->attr_end))
 	    break;
 
 	  nxt_offset = u16at (at->attr_nxt, 4);
@@ -510,7 +583,8 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 	    at->attr_nxt = NULL;
 	}
 
-      if ((at->attr_nxt + GRUB_NTFS_ATTRIBUTE_HEADER_SIZE) >= at->attr_end || at->attr_nxt == NULL)
+      if (at->attr_nxt == NULL
+	  || (at->attr_nxt + GRUB_NTFS_ATTRIBUTE_HEADER_SIZE) >= at->attr_end)
 	return NULL;
 
       if ((at->flags & GRUB_NTFS_AF_MMFT) && (attr == GRUB_NTFS_AT_DATA))
@@ -564,14 +638,16 @@ find_attr (struct grub_ntfs_attr *at, grub_uint8_t attr)
 }
 
 static grub_uint8_t *
-locate_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft,
-	     grub_uint8_t attr)
+locate_attr_name (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft,
+	     grub_uint8_t attr, const grub_uint8_t *name, grub_size_t name_len)
 {
   grub_uint8_t *pa;
   grub_uint8_t *last_pa;
 
   if (init_attr (at, mft) != GRUB_ERR_NONE)
     return NULL;
+  at->name = name;
+  at->name_len = name_len;
 
   pa = find_attr (at, attr);
   if (pa == NULL)
@@ -593,9 +669,25 @@ locate_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft,
       free_attr (at);
       if (init_attr (at, mft) != GRUB_ERR_NONE)
 	return NULL;
+      at->name = name;
+      at->name_len = name_len;
       pa = find_attr (at, attr);
     }
   return pa;
+}
+
+static grub_uint8_t *
+locate_attr (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft, grub_uint8_t attr)
+{
+  return locate_attr_name (at, mft, attr, NULL, 0);
+}
+
+static grub_uint8_t *
+locate_attr_unnamed (struct grub_ntfs_attr *at, struct grub_ntfs_file *mft, grub_uint8_t attr)
+{
+  static const grub_uint8_t empty_name;
+
+  return locate_attr_name (at, mft, attr, &empty_name, 0);
 }
 
 static grub_disk_addr_t
@@ -820,7 +912,7 @@ read_attr (struct grub_ntfs_attr *at, grub_uint8_t *dest, grub_disk_addr_t ofs,
 
       while (pa)
 	{
-	  if (*pa != attr)
+	  if (*pa != attr || !attr_list_name_matches (at, pa, at->attr_end))
 	    break;
 	  if (u32at (pa, 8) > vcn)
 	    break;
@@ -840,6 +932,12 @@ read_attr (struct grub_ntfs_attr *at, grub_uint8_t *dest, grub_disk_addr_t ofs,
   return ret;
 }
 
+grub_err_t
+grub_ntfs_read_attr (struct grub_ntfs_attr *at, grub_uint8_t *dest, grub_disk_addr_t ofs, grub_size_t len)
+{
+  return read_attr (at, dest, ofs, len, 1, 0, 0);
+}
+
 static grub_err_t
 read_mft (struct grub_ntfs_data *data, grub_uint8_t *buf, grub_uint64_t mftno)
 {
@@ -851,11 +949,123 @@ read_mft (struct grub_ntfs_data *data, grub_uint8_t *buf, grub_uint64_t mftno)
 }
 
 static grub_err_t
+ntfs_wof_init (struct grub_ntfs_file *mft)
+{
+  struct grub_ntfs_attr reparse_attr;
+  struct grub_ntfs_attr wof_attr;
+  grub_uint8_t reparse[GRUB_NTFS_WOF_REPARSE_SIZE];
+  grub_uint8_t *pa;
+  grub_uint64_t reparse_size;
+  grub_uint32_t format;
+  grub_uint8_t algorithm;
+  grub_uint8_t frame_bits;
+  grub_err_t err;
+
+  grub_memset (&reparse_attr, 0, sizeof (reparse_attr));
+  grub_memset (&wof_attr, 0, sizeof (wof_attr));
+
+  pa = locate_attr_unnamed (&reparse_attr, mft, GRUB_NTFS_AT_SYMLINK);
+  if (pa == NULL)
+    {
+      err = grub_errno;
+      if (err)
+	goto fail;
+      return GRUB_ERR_NONE;
+    }
+
+  reparse_size = pa[GRUB_NTFS_ATTRIBUTE_RESIDENT]
+    ? u64at (pa, 0x30) : res_attr_data_len (pa);
+  if (reparse_size < 8)
+    goto done;
+  if (grub_ntfs_read_attr (&reparse_attr, reparse, 0, 8))
+    goto fail;
+  if (u32at (reparse, 0) != GRUB_NTFS_REPARSE_TAG_COMPRESS)
+    goto done;
+
+  if (reparse_size < GRUB_NTFS_WOF_REPARSE_SIZE
+      || u16at (reparse, 4) < GRUB_NTFS_WOF_REPARSE_SIZE - 8
+      || (grub_uint64_t) u16at (reparse, 4) + 8 > reparse_size)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid WOF reparse data");
+      goto fail;
+    }
+  if (grub_ntfs_read_attr (&reparse_attr, reparse, 0, sizeof (reparse)))
+    goto fail;
+
+  if (u32at (reparse, 8) != 1 || u32at (reparse, 12) != 2
+      || u32at (reparse, 16) != 1)
+    goto done;
+
+  format = u32at (reparse, 20);
+  switch (format)
+    {
+    case 0:
+      algorithm = GRUB_NTFS_WOF_XPRESS;
+      frame_bits = 12;
+      break;
+    case 1:
+      algorithm = GRUB_NTFS_WOF_LZX;
+      frame_bits = 15;
+      break;
+    case 2:
+      algorithm = GRUB_NTFS_WOF_XPRESS;
+      frame_bits = 13;
+      break;
+    case 3:
+      algorithm = GRUB_NTFS_WOF_XPRESS;
+      frame_bits = 14;
+      break;
+    default:
+      goto done;
+    }
+
+  pa = locate_attr_name (&wof_attr, mft, GRUB_NTFS_AT_DATA,
+			 grub_ntfs_wof_name, GRUB_NTFS_WOF_NAME_LEN);
+  if (pa == NULL)
+    {
+      if (!grub_errno)
+	grub_error (GRUB_ERR_BAD_FS, "WOF data stream is missing");
+      goto fail;
+    }
+
+  mft->wof_size = pa[GRUB_NTFS_ATTRIBUTE_RESIDENT]
+    ? u64at (pa, 0x30) : res_attr_data_len (pa);
+  if (mft->size && !mft->wof_size)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "WOF data stream is empty");
+      goto fail;
+    }
+
+  mft->wof_algorithm = algorithm;
+  mft->wof_frame_bits = frame_bits;
+  mft->wof_save_pos = ~(grub_uint64_t) 0;
+  free_attr (&mft->attr);
+  mft->attr = wof_attr;
+  grub_memset (&wof_attr, 0, sizeof (wof_attr));
+
+done:
+  free_attr (&reparse_attr);
+  return GRUB_ERR_NONE;
+
+fail:
+  err = grub_errno;
+  free_attr (&wof_attr);
+  free_attr (&reparse_attr);
+  return err;
+}
+
+static grub_err_t
 init_file (struct grub_ntfs_file *mft, grub_uint64_t mftno)
 {
   unsigned short flag;
 
   mft->inode_read = 1;
+  mft->wof_algorithm = GRUB_NTFS_WOF_NONE;
+  mft->wof_frame_bits = 0;
+  mft->wof_size = 0;
+  mft->wof_save_pos = ~(grub_uint64_t) 0;
+  mft->wof_sbuf = NULL;
+  mft->wof_sbuf_len = 0;
 
   mft->buf = grub_malloc (mft->data->mft_size << GRUB_NTFS_BLK_SHR);
   if (mft->buf == NULL)
@@ -873,7 +1083,7 @@ init_file (struct grub_ntfs_file *mft, grub_uint64_t mftno)
     {
       grub_uint8_t *pa;
 
-      pa = locate_attr (&mft->attr, mft, GRUB_NTFS_AT_DATA);
+      pa = locate_attr_unnamed (&mft->attr, mft, GRUB_NTFS_AT_DATA);
       if (pa == NULL)
 	return grub_error (GRUB_ERR_BAD_FS, "no $DATA in MFT 0x%llx",
 			   (unsigned long long) mftno);
@@ -882,6 +1092,9 @@ init_file (struct grub_ntfs_file *mft, grub_uint64_t mftno)
 	mft->size = res_attr_data_len (pa);
       else
 	mft->size = u64at (pa, 0x30);
+
+      if (ntfs_wof_init (mft))
+	return grub_errno;
 
       if ((mft->attr.flags & GRUB_NTFS_AF_ALST) == 0)
 	mft->attr.attr_end = 0;	/*  Don't jump to attribute list */
@@ -898,8 +1111,25 @@ free_file (struct grub_ntfs_file *mft)
   if (mft)
   {
     free_attr (&mft->attr);
+    grub_free (mft->wof_sbuf);
     grub_free (mft->buf);
   }
+}
+
+static int
+is_wof_file (struct grub_ntfs_data *data, grub_uint64_t ino)
+{
+  struct grub_ntfs_file mft;
+  int ret = 0;
+
+  grub_memset (&mft, 0, sizeof (mft));
+  mft.data = data;
+  if (!init_file (&mft, ino) && mft.wof_algorithm != GRUB_NTFS_WOF_NONE)
+    ret = 1;
+  free_file (&mft);
+  grub_errno = GRUB_ERR_NONE;
+
+  return ret;
 }
 
 static char *
@@ -962,7 +1192,7 @@ list_file (struct grub_ntfs_file *diro, grub_uint8_t *pos, grub_uint8_t *end_pos
 
 	  attr = u32at (pos, 0x48);
 	  if (attr & GRUB_NTFS_ATTR_REPARSE)
-	    type = GRUB_FSHELP_SYMLINK;
+	    type = is_wof_file (diro->data, u64at (pos, 0) & 0xffffffffffffULL) ? GRUB_FSHELP_REG : GRUB_FSHELP_SYMLINK;
 	  else if (attr & GRUB_NTFS_ATTR_DIRECTORY)
 	    type = GRUB_FSHELP_DIR;
 	  else
@@ -1036,7 +1266,7 @@ grub_ntfs_read_symlink (grub_fshelp_node_t node)
   if (read_mft (mft->data, mft->buf, mft->ino))
     goto fail;
 
-  pa = locate_attr (&mft->attr, mft, GRUB_NTFS_AT_SYMLINK);
+  pa = locate_attr_unnamed (&mft->attr, mft, GRUB_NTFS_AT_SYMLINK);
   if (pa == NULL)
     {
       grub_error (GRUB_ERR_BAD_FS, "no $SYMLINK in MFT 0x%llx",
@@ -1394,7 +1624,7 @@ grub_ntfs_mount (grub_disk_t disk)
   if (fixup (data->mmft.buf, data->mft_size, (const grub_uint8_t *) "FILE"))
     goto fail;
 
-  if (!locate_attr (&data->mmft.attr, &data->mmft, GRUB_NTFS_AT_DATA))
+  if (!locate_attr_unnamed (&data->mmft.attr, &data->mmft, GRUB_NTFS_AT_DATA))
     goto fail;
 
   if (init_file (&data->cmft, GRUB_NTFS_FILE_ROOT))
@@ -1533,14 +1763,29 @@ static grub_ssize_t
 grub_ntfs_read (grub_file_t file, char *buf, grub_size_t len)
 {
   struct grub_ntfs_file *mft;
+  grub_err_t err;
 
   mft = &((struct grub_ntfs_data *) file->data)->cmft;
-  if (file->read_hook)
-    mft->attr.save_pos = 1;
-
-  read_attr (&mft->attr, (grub_uint8_t *) buf, file->offset, len, 1,
-	     file->read_hook, file->read_hook_data);
-  return (grub_errno) ? -1 : (grub_ssize_t) len;
+  if (mft->wof_algorithm != GRUB_NTFS_WOF_NONE)
+    {
+      err = grub_ntfswof_func ? grub_ntfswof_func ((grub_uint8_t *) buf, file->offset, len, mft)
+	    : grub_error (GRUB_ERR_BAD_FS, N_("module `%s' isn't loaded"), "ntfscomp");
+      if (err)
+	return -1;
+      if (grub_file_progress_hook
+	  && file->read_hook == grub_file_progress_hook)
+	grub_file_progress_hook (0, 0, len, NULL, file->read_hook_data);
+    }
+  else
+    {
+      if (file->read_hook)
+	mft->attr.save_pos = 1;
+      read_attr (&mft->attr, (grub_uint8_t *) buf, file->offset, len, 1,
+		 file->read_hook, file->read_hook_data);
+      if (grub_errno)
+	return -1;
+    }
+  return (grub_ssize_t) len;
 }
 
 static grub_err_t
