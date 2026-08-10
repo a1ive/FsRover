@@ -1011,8 +1011,10 @@ grub_ubifs_mount(grub_disk_t disk)
 {
 	struct grub_ubifs_data *data;
 	grub_uint8_t probe[UBIFS_CH_LEN];
+	grub_uint64_t sectors;
 
-	if (disk->total_sectors == GRUB_DISK_SIZE_UNKNOWN)
+	sectors = grub_disk_native_sectors(disk);
+	if (sectors == GRUB_DISK_SIZE_UNKNOWN)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "not a ubifs filesystem");
 		return NULL;
@@ -1022,7 +1024,7 @@ grub_ubifs_mount(grub_disk_t disk)
 	if (!data)
 		return NULL;
 	data->disk = disk;
-	data->disk_size = disk->total_sectors << GRUB_DISK_SECTOR_BITS;
+	data->disk_size = sectors << GRUB_DISK_SECTOR_BITS;
 	data->root = (struct grub_fshelp_node *) (data + 1);
 	data->root->data = data;
 	data->root->ino = UBIFS_ROOT_INO;

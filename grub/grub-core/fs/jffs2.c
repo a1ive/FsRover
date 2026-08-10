@@ -542,9 +542,10 @@ grub_jffs2_mount(grub_disk_t disk)
 	grub_size_t probe_len, i;
 	int found = 0;
 
-	if (disk->total_sectors == GRUB_DISK_SIZE_UNKNOWN)
+	size = grub_disk_native_sectors(disk);
+	if (size == GRUB_DISK_SIZE_UNKNOWN)
 		goto fail;
-	size = disk->total_sectors << GRUB_DISK_SECTOR_BITS;
+	size <<= GRUB_DISK_SECTOR_BITS;
 	if (size < JFFS2_HDR_LEN)
 		goto fail;
 

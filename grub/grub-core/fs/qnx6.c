@@ -571,7 +571,7 @@ static grub_err_t
 qnx6_parse_superblocks(grub_qnx6_data_t* data)
 {
 	grub_uint64_t sb1_sec = QNX6_BOOTBLOCK_SIZE >> GRUB_DISK_SECTOR_BITS;
-	grub_uint64_t sb2_sec = (data->disk->total_sectors & ~(QNX6_SUPERBLOCK_SECTORS -
+	grub_uint64_t sb2_sec = (grub_disk_native_sectors(data->disk) & ~(QNX6_SUPERBLOCK_SECTORS -
 		1)) - QNX6_SUPERBLOCK_SECTORS;
 	bool          sb1_ok, sb2_ok;
 
