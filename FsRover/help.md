@@ -997,28 +997,29 @@ below.
 
 > Origin: GRUB
 
-**Ciphers:** AES-128/192/256, Serpent, Twofish and Camellia, in CBC and XTS mode.
-**Hashes:** SHA-1, SHA-256, SHA-384, SHA-512, RIPEMD-160, Whirlpool.
+**Ciphers:** AES-128/192/256, Serpent-128/192/256, Twofish-128/256,
+Camellia-128/192/256, CAST5, Blowfish, DES and 3DES.
+**Hashes:** SHA-1, SHA-224, SHA-256, SHA-384, SHA-512 (including the SHA-512/224
+and SHA-512/256 truncations), RIPEMD-160, Whirlpool, Streebog-256/512, MD5.
 **Key derivation:** PBKDF2.
 
 A key file up to 8 MiB may be used instead of a passphrase.
 
-**Not supported:** CAST5, Blowfish and 3DES volumes — those primitives are not
-built in.
+**Modes.** XTS and LRW need a 16-byte block, so they are available for AES,
+Serpent, Twofish and Camellia only; the 8-byte-block ciphers — CAST5, Blowfish,
+DES, 3DES — can be used in CBC and ECB. In XTS the LUKS key is split in half, so
+`--key-size` there is twice the cipher's key size.
 
 ### LUKS2 — `luks2`
 
 > Origin: GRUB
 
-**Ciphers:** AES-128/192/256, Serpent, Twofish and Camellia, in CBC and XTS mode.
-
-**Hashes:** SHA-1, SHA-256, SHA-384, SHA-512, RIPEMD-160, Whirlpool.
+**Ciphers and hashes:** the same set as LUKS1 above, including the note on
+modes.
 
 **Key derivation:** PBKDF2, Argon2i, Argon2id.
 
-The JSON metadata area and its base64 fields are parsed in full. The 256-bit
-restriction on Serpent, Twofish and Camellia, and the missing CAST5 / Blowfish /
-3DES, are the same as for LUKS1 above.
+The JSON metadata area and its base64 fields are parsed in full.
 
 ### BitLocker — `bitlocker`
 
@@ -1089,7 +1090,9 @@ has been unable to mount itself since 1.19.
 
 > Origin: GRUB
 
-**Ciphers:** AES-CBC (algorithm `0x0b`) and AES-XTS (`0x16`).
+**Ciphers:** every algorithm id GELI defines that has a name in GRUB's table —
+DES (`0x01`), 3DES (`0x02`), Blowfish (`0x03`), CAST5 (`0x04`), AES (`0x0b`) and
+Camellia-128 (`0x15`) in CBC, and AES (`0x16`) in XTS.
 **Hashes:** SHA-256, SHA-512.
 **Key derivation:** PBKDF2, plus the v5+ rekey scheme.
 
@@ -1097,9 +1100,8 @@ Metadata versions 1–7 are read. The metadata lives in the volume's **last**
 sector, and the UUID is not stored but derived —
 `hex(HMAC-SHA256(salt, "uuid"))`.
 
-**Not supported:** volumes using DES/3DES, Blowfish or CAST5, which are not
-built in; and GELI's Camellia (algorithm `0x15`), which is the 128-bit variant
-that the Camellia here does not key.
+**Not supported:** Skipjack (`0x05`) and the null cipher (`0x10`), which GRUB's
+algorithm table leaves unnamed.
 
 ---
 

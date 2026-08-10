@@ -1568,10 +1568,32 @@ static const gcry_cipher_oid_spec_t camellia256_oids[] =
     { NULL }
   };
 
+/* Rover: upstream leaves these NULL, so the plain "camellia" a LUKS header
+   names could not be looked up.  Named after the serpent aliases above: the
+   unsuffixed name goes to the 128 bit variant, which is what libgcrypt does
+   for Serpent.  camellia_setkey() accepts 16, 24 and 32 byte keys whichever
+   spec was opened, so the key size in the header still decides.  */
+static const char *camellia128_aliases[] =
+  {
+    "CAMELLIA",
+    "CAMELLIA-128",
+    NULL
+  };
+static const char *camellia192_aliases[] =
+  {
+    "CAMELLIA-192",
+    NULL
+  };
+static const char *camellia256_aliases[] =
+  {
+    "CAMELLIA-256",
+    NULL
+  };
+
 gcry_cipher_spec_t _gcry_cipher_spec_camellia128 =
   {
     GCRY_CIPHER_CAMELLIA128, {0, 0},
-    "CAMELLIA128",NULL,camellia128_oids,CAMELLIA_BLOCK_SIZE,128,
+    "CAMELLIA128",camellia128_aliases,camellia128_oids,CAMELLIA_BLOCK_SIZE,128,
     sizeof(CAMELLIA_context),camellia_setkey,camellia_encrypt,camellia_decrypt
     ,
     GRUB_UTIL_MODNAME("gcry_camellia")
@@ -1580,7 +1602,7 @@ gcry_cipher_spec_t _gcry_cipher_spec_camellia128 =
 gcry_cipher_spec_t _gcry_cipher_spec_camellia192 =
   {
     GCRY_CIPHER_CAMELLIA192, {0, 0},
-    "CAMELLIA192",NULL,camellia192_oids,CAMELLIA_BLOCK_SIZE,192,
+    "CAMELLIA192",camellia192_aliases,camellia192_oids,CAMELLIA_BLOCK_SIZE,192,
     sizeof(CAMELLIA_context),camellia_setkey,camellia_encrypt,camellia_decrypt
     ,
     GRUB_UTIL_MODNAME("gcry_camellia")
@@ -1589,7 +1611,7 @@ gcry_cipher_spec_t _gcry_cipher_spec_camellia192 =
 gcry_cipher_spec_t _gcry_cipher_spec_camellia256 =
   {
     GCRY_CIPHER_CAMELLIA256, {0, 0},
-    "CAMELLIA256",NULL,camellia256_oids,CAMELLIA_BLOCK_SIZE,256,
+    "CAMELLIA256",camellia256_aliases,camellia256_oids,CAMELLIA_BLOCK_SIZE,256,
     sizeof(CAMELLIA_context),camellia_setkey,camellia_encrypt,camellia_decrypt
     ,
     GRUB_UTIL_MODNAME("gcry_camellia")

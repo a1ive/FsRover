@@ -121,7 +121,15 @@ enum gcry_cipher_modes
 /* Don't rely on this. Check!  */
 #define GRUB_CRYPTO_MAX_MDLEN 64
 #define GRUB_CRYPTO_MAX_CIPHER_BLOCKSIZE 16
-#define GRUB_CRYPTO_MAX_MD_CONTEXT_SIZE 256
+/*
+ * Rover: raised from upstream's 256.  This bounds the on-stack context in
+ * grub_crypto_hash(), which calls grub_fatal() when a digest needs more, and
+ * the digests registered here have outgrown it: Whirlpool needs 272 bytes and
+ * Streebog 352.  Both are reachable from LUKS (the AF-splitter hashes through
+ * grub_crypto_hash()), so the old value aborted the process on a volume whose
+ * header names one of them.
+ */
+#define GRUB_CRYPTO_MAX_MD_CONTEXT_SIZE 384
 
 /* Type for the cipher_setkey function.  */
 struct cipher_bulk_ops;
