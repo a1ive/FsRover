@@ -222,7 +222,7 @@
     <ClCompile Include="grub-core\fs\cramfs.c" />
     <ClCompile Include="grub-core\fs\deb.c" />
     <ClCompile Include="grub-core\fs\erofs.c">
-      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\exfat.c" />
     <ClCompile Include="grub-core\fs\ext2.c" />

@@ -29,6 +29,10 @@
 #include <grub/types.h>
 
 #include <lz4.h>
+#include <LzmaDec.h>
+#include <miniz.h>
+#define ZSTD_STATIC_LINKING_ONLY
+#include <zstd.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -37,7 +41,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define EROFS_ISLOTBITS		5
 
 #define EROFS_FEATURE_INCOMPAT_ZERO_PADDING	0x00000001
-#define EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER	0x00000002
+#define EROFS_FEATURE_INCOMPAT_COMPR_CFGS	0x00000002
+#define EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER	EROFS_FEATURE_INCOMPAT_COMPR_CFGS
 #define EROFS_FEATURE_INCOMPAT_CHUNKED_FILE	0x00000004
 #define EROFS_FEATURE_INCOMPAT_ZTAILPACKING	0x00000010
 #define EROFS_FEATURE_INCOMPAT_FRAGMENTS		0x00000020
@@ -82,6 +87,33 @@ struct grub_erofs_super
   grub_uint64_t		packed_nid;
   grub_uint8_t		reserved2[24];
 } GRUB_PACKED;
+
+struct grub_erofs_lz4_cfgs
+{
+  grub_uint16_t		max_distance;
+  grub_uint16_t		max_pclusterblks;
+  grub_uint8_t		reserved[10];
+} GRUB_PACKED;
+
+struct grub_erofs_lzma_cfgs
+{
+  grub_uint32_t		dict_size;
+  grub_uint16_t		format;
+  grub_uint8_t		reserved[8];
+} GRUB_PACKED;
+
+struct grub_erofs_deflate_cfgs
+{
+  grub_uint8_t		windowbits;
+  grub_uint8_t		reserved[5];
+} GRUB_PACKED;
+
+struct grub_erofs_zstd_cfgs
+{
+  grub_uint8_t		format;
+  grub_uint8_t		windowlog;
+  grub_uint8_t		reserved[4];
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 #define EROFS_INODE_LAYOUT_COMPACT	0
@@ -122,6 +154,9 @@ PRAGMA_END_PACKED
 #define EROFS_PATH_LEN			4096
 #define EROFS_MIN_LOG2_BLOCK_SIZE	9
 #define EROFS_MAX_LOG2_BLOCK_SIZE	16
+#define EROFS_SB_EXTSLOT_SIZE		16
+#define EROFS_LZMA_MAX_DICT_SIZE	(8 * 1024 * 1024)
+#define EROFS_ZSTD_MAX_WINDOWLOG	10
 
 struct grub_erofs_inode_chunk_index
 {
@@ -220,8 +255,13 @@ struct grub_erofs_map_blocks
 enum
 {
   EROFS_COMPRESSION_LZ4,
+  EROFS_COMPRESSION_LZMA,
+  EROFS_COMPRESSION_DEFLATE,
+  EROFS_COMPRESSION_ZSTD,
   EROFS_COMPRESSION_MAX
 };
+
+#define EROFS_ALL_COMPR_ALGS	((1U << EROFS_COMPRESSION_MAX) - 1)
 
 enum
 {
@@ -353,10 +393,133 @@ struct grub_erofs_data
   grub_disk_t			disk;
   struct grub_erofs_super	sb;
 
+  grub_uint16_t			available_compr_algs;
+  grub_uint32_t			lzma_dict_size;
+  grub_uint32_t			zstd_max_window_size;
+
   struct grub_fshelp_node	inode;
 };
 
 #define erofs_blocksz(data) (((grub_uint32_t) 1) << data->sb.log2_blksz)
+
+static grub_err_t
+erofs_parse_compression_configs (struct grub_erofs_data *data)
+{
+  grub_uint16_t algs;
+  grub_uint64_t offset;
+  unsigned int alg;
+  grub_err_t err;
+
+  data->lzma_dict_size = 0;
+  data->zstd_max_window_size = 0;
+  if (!(grub_le_to_cpu32 (data->sb.feature_incompat) & EROFS_FEATURE_INCOMPAT_COMPR_CFGS))
+  {
+    data->available_compr_algs = 1 << EROFS_COMPRESSION_LZ4;
+    return GRUB_ERR_NONE;
+  }
+
+  algs = grub_le_to_cpu16 (data->sb.u1.available_compr_algs);
+  if (algs & ~EROFS_ALL_COMPR_ALGS)
+    return grub_error (GRUB_ERR_BAD_FS, "unsupported compression algorithms: 0x%x", algs & ~EROFS_ALL_COMPR_ALGS);
+
+  data->available_compr_algs = algs;
+  offset = EROFS_SUPER_OFFSET + sizeof (data->sb) + (grub_uint64_t) data->sb.sb_extslots * EROFS_SB_EXTSLOT_SIZE;
+  for (alg = 0; alg < EROFS_COMPRESSION_MAX; alg++)
+  {
+    grub_uint16_t config_len;
+    grub_size_t config_size;
+    void *config = NULL;
+
+    if (!(algs & (1U << alg)))
+      continue;
+
+    if (ALIGN_UP_OVF (offset, 4, &offset))
+      return grub_error (GRUB_ERR_OUT_OF_RANGE, "compression config offset overflow");
+
+    err = grub_disk_read (data->disk, offset >> GRUB_DISK_SECTOR_BITS, offset & (GRUB_DISK_SECTOR_SIZE - 1), sizeof (config_len), &config_len);
+    if (err != GRUB_ERR_NONE)
+      return err;
+
+    config_size = grub_le_to_cpu16 (config_len);
+    if (config_size == 0)
+      config_size = 65536;
+    if (grub_add (offset, sizeof (config_len), &offset))
+      return grub_error (GRUB_ERR_OUT_OF_RANGE, "compression config offset overflow");
+
+    config = grub_malloc (config_size);
+    if (config == NULL)
+      return grub_errno;
+
+    err = grub_disk_read (data->disk, offset >> GRUB_DISK_SECTOR_BITS, offset & (GRUB_DISK_SECTOR_SIZE - 1), config_size, config);
+    if (err != GRUB_ERR_NONE)
+      goto fail;
+
+    switch (alg)
+    {
+      case EROFS_COMPRESSION_LZ4:
+        if (config_size < sizeof (struct grub_erofs_lz4_cfgs))
+        {
+          err = grub_error (GRUB_ERR_BAD_FS, "invalid lz4 compression config");
+          goto fail;
+        }
+        break;
+      case EROFS_COMPRESSION_LZMA:
+      {
+        const struct grub_erofs_lzma_cfgs *lzma = config;
+
+        if (config_size < sizeof (*lzma) || grub_le_to_cpu16 (lzma->format) != 0)
+        {
+           err = grub_error (GRUB_ERR_BAD_FS, "invalid lzma compression config");
+           goto fail;
+        }
+        data->lzma_dict_size = grub_le_to_cpu32 (lzma->dict_size);
+        if (data->lzma_dict_size < 4096 || data->lzma_dict_size > EROFS_LZMA_MAX_DICT_SIZE)
+        {
+           err = grub_error (GRUB_ERR_BAD_FS, "unsupported lzma dictionary size %u", data->lzma_dict_size);
+           goto fail;
+        }
+        break;
+      }
+      case EROFS_COMPRESSION_DEFLATE:
+      {
+        const struct grub_erofs_deflate_cfgs *deflate = config;
+
+        if (config_size < sizeof (*deflate) || deflate->windowbits > 15)
+        {
+          err = grub_error (GRUB_ERR_BAD_FS, "invalid deflate compression config");
+          goto fail;
+        }
+        break;
+      }
+      case EROFS_COMPRESSION_ZSTD:
+      {
+        const struct grub_erofs_zstd_cfgs *zstd = config;
+
+        if (config_size < sizeof (*zstd) || zstd->format != 0 || zstd->windowlog > EROFS_ZSTD_MAX_WINDOWLOG)
+        {
+          err = grub_error (GRUB_ERR_BAD_FS, "invalid zstd compression config");
+          goto fail;
+        }
+        data->zstd_max_window_size = ((grub_uint32_t) 1) << (zstd->windowlog + 10);
+        break;
+      }
+    }
+
+    if (grub_add (offset, config_size, &offset))
+    {
+      err = grub_error (GRUB_ERR_OUT_OF_RANGE, "compression config offset overflow");
+      goto fail;
+    }
+    grub_free (config);
+    continue;
+
+fail:
+    grub_free (config);
+    return err;
+  }
+
+  return GRUB_ERR_NONE;
+}
 
 static grub_size_t
 grub_erofs_strnlen (const char *s, grub_size_t n)
@@ -730,7 +893,7 @@ grub_erofs_zip_read_header(grub_fshelp_node_t node)
 	node->z_algorithmtype[0] = h.h_algorithmtype & 0xF;
 	node->z_algorithmtype[1] = (h.h_algorithmtype >> 4) & 0xF;
 
-	if (node->z_algorithmtype[0] >= EROFS_COMPRESSION_MAX)
+	if (node->z_algorithmtype[0] >= EROFS_COMPRESSION_MAX || !(node->data->available_compr_algs & (1U << node->z_algorithmtype[0])))
 		return grub_error(GRUB_ERR_BAD_FS, "unsupported compression algorithm %u",
 			node->z_algorithmtype[0]);
 
@@ -1271,15 +1434,51 @@ grub_erofs_zip_map_blocks_iter(grub_fshelp_node_t node,
 }
 
 static grub_err_t
+grub_erofs_zip_skip_0padding (struct grub_erofs_zip_decompress_req *rq, char **src, grub_uint32_t *inputsize)
+{
+  grub_uint32_t inputmargin = 0;
+  grub_uint32_t blocksz = erofs_blocksz (rq->data);
+
+  while (inputmargin < *inputsize && inputmargin < blocksz && !(*src)[inputmargin])
+    inputmargin++;
+
+  if (inputmargin >= *inputsize || inputmargin >= blocksz)
+    return grub_error (GRUB_ERR_BAD_FS, "invalid compressed input padding");
+
+  *src += inputmargin;
+  *inputsize -= inputmargin;
+  return GRUB_ERR_NONE;
+}
+
+static void *
+erofs_lzma_alloc (ISzAllocPtr p, size_t size)
+{
+  (void) p;
+  return grub_malloc (size);
+}
+
+static void
+erofs_lzma_free (ISzAllocPtr p, void *address)
+{
+  (void) p;
+  grub_free (address);
+}
+
+static const ISzAlloc erofs_lzma_allocator =
+{
+  erofs_lzma_alloc,
+  erofs_lzma_free
+};
+
+static grub_err_t
 grub_erofs_zip_decompress_lz4(struct grub_erofs_zip_decompress_req* rq)
 {
 	int ret = 0;
 	char* dest = rq->out, * src = rq->in;
 	char* buff = NULL;
 	bool support_0padding = false;
-	grub_uint32_t inputmargin = 0;
+	grub_uint32_t inputsize = rq->inputsize;
 	grub_err_t err = GRUB_ERR_NONE;
-	grub_uint32_t blocksz = erofs_blocksz(rq->data);
 
 	if (rq->decodedskip > rq->decodedlength ||
 		rq->inputsize > GRUB_INT_MAX || rq->decodedlength > GRUB_INT_MAX)
@@ -1290,13 +1489,9 @@ grub_erofs_zip_decompress_lz4(struct grub_erofs_zip_decompress_req* rq)
 	{
 		support_0padding = true;
 
-		while (inputmargin < rq->inputsize && inputmargin < blocksz &&
-			!src[inputmargin])
-			inputmargin++;
-
-		if (inputmargin >= rq->inputsize || inputmargin >= blocksz)
-			return grub_error(GRUB_ERR_BAD_FS, "invalid lz4 inputmargin %u",
-				inputmargin);
+		err = grub_erofs_zip_skip_0padding (rq, &src, &inputsize);
+		if (err != GRUB_ERR_NONE)
+			return err;
 	}
 
 	if (rq->decodedskip)
@@ -1308,12 +1503,11 @@ grub_erofs_zip_decompress_lz4(struct grub_erofs_zip_decompress_req* rq)
 	}
 
 	if (rq->partial_decoding || !support_0padding)
-		ret = LZ4_decompress_safe_partial(src + inputmargin, dest,
-			rq->inputsize - inputmargin,
+		ret = LZ4_decompress_safe_partial(src, dest, inputsize,
 			rq->decodedlength, rq->decodedlength);
 	else
-		ret = LZ4_decompress_safe(src + inputmargin, dest,
-			rq->inputsize - inputmargin, rq->decodedlength);
+		ret = LZ4_decompress_safe(src, dest, inputsize,
+			rq->decodedlength);
 
 	if (ret != (int)rq->decodedlength)
 	{
@@ -1331,6 +1525,250 @@ out:
 	if (buff)
 		grub_free(buff);
 
+	return err;
+}
+
+static grub_err_t
+grub_erofs_zip_decompress_lzma (struct grub_erofs_zip_decompress_req *rq)
+{
+	char *src = rq->in;
+	char *dest = rq->out;
+	char *input = NULL;
+	char *buff = NULL;
+	grub_uint32_t inputsize = rq->inputsize;
+	grub_uint8_t props[LZMA_PROPS_SIZE];
+	SizeT dest_len;
+	SizeT src_len;
+	ELzmaStatus status;
+	SRes result;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	if (rq->decodedskip > rq->decodedlength || rq->data->lzma_dict_size == 0)
+	  return grub_error (GRUB_ERR_BAD_FS, "invalid lzma decompress request");
+
+	err = grub_erofs_zip_skip_0padding (rq, &src, &inputsize);
+	if (err != GRUB_ERR_NONE)
+	  return err;
+
+	input = grub_malloc (inputsize);
+	if (input == NULL)
+	  {
+	    err = grub_errno;
+	    goto out;
+	  }
+	grub_memcpy (input, src, inputsize);
+
+	/* MicroLZMA replaces the raw stream's initial zero with ~lc/lp/pb. */
+	props[0] = (grub_uint8_t) ~((grub_uint8_t) input[0]);
+	props[1] = (grub_uint8_t) rq->data->lzma_dict_size;
+	props[2] = (grub_uint8_t) (rq->data->lzma_dict_size >> 8);
+	props[3] = (grub_uint8_t) (rq->data->lzma_dict_size >> 16);
+	props[4] = (grub_uint8_t) (rq->data->lzma_dict_size >> 24);
+	input[0] = 0;
+
+	if (rq->decodedskip)
+	  {
+	    buff = grub_malloc (rq->decodedlength);
+	    if (buff == NULL)
+	      {
+		err = grub_errno;
+		goto out;
+	      }
+	    dest = buff;
+	  }
+
+	dest_len = rq->decodedlength;
+	src_len = inputsize;
+	result = LzmaDecode ((Byte *) dest, &dest_len, (const Byte *) input,
+			     &src_len, props, sizeof (props),
+			     rq->partial_decoding ? LZMA_FINISH_ANY : LZMA_FINISH_END,
+			     &status, &erofs_lzma_allocator);
+	if (result != SZ_OK)
+	  {
+	    err = grub_error (result == SZ_ERROR_MEM ? GRUB_ERR_OUT_OF_MEMORY :
+			      GRUB_ERR_BAD_FS, "lzma decompress failed");
+	    goto out;
+	  }
+	if (dest_len != rq->decodedlength ||
+	    (!rq->partial_decoding &&
+	     (src_len != inputsize ||
+	      status != LZMA_STATUS_MAYBE_FINISHED_WITHOUT_MARK)))
+	  {
+	    err = grub_error (GRUB_ERR_BAD_FS, "invalid lzma compressed data");
+	    goto out;
+	  }
+
+	if (rq->decodedskip)
+	  grub_memcpy (rq->out, dest + rq->decodedskip,
+		       rq->decodedlength - rq->decodedskip);
+
+out:
+	grub_free (buff);
+	grub_free (input);
+	return err;
+}
+
+static grub_err_t
+grub_erofs_zip_decompress_deflate (struct grub_erofs_zip_decompress_req *rq)
+{
+	char *src = rq->in;
+	char *dest = rq->out;
+	char *buff = NULL;
+	tinfl_decompressor *dec = NULL;
+	grub_uint32_t inputsize = rq->inputsize;
+	grub_size_t in_size;
+	grub_size_t out_size;
+	tinfl_status status;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	if (rq->decodedskip > rq->decodedlength)
+	  return grub_error (GRUB_ERR_BAD_FS, "invalid deflate decompress request");
+
+	err = grub_erofs_zip_skip_0padding (rq, &src, &inputsize);
+	if (err != GRUB_ERR_NONE)
+	  return err;
+
+	if (rq->decodedskip)
+	  {
+	    buff = grub_malloc (rq->decodedlength);
+	    if (buff == NULL)
+	      {
+		err = grub_errno;
+		goto out;
+	      }
+	    dest = buff;
+	  }
+
+	dec = grub_malloc (sizeof (*dec));
+	if (dec == NULL)
+	  {
+	    err = grub_errno;
+	    goto out;
+	  }
+	/* EROFS stores a raw DEFLATE stream, without a zlib wrapper. */
+	tinfl_init (dec);
+	in_size = inputsize;
+	out_size = rq->decodedlength;
+	status = tinfl_decompress (dec, (const mz_uint8 *) src, &in_size,
+				  (mz_uint8 *) dest, (mz_uint8 *) dest, &out_size,
+				  TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+	if (out_size != rq->decodedlength ||
+	    (!rq->partial_decoding &&
+	     (status != TINFL_STATUS_DONE || in_size != inputsize)) ||
+	    (rq->partial_decoding && status != TINFL_STATUS_DONE &&
+	     status != TINFL_STATUS_HAS_MORE_OUTPUT) ||
+	    (status == TINFL_STATUS_DONE && in_size != inputsize))
+	  {
+	    err = grub_error (GRUB_ERR_BAD_FS, "invalid deflate compressed data");
+	    goto out;
+	  }
+
+	if (rq->decodedskip)
+	  grub_memcpy (rq->out, dest + rq->decodedskip,
+		       rq->decodedlength - rq->decodedskip);
+
+out:
+	grub_free (dec);
+	grub_free (buff);
+	return err;
+}
+
+static grub_err_t
+grub_erofs_zip_decompress_zstd (struct grub_erofs_zip_decompress_req *rq)
+{
+	char *src = rq->in;
+	char *dest = rq->out;
+	char *buff = NULL;
+	ZSTD_DStream *stream = NULL;
+	ZSTD_inBuffer input;
+	ZSTD_outBuffer output;
+	grub_uint32_t inputsize = rq->inputsize;
+	size_t result = 1;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	if (rq->decodedskip > rq->decodedlength ||
+	    rq->data->zstd_max_window_size == 0)
+	  return grub_error (GRUB_ERR_BAD_FS, "invalid zstd decompress request");
+
+	err = grub_erofs_zip_skip_0padding (rq, &src, &inputsize);
+	if (err != GRUB_ERR_NONE)
+	  return err;
+
+	if (rq->decodedskip)
+	  {
+	    buff = grub_malloc (rq->decodedlength);
+	    if (buff == NULL)
+	      {
+		err = grub_errno;
+		goto out;
+	      }
+	    dest = buff;
+	  }
+
+	stream = ZSTD_createDStream ();
+	if (stream == NULL)
+	  {
+	    err = grub_error (GRUB_ERR_OUT_OF_MEMORY,
+			      "cannot allocate zstd decompressor");
+	    goto out;
+	  }
+	result = ZSTD_initDStream (stream);
+	if (ZSTD_isError (result))
+	  {
+	    err = grub_error (GRUB_ERR_BAD_FS, "cannot initialize zstd decompressor");
+	    goto out;
+	  }
+	result = ZSTD_DCtx_setMaxWindowSize ((ZSTD_DCtx *) stream,
+				      rq->data->zstd_max_window_size);
+	if (ZSTD_isError (result))
+	  {
+	    err = grub_error (GRUB_ERR_BAD_FS, "invalid zstd window size");
+	    goto out;
+	  }
+
+	input.src = src;
+	input.size = inputsize;
+	input.pos = 0;
+	output.dst = dest;
+	output.size = rq->decodedlength;
+	output.pos = 0;
+	while (output.pos < output.size)
+	  {
+	    grub_size_t in_pos = input.pos;
+	    grub_size_t out_pos = output.pos;
+
+	    result = ZSTD_decompressStream (stream, &output, &input);
+	    if (ZSTD_isError (result))
+	      {
+		err = grub_error (GRUB_ERR_BAD_FS, "zstd decompress failed: %s",
+				  ZSTD_getErrorName (result));
+		goto out;
+	      }
+	    if (output.pos == output.size)
+	      break;
+	    if (result == 0 || input.pos == input.size ||
+		(in_pos == input.pos && out_pos == output.pos))
+	      {
+		err = grub_error (GRUB_ERR_BAD_FS, "invalid zstd compressed data");
+		goto out;
+	      }
+	  }
+
+	if (!rq->partial_decoding &&
+	    (output.pos != output.size || result != 0 || input.pos != input.size))
+	  {
+	    err = grub_error (GRUB_ERR_BAD_FS, "invalid zstd compressed data");
+	    goto out;
+	  }
+
+	if (rq->decodedskip)
+	  grub_memcpy (rq->out, dest + rq->decodedskip,
+		       rq->decodedlength - rq->decodedskip);
+
+out:
+	if (stream != NULL)
+	  ZSTD_freeDStream (stream);
+	grub_free (buff);
 	return err;
 }
 
@@ -1368,10 +1806,20 @@ grub_erofs_zip_decompress(struct grub_erofs_zip_decompress_req* rq)
 		return GRUB_ERR_NONE;
 	}
 
-	if (rq->alg == EROFS_COMPRESSION_LZ4)
-		return grub_erofs_zip_decompress_lz4(rq);
-
-	return grub_error(GRUB_ERR_BAD_FS, "unknown compression alg %u", rq->alg);
+	switch (rq->alg)
+	{
+	case EROFS_COMPRESSION_LZ4:
+		return grub_erofs_zip_decompress_lz4 (rq);
+	case EROFS_COMPRESSION_LZMA:
+		return grub_erofs_zip_decompress_lzma (rq);
+	case EROFS_COMPRESSION_DEFLATE:
+		return grub_erofs_zip_decompress_deflate (rq);
+	case EROFS_COMPRESSION_ZSTD:
+		return grub_erofs_zip_decompress_zstd (rq);
+	default:
+		return grub_error (GRUB_ERR_BAD_FS,
+				   "unknown compression alg %u", rq->alg);
+	}
 }
 
 static grub_err_t
@@ -1751,6 +2199,13 @@ erofs_mount (grub_disk_t disk, bool read_root)
 
   data->disk = disk;
   data->sb = sb;
+
+  err = erofs_parse_compression_configs (data);
+  if (err != GRUB_ERR_NONE)
+    {
+      grub_free (data);
+      return NULL;
+    }
 
   if (read_root)
     {

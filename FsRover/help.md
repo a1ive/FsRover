@@ -51,11 +51,7 @@ Images carrying a 512-byte boot prefix are accepted.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved
 
-**Compression: LZ4 only.** Images compressed with DEFLATE, LZMA or Zstandard
-are not readable.
-
-Both the compact and the full (extended) map layouts are handled, as are
-chunked files, tail packing and fragments.
+**Compression:** LZ4, LZMA, DEFLATE, Zstandard.
 
 #### ext2 / ext3 / ext4 — `ext2`
 
@@ -79,8 +75,7 @@ back as stored ciphertext.
 
 Inline data and inline directories are handled.
 
-**Not supported: F2FS transparent compression** (LZO, LZ4, Zstandard). Files
-written with it cannot be read correctly.
+**Not supported: F2FS transparent compression** (LZO, LZ4, Zstandard).
 
 #### JFFS2 — `jffs2`
 
@@ -135,8 +130,7 @@ Unlike u-boot, this driver does **not replay the journal** — it walks the
 committed on-flash index. Changes written after the last commit of an uncleanly
 detached image are therefore invisible.
 
-**Not supported:** encrypted and authenticated filesystems, both rejected at
-mount time.
+**Not supported:** encrypted and authenticated filesystems.
 
 #### XFS — `xfs`
 
