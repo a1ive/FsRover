@@ -174,6 +174,8 @@ list_dir_hook (const struct rover_dirent *ent, void *data)
 	e.is_symlink = ent->is_symlink != 0;
 	e.size = 0;
 	e.mtime = ent->mtime_set ? ent->mtime : 0;
+	e.inode_set = ent->inode_set != 0;
+	e.inode = ent->inode;
 	entries->push_back (std::move (e));
 	return 0;
 }
@@ -238,7 +240,8 @@ run_list_dir (const std::string &path, backend_result *res)
  * A directory entry can point at one of its own ancestors all the same
  * on a corrupt image -- grub caps symlink nesting but has no cycle
  * detection, and no filesystem driver is safe from it -- so the walk
- * is bounded by depth instead of trusting the tree to be finite.
+ * checks each directory against the inodes of its own ancestors, and
+ * falls back on a depth cap for the drivers that report no inode.
  */
 
 struct walk_item
@@ -363,20 +366,45 @@ top_rel_name (const std::string &src)
 	return sanitize_component (base);
 }
 
-/* Directory levels walked below a source: past any real tree (grub's
-   own path handling gives out well before this), short enough that the
-   recursion cannot run the stack out on a cyclic one.  */
-constexpr int WALK_MAX_DEPTH = 64;
+/* Directory levels walked below a source.  The inode chain below is
+   the real cycle guard; this is what is left for the drivers that
+   report no inode -- past any real tree (grub's own path handling
+   gives out well before this), short enough that the recursion cannot
+   run the stack out on a cyclic one.  */
+constexpr size_t WALK_MAX_DEPTH = 64;
+
+/* The directories currently being walked, innermost last: the chain
+   from the source down to the directory being listed, one entry per
+   level.  An entry whose inode matches one already on the chain is the
+   same directory reached again -- a cycle; a level the driver did not
+   identify simply has nothing to match against, and still counts
+   towards WALK_MAX_DEPTH.  */
+struct walk_level
+{
+	bool inode_set;
+	UINT64 inode;
+};
+using walk_chain = std::vector<walk_level>;
+
+bool
+chain_has (const walk_chain &chain, UINT64 inode)
+{
+	return std::find_if (chain.begin (), chain.end (),
+		[inode] (const walk_level &l)
+		{
+			return l.inode_set && l.inode == inode;
+		}) != chain.end ();
+}
 
 /* Returns false on error (error set) or cancellation (error empty);
-   LINKS counts the symlinks left out of the work list.  DEPTH is how
-   far SRC itself sits below the source the walk started from.  */
+   LINKS counts the symlinks left out of the work list.  CHAIN holds
+   SRC and its ancestors, SRC last (see walk_chain).  */
 bool
-walk_dir (const std::string &src, const std::wstring &rel, int depth, std::vector<walk_item> &out, UINT64 &links, std::string &error)
+walk_dir (const std::string &src, const std::wstring &rel, walk_chain &chain, std::vector<walk_item> &out, UINT64 &links, std::string &error)
 {
 	std::vector<backend_dirent> children;
 
-	if (depth >= WALK_MAX_DEPTH)
+	if (chain.size () >= WALK_MAX_DEPTH)
 	{
 		error = src + ": directory nesting too deep";
 		return false;
@@ -402,8 +430,18 @@ walk_dir (const std::string &src, const std::wstring &rel, int depth, std::vecto
 		item.rel = rel + L'\\' + sanitize_component (e.name);
 		item.is_dir = e.is_dir;
 		item.mtime = e.mtime;
+		if (e.is_dir && e.inode_set && chain_has (chain, e.inode))
+		{
+			error = item.src + ": directory loops back on itself";
+			return false;
+		}
 		out.push_back (item);
-		if (e.is_dir && !walk_dir (item.src, item.rel, depth + 1, out, links, error))
+		if (!e.is_dir)
+			continue;
+		chain.push_back ({ e.inode_set, e.inode });
+		bool ok = walk_dir (item.src, item.rel, chain, out, links, error);
+		chain.pop_back ();
+		if (!ok)
 			return false;
 	}
 	return true;
@@ -514,8 +552,13 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 		item.is_dir = st.is_dir != 0;
 		item.mtime = st.mtime_set ? st.mtime : 0;
 		work.push_back (item);
+		/* A device root has no directory entry to be identified by
+		   (rover_stat says so), which costs one wasted level: an
+		   entry looping back to the root is caught one deeper, at
+		   the first level that does have an inode.  */
+		walk_chain chain = { { st.inode_set != 0, st.inode } };
 		if (item.is_dir
-		    && !walk_dir (item.src, item.rel, 0, work, ctx.links_skipped, res->error))
+		    && !walk_dir (item.src, item.rel, chain, work, ctx.links_skipped, res->error))
 			goto fail;
 	}
 	for (const walk_item &item : work)

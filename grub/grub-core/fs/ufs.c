@@ -687,6 +687,14 @@ grub_ufs_dir (grub_device_t device, const char *path,
       if (dirent.direntlen == 0)
 	break;
 
+      /* Unused slot, it has no name.  UFS preallocates those, e.g. in
+	 lost+found.  */
+      if (dirent.ino == 0)
+	{
+	  pos += grub_ufs_to_cpu16 (dirent.direntlen);
+	  continue;
+	}
+
 #ifdef MODE_UFS2
       namelen = dirent.namelen_bsd;
 #else
@@ -721,6 +729,8 @@ grub_ufs_dir (grub_device_t device, const char *path,
       info.mtime = grub_ufs_to_cpu32 (inode.mtime);
 #endif
       info.mtimeset = 1;
+      info.inodeset = 1;
+      info.inode = grub_ufs_to_cpu32 (dirent.ino);
 
       if (hook (filename, &info, hook_data))
 	{

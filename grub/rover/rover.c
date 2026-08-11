@@ -441,6 +441,8 @@ dir_hook_shim (const char *filename, const struct grub_dirhook_info *info, void 
 	ent.is_symlink = info->symlink ? 1 : 0;
 	ent.mtime_set = info->mtimeset ? 1 : 0;
 	ent.mtime = info->mtimeset ? info->mtime : 0;
+	ent.inode_set = info->inodeset ? 1 : 0;
+	ent.inode = info->inodeset ? info->inode : 0;
 	return ctx->cb (&ent, ctx->data);
 }
 
@@ -609,6 +611,8 @@ stat_dir_hook (const char *filename, const struct grub_dirhook_info *info, void 
 	ctx->st->is_symlink = info->symlink ? 1 : 0;
 	ctx->st->mtime_set = info->mtimeset ? 1 : 0;
 	ctx->st->mtime = info->mtimeset ? info->mtime : 0;
+	ctx->st->inode_set = info->inodeset ? 1 : 0;
+	ctx->st->inode = info->inodeset ? info->inode : 0;
 	return 1;
 }
 

@@ -942,6 +942,8 @@ grub_vxfs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 	info.symlink = (filetype == GRUB_FSHELP_SYMLINK);
 	info.mtimeset = 1;
 	info.mtime = node->mtime;
+	info.inodeset = 1;
+	info.inode = node->ino;
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

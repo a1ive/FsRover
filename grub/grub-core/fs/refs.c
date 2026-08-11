@@ -1116,6 +1116,14 @@ grub_refs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 	info.case_insensitive = 1;
 	info.mtimeset = 1;
 	info.mtime = node->mtime;
+	/* Only directories carry an object id; a regular file's oid field
+	   is its parent's, which would alias every file in one directory
+	   into a single identity.  */
+	if (info.dir)
+	{
+		info.inodeset = 1;
+		info.inode = node->oid;
+	}
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

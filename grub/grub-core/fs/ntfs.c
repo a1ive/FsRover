@@ -1666,6 +1666,8 @@ grub_ntfs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
   info.mtime = grub_divmod64 (node->mtime, 10000000, 0)
     - 86400ULL * 365 * (1970 - 1601)
     - 86400ULL * ((1970 - 1601) / 4) + 86400ULL * ((1970 - 1601) / 100);
+  info.inodeset = 1;
+  info.inode = node->ino;
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);
 }

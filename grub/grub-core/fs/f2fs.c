@@ -1805,6 +1805,8 @@ grub_f2fs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
 
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+  info.inodeset = 1;
+  info.inode = node->ino;
   grub_free (node);
 
   return ctx->hook (filename, &info, ctx->hook_data);

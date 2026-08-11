@@ -157,6 +157,10 @@ struct backend_dirent
 	bool is_symlink;
 	UINT64 size;	/* BACKEND_SIZE_UNKNOWN if not determined */
 	INT64 mtime;	/* seconds since Unix epoch, 0 = unknown */
+	/* On-disk identity within the volume, for telling one object from
+	   another (see struct rover_dirent).  Not every driver has one.  */
+	bool inode_set;
+	UINT64 inode;
 };
 
 struct backend_result

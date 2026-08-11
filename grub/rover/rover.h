@@ -126,6 +126,15 @@ struct rover_dirent
 	int is_symlink;
 	int mtime_set;
 	long long mtime;	/* seconds since Unix epoch */
+	/* On-disk identity of the entry (inode number, MFT record, start
+	   cluster -- whatever the driver uses to tell two objects apart
+	   within one volume).  Not every driver reports one: inode_set is
+	   0 then and inode is meaningless.  Two entries of the same volume
+	   with equal inodes are the same object, which is how a walker
+	   tells a hard link or a corrupt directory cycle from a fresh
+	   subtree.  */
+	int inode_set;
+	unsigned long long inode;
 };
 
 typedef int (*rover_dir_hook) (const struct rover_dirent *ent, void *data);
@@ -167,6 +176,8 @@ struct rover_stat
 	int mtime_set;
 	long long mtime;	/* seconds since Unix epoch */
 	unsigned long long size;	/* 0 for directories */
+	int inode_set;	/* see struct rover_dirent */
+	unsigned long long inode;
 };
 typedef struct rover_stat rover_stat_t;
 

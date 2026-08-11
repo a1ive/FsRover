@@ -358,6 +358,8 @@ grub_bootfs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 	info.dir = (filetype == GRUB_FSHELP_DIR);
 	info.mtimeset = 1;
 	info.mtime = node->mtime;
+	info.inodeset = 1;
+	info.inode = node->ino;
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

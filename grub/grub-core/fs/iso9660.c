@@ -1015,6 +1015,15 @@ grub_iso9660_dir_iter (const char *filename,
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
   info.mtimeset = !!iso9660_to_unixtime2 (&node->dirents[0].mtime, &info.mtime);
+  /* An extent start is the closest thing ISO 9660 has to an inode:
+     it is what a directory record points at, and what a corrupt one
+     loops back to.  Zero-length files are left at sector 0, which
+     identifies nothing.  */
+  if (node->have_dirents)
+    {
+      info.inode = grub_le_to_cpu32 (node->dirents[0].first_sector);
+      info.inodeset = info.inode != 0;
+    }
 
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);

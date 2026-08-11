@@ -1033,13 +1033,20 @@ grub_fat_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook,
       info.mtimeset = grub_exfat_timestamp (grub_le_to_cpu32 (ctxt.entry.type_specific.file.m_time),
 					    ctxt.entry.type_specific.file.m_time_tenth,
 					    &info.mtime);
+      info.inode = ctxt.dir.first_cluster;
 #else
       if (ctxt.dir.attr & GRUB_FAT_ATTR_VOLUME_ID)
 	continue;
       info.mtimeset = grub_fat_timestamp (grub_le_to_cpu16 (ctxt.dir.w_time),
 					  grub_le_to_cpu16 (ctxt.dir.w_date),
 					  &info.mtime);
+      info.inode = ((grub_le_to_cpu16 (ctxt.dir.first_cluster_high) << 16)
+		    | grub_le_to_cpu16 (ctxt.dir.first_cluster_low));
 #endif
+      /* The start cluster is what grub_fat_dir() itself follows, so it
+	 identifies the object -- except that every empty file is left at
+	 cluster 0, which identifies nothing.  */
+      info.inodeset = info.inode != 0;
 
       if (hook (ctxt.filename, &info, hook_data))
 	break;

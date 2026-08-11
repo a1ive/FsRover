@@ -612,6 +612,8 @@ grub_minix_dir (grub_device_t device, const char *path,
       info.symlink = ((GRUB_MINIX_INODE_MODE (data) & GRUB_MINIX_IFLNK) == GRUB_MINIX_IFLNK);
       info.mtimeset = 1;
       info.mtime = grub_minix_to_cpu32 (data->inode.mtime);
+      info.inodeset = 1;
+      info.inode = grub_minix_to_cpu_ino (ino);
 
       if (hook (filename, &info, hook_data) ? 1 : 0)
 	break;
