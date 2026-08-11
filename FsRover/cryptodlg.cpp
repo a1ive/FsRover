@@ -552,6 +552,277 @@ veracrypt_on_progress (backend_progress *p)
 	return true;
 }
 
+/* Plain dm-crypt */
+
+namespace
+{
+
+HWND g_pm;	/* mount dialog, null when closed */
+UINT g_seq_pm;	/* in-flight plainmount_unlock task */
+std::string g_pm_dev;
+std::string g_pm_newdev;
+
+/* cryptsetup's own default is aes-xts-plain64 with a 512 bit key.  */
+const wchar_t *const PM_CIPHERS[] =
+{
+	L"aes-xts-plain64", L"aes-cbc-essiv:sha256", L"aes-cbc-plain64",
+	L"aes-cbc-plain", L"serpent-xts-plain64", L"twofish-xts-plain64",
+	L"camellia-xts-plain64", L"kuznyechik-xts-plain64", L"aes-lrw-benbi",
+	L"aes-ecb",
+};
+
+/* Index 0 means "no hashing", which the backend spells "plain".  */
+const wchar_t *const PM_HASHES[] =
+{
+	nullptr,	/* filled from IDS_PM_HASH_NONE */
+	L"ripemd160", L"sha1", L"sha256", L"sha512", L"whirlpool", L"stribog512",
+};
+
+const wchar_t *const PM_KEYBITS[] = { L"512", L"256", L"128", L"192", L"1024" };
+const wchar_t *const PM_SECTORS[] = { L"512", L"1024", L"2048", L"4096" };
+
+/* Read a decimal control, returning false when it is empty or malformed.  */
+bool
+pm_read_number (HWND dlg, int id, UINT64 max, UINT64 *out)
+{
+	wchar_t buf[24] = {};
+	UINT64 v = 0;
+
+	GetDlgItemTextW (dlg, id, buf, 24);
+	if (!buf[0])
+		return false;
+	for (const wchar_t *p = buf; *p; p++)
+	{
+		if (*p < L'0' || *p > L'9')
+			return false;
+		v = v * 10 + (UINT64) (*p - L'0');
+		if (v > max)
+			return false;
+	}
+	*out = v;
+	return true;
+}
+
+/*
+ * The secret.  A passphrase goes to the backend as typed; a key file is read
+ * here, because the caller is the one that knows the key file offset, and
+ * exactly key_bits/8 bytes of it become the volume key.
+ */
+std::vector<char>
+pm_gather_key (HWND dlg, UINT key_bits, bool *is_keyfile)
+{
+	*is_keyfile = IsDlgButtonChecked (dlg, IDC_PM_USEKEYFILE) == BST_CHECKED;
+	if (!*is_keyfile)
+	{
+		wchar_t pass[512] = {};
+		GetDlgItemTextW (dlg, IDC_PM_PASS, pass, 512);
+		std::string u = narrow (pass);
+		SecureZeroMemory (pass, sizeof (pass));
+		return std::vector<char> (u.begin (), u.end ());
+	}
+
+	wchar_t path[MAX_PATH] = {};
+	GetDlgItemTextW (dlg, IDC_PM_KEYFILE, path, MAX_PATH);
+	if (!path[0])
+		return {};
+
+	UINT64 off = 0;
+	wchar_t offbuf[24] = {};
+	GetDlgItemTextW (dlg, IDC_PM_KEYOFFSET, offbuf, 24);
+	if (offbuf[0] && !pm_read_number (dlg, IDC_PM_KEYOFFSET, ~0ULL / 2, &off))
+		return {};
+
+	HANDLE h = CreateFileW (path, GENERIC_READ, FILE_SHARE_READ, nullptr,
+				OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h == INVALID_HANDLE_VALUE)
+		return {};
+
+	LARGE_INTEGER li;
+	li.QuadPart = (LONGLONG) off;
+	std::vector<char> key (key_bits / 8);
+	DWORD got = 0;
+	bool ok = SetFilePointerEx (h, li, nullptr, FILE_BEGIN)
+		&& ReadFile (h, key.data (), (DWORD) key.size (), &got, nullptr)
+		&& got == key.size ();
+	CloseHandle (h);
+	return ok ? key : std::vector<char> ();
+}
+
+void
+pm_enable_inputs (HWND dlg, BOOL on)
+{
+	BOOL kf = IsDlgButtonChecked (dlg, IDC_PM_USEKEYFILE) == BST_CHECKED;
+	const int ids[] =
+	{
+		IDOK, IDC_PM_CIPHER, IDC_PM_HASH, IDC_PM_KEYBITS, IDC_PM_SECTOR,
+		IDC_PM_OFFSET, IDC_PM_SKIP, IDC_PM_USEKEYFILE,
+	};
+
+	for (int id : ids)
+		EnableWindow (GetDlgItem (dlg, id), on);
+	EnableWindow (GetDlgItem (dlg, IDC_PM_PASS), on && !kf);
+	EnableWindow (GetDlgItem (dlg, IDC_PM_KEYFILE), on && kf);
+	EnableWindow (GetDlgItem (dlg, IDC_PM_BROWSE), on && kf);
+	EnableWindow (GetDlgItem (dlg, IDC_PM_KEYOFFSET), on && kf);
+	/* Hashing applies to a passphrase only; a key file is the key.  */
+	EnableWindow (GetDlgItem (dlg, IDC_PM_HASH), on && !kf);
+}
+
+INT_PTR CALLBACK
+pm_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+	{
+		wchar_t title[128];
+		std::wstring none = res_str (IDS_PM_HASH_NONE);
+
+		g_pm = dlg;
+		swprintf (title, 128, res_str (IDS_FMT_PM_TITLE).c_str (), widen (g_pm_dev).c_str ());
+		SetWindowTextW (dlg, title);
+		SetDlgItemTextW (dlg, IDC_PM_INFO, widen (g_pm_dev).c_str ());
+
+		for (const wchar_t *c : PM_CIPHERS)
+			SendDlgItemMessageW (dlg, IDC_PM_CIPHER, CB_ADDSTRING, 0, (LPARAM) c);
+		SetDlgItemTextW (dlg, IDC_PM_CIPHER, PM_CIPHERS[0]);
+
+		for (size_t i = 0; i < ARRAYSIZE (PM_HASHES); i++)
+			SendDlgItemMessageW (dlg, IDC_PM_HASH, CB_ADDSTRING, 0,
+				(LPARAM) (i == 0 ? none.c_str () : PM_HASHES[i]));
+		SendDlgItemMessageW (dlg, IDC_PM_HASH, CB_SETCURSEL, 1, 0);	/* ripemd160 */
+
+		for (const wchar_t *k : PM_KEYBITS)
+			SendDlgItemMessageW (dlg, IDC_PM_KEYBITS, CB_ADDSTRING, 0, (LPARAM) k);
+		SetDlgItemTextW (dlg, IDC_PM_KEYBITS, PM_KEYBITS[0]);
+
+		for (const wchar_t *s : PM_SECTORS)
+			SendDlgItemMessageW (dlg, IDC_PM_SECTOR, CB_ADDSTRING, 0, (LPARAM) s);
+		SendDlgItemMessageW (dlg, IDC_PM_SECTOR, CB_SETCURSEL, 0, 0);
+
+		pm_enable_inputs (dlg, TRUE);
+		SetFocus (GetDlgItem (dlg, IDC_PM_PASS));
+		return FALSE;	/* focus was set explicitly */
+	}
+	case WM_COMMAND:
+		switch (LOWORD (wp))
+		{
+		case IDC_PM_USEKEYFILE:
+			pm_enable_inputs (dlg, TRUE);
+			return TRUE;
+		case IDC_PM_BROWSE:
+		{
+			wchar_t path[MAX_PATH] = {};
+			OPENFILENAMEW ofn = { sizeof (ofn) };
+			std::wstring t = res_str (IDS_PM_KEYFILE);
+
+			ofn.hwndOwner = dlg;
+			ofn.lpstrFile = path;
+			ofn.nMaxFile = MAX_PATH;
+			ofn.lpstrTitle = t.c_str ();
+			ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+			if (GetOpenFileNameW (&ofn))
+				SetDlgItemTextW (dlg, IDC_PM_KEYFILE, path);
+			return TRUE;
+		}
+		case IDOK:
+		{
+			backend_task task;
+			wchar_t cipher[128] = {}, sector[24] = {};
+			UINT64 key_bits = 0;
+			bool is_keyfile = false;
+			int hash_idx;
+
+			UINT64 offset = 0, skip = 0;
+
+			GetDlgItemTextW (dlg, IDC_PM_CIPHER, cipher, 128);
+			GetDlgItemTextW (dlg, IDC_PM_SECTOR, sector, 24);
+			/* Both offsets are optional and default to 0.  */
+			if (GetWindowTextLengthW (GetDlgItem (dlg, IDC_PM_OFFSET)) > 0
+				&& !pm_read_number (dlg, IDC_PM_OFFSET, ~0ULL / 512, &offset))
+				offset = ~0ULL;
+			if (GetWindowTextLengthW (GetDlgItem (dlg, IDC_PM_SKIP)) > 0
+				&& !pm_read_number (dlg, IDC_PM_SKIP, ~0ULL / 512, &skip))
+				skip = ~0ULL;
+			/* A key size that is not a whole number of bytes, or a
+			   cipher without a mode, cannot be mounted at all.  */
+			if (!cipher[0] || !wcschr (cipher, L'-')
+				|| !pm_read_number (dlg, IDC_PM_KEYBITS, 1024, &key_bits)
+				|| key_bits == 0 || (key_bits % 8) != 0
+				|| offset == ~0ULL || skip == ~0ULL)
+			{
+				MessageBoxW (dlg, res_str (IDS_PM_BADPARAM).c_str (),
+					nullptr, MB_ICONWARNING | MB_OK);
+				return TRUE;
+			}
+
+			task.key = pm_gather_key (dlg, (UINT) key_bits, &is_keyfile);
+			if (task.key.empty ())
+				return TRUE;	/* nothing usable entered */
+
+			hash_idx = (int) SendDlgItemMessageW (dlg, IDC_PM_HASH, CB_GETCURSEL, 0, 0);
+			task.type = backend_task_type::plainmount_unlock;
+			task.path = g_pm_dev;
+			task.pm_cipher = narrow (cipher);
+			task.pm_hash = hash_idx <= 0 ? "plain" : narrow (PM_HASHES[hash_idx]);
+			task.pm_key_bits = (UINT) key_bits;
+			task.pm_sector_size = (UINT) _wtoi (sector);
+			task.pm_offset = offset;
+			task.pm_skip = skip;
+			task.pm_keyfile = is_keyfile;
+
+			pm_enable_inputs (dlg, FALSE);
+			g_seq_pm = backend_post (std::move (task));
+			return TRUE;
+		}
+		case IDCANCEL:
+			g_pm = nullptr;
+			EndDialog (dlg, 0);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+} // namespace
+
+/* Called from WM_APP_TASK_DONE when a plainmount_unlock finishes.  */
+void
+plainmount_done (backend_result *res)
+{
+	if (!g_pm || res->seq != g_seq_pm)
+		return;
+	if (!res->error.empty ())
+	{
+		pm_enable_inputs (g_pm, TRUE);
+		MessageBoxW (g_pm, res_str (IDS_PM_FAILED).c_str (), nullptr, MB_ICONWARNING | MB_OK);
+		return;
+	}
+	g_pm_newdev = res->path;
+	HWND dlg = g_pm;
+	g_pm = nullptr;
+	EndDialog (dlg, 1);
+}
+
+void
+prompt_plainmount (const std::string &devname)
+{
+	g_pm_dev = devname;
+	g_pm_newdev.clear ();
+
+	INT_PTR r;
+	{
+		modal_scope hold;
+		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_PLAINMOUNT), g_main, pm_dlg_proc, 0);
+	}
+	if (r == 1 && !g_pm_newdev.empty ())
+	{
+		refresh ();
+		navigate ("(" + g_pm_newdev + ")/");
+	}
+}
+
 void
 prompt_unlock (const std::string &devname, const std::string &uuid)
 {

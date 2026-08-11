@@ -1014,10 +1014,12 @@ When FsRover recognises an encrypted volume it shows it with a padlock icon and
 asks for the passphrase, or a key file, the first time you browse it. A successful unlock creates a `cryptoN` device in the tree, whose
 plaintext filesystem is then browsed like any other.
 
-**VeraCrypt and TrueCrypt volumes: they cannot be recognised
-at all**, so they never get a padlock and are unlocked from the tree's
-right-click menu instead. See [VeraCrypt / TrueCrypt](#veracrypt--truecrypt--veracrypt)
-below.
+**Two formats cannot be recognised at all**, so they never get a padlock and are
+opened from the tree's right-click menu instead:
+[VeraCrypt / TrueCrypt](#veracrypt--truecrypt--veracrypt), where everything past
+the salt is ciphertext, and [plain dm-crypt](#plain-dm-crypt--plainmount), which
+has no header whatsoever. Both take their parameters from a dialog, and neither
+can tell a wrong parameter from a wrong passphrase.
 
 ### LUKS1 — `luks`
 
@@ -1111,6 +1113,53 @@ support for them.
 **Not supported:** system-encrypted partitions, whose header lives outside the
 partition on sector 62 of the whole drive; and GOST89 volumes, which VeraCrypt
 has been unable to mount itself since 1.19.
+
+### Plain dm-crypt — `plainmount`
+
+> Origin: GRUB
+
+What `cryptsetup plainOpen` maps: a volume with **no header at all**. Every
+parameter — cipher, mode, IV generator, key size, sector size, where the data
+starts, how the passphrase becomes the key — lives outside the volume and has to
+be supplied. Nothing in the container identifies any of it and nothing can be
+checked, so a wrong parameter is not reported as a wrong passphrase: the volume
+maps and decrypts to plausible garbage, which normally surfaces as *unknown
+filesystem*.
+
+**Cipher.** cryptsetup's `-c` specification, `cipher-mode-iv` —
+`aes-xts-plain64`, `aes-cbc-essiv:sha256`, `serpent-xts-plain64`, and so on. The
+box lists the common ones but stays editable, because the three parts combine
+freely and no fixed list covers them.
+
+| Part | Accepted |
+| --- | --- |
+| cipher | `aes` — with 128-, 192- or 256-bit keys; `serpent`, `twofish`, `camellia`, `kuznyechik` — 256-bit keys only |
+| mode | `xts`, `cbc`, `pcbc`, `lrw`, and `ecb`, which takes no IV part |
+| IV | `plain64`, `plain`, `benbi`, `null`, `essiv:HASH` |
+
+**Hash.** How the passphrase becomes the key, cryptsetup's `-h`: `ripemd160` —
+cryptsetup's own default — `sha1`, `sha256`, `sha512`, `whirlpool`,
+`stribog512`, or **none**. Block *r* of the key is `hash('A' × r ‖ passphrase)`,
+and the blocks are concatenated until the key is full; **none** uses the
+passphrase itself, zero-padded or truncated to the key size.
+
+**Key size** is the volume key in bits and must be a multiple of 8. XTS splits
+the key in half, so 512 bits there is AES-256. **Sector size** is what the mapped
+device reports — 512, unless the volume was made with `--sector-size`.
+
+**Offset and IV** are cryptsetup's `--offset` and `--skip`, both counted in
+**512-byte sectors** whatever the sector size, and independent of each other.
+*Offset* is where the encrypted data starts, so the byte at that offset is what
+the mapped device shows at 0; it has to be a whole number of mapped sectors. *IV*
+is the sector number the IV counts from. Leave both empty for a volume made
+without them — and note that getting either wrong looks exactly like a wrong
+passphrase.
+
+**Key file.** Ticking *Use a key file instead* makes the file's bytes the volume
+key directly, with no hashing, which is what cryptsetup does for a key file as
+opposed to a passphrase. Exactly *key size* bytes are read, starting at *File
+offset* — in bytes, cryptsetup's `--keyfile-offset` — so the file must be at
+least that long.
 
 ### FreeBSD GELI — `geli`
 

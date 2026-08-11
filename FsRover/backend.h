@@ -63,6 +63,7 @@ enum class backend_task_type
 	read_chunk,	/* path + offset/length -> result.data, file_size */
 	crypto_unlock,	/* path (source device) + key -> result.path = "cryptoN" */
 	veracrypt_unlock,	/* like crypto_unlock, plus pim/prf/vc_flags */
+	plainmount_unlock,	/* headerless dm-crypt volume, all parameters given */
 };
 
 /* veracrypt_unlock: key derivation function, matching ROVER_VC_PRF_*.  */
@@ -106,6 +107,13 @@ struct backend_task
 	UINT pim = 0;		/* veracrypt_unlock: 0 = the volume's default */
 	int prf = BACKEND_VC_PRF_AUTO;	/* veracrypt_unlock: BACKEND_VC_PRF_* */
 	UINT vc_flags = 0;	/* veracrypt_unlock: BACKEND_VC_* bits */
+	std::string pm_cipher;	/* plainmount_unlock: "aes-xts-plain64" */
+	std::string pm_hash;	/* plainmount_unlock: digest, or "plain" for none */
+	UINT pm_key_bits = 0;	/* plainmount_unlock: volume key size */
+	UINT pm_sector_size = 0;	/* plainmount_unlock: mapped sector size */
+	UINT64 pm_offset = 0;	/* plainmount_unlock: data start, 512B sectors */
+	UINT64 pm_skip = 0;	/* plainmount_unlock: IV start, 512B sectors */
+	bool pm_keyfile = false;	/* plainmount_unlock: key is raw key material */
 	bool decompress = false;	/* loopback_add, winfile_add: decode gzip/xz/... transparently */
 	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
 };

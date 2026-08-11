@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="grub-core">
@@ -1107,6 +1107,9 @@
     <ClCompile Include="grub-core\disk\veracrypt.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\disk\plainmount.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\disk\geli.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
@@ -1218,6 +1221,9 @@
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\veracrypt.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\plainmount.h">
       <Filter>include\grub</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\json\json.h">

@@ -107,6 +107,7 @@ constexpr int IDM_IMAGE = 12;
 constexpr int IDM_EXPORT = 13;
 constexpr int IDM_MARKDOWN = 14;
 constexpr int IDM_VERACRYPT = 15;
+constexpr int IDM_PLAINMOUNT = 16;
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -1117,6 +1118,7 @@ on_tree_rclick (void)
 	   something the backend supports.  */
 	bool can_vc = can_raw && d.size >= 256 * 1024
 		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
+	bool can_pm = can_raw && d.dev_id != BACKEND_DEV_CRYPTODISK;
 	UINT busy = g_extracting ? MF_GRAYED : 0u;
 
 	HMENU menu = CreatePopupMenu ();
@@ -1129,6 +1131,9 @@ on_tree_rclick (void)
 	/* VeraCrypt volumes are not detectable, so the item is offered on any
 	   device with a known size that is not already an unlocked one.  */
 	AppendMenuW (menu, MF_STRING | busy | (can_vc ? 0u : MF_GRAYED), IDM_VERACRYPT, res_str (IDS_MENU_VERACRYPT).c_str ());
+	/* Plain dm-crypt has no header at all, so the same applies -- except
+	   that it needs no room for headers, only a device.  */
+	AppendMenuW (menu, MF_STRING | busy | (can_pm ? 0u : MF_GRAYED), IDM_PLAINMOUNT, res_str (IDS_MENU_PLAINMOUNT).c_str ());
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
@@ -1164,6 +1169,10 @@ on_tree_rclick (void)
 	case IDM_VERACRYPT:
 		if (can_vc)
 			prompt_unlock_veracrypt (d.name);
+		break;
+	case IDM_PLAINMOUNT:
+		if (can_pm)
+			prompt_plainmount (d.name);
 		break;
 	case IDM_HEX:
 		if (can_raw)
@@ -1402,6 +1411,9 @@ on_task_done (backend_result *raw)
 		return;
 	case backend_task_type::veracrypt_unlock:
 		veracrypt_unlock_done (res.get ());
+		return;
+	case backend_task_type::plainmount_unlock:
+		plainmount_done (res.get ());
 		return;
 	}
 

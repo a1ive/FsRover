@@ -74,6 +74,9 @@
    volume does not store (PIM, PRF, TrueCrypt mode, hidden/backup header).  */
 #define IDD_VERACRYPT		111
 
+/* Plain dm-crypt mount: cipher spec, hash, key size, sector size, secret.  */
+#define IDD_PLAINMOUNT		112
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303
@@ -109,6 +112,19 @@
 #define IDC_VC_HIDDEN		1229
 #define IDC_VC_BACKUP		1230
 #define IDC_VC_PROGRESS		1231
+
+#define IDC_PM_INFO		1241
+#define IDC_PM_CIPHER		1242
+#define IDC_PM_HASH		1243
+#define IDC_PM_KEYBITS		1244
+#define IDC_PM_SECTOR		1245
+#define IDC_PM_PASS		1246
+#define IDC_PM_USEKEYFILE	1247
+#define IDC_PM_KEYFILE		1248
+#define IDC_PM_BROWSE		1249
+#define IDC_PM_KEYOFFSET	1250
+#define IDC_PM_OFFSET		1251
+#define IDC_PM_SKIP		1252
 
 #define IDC_ABOUT_ICON		1401
 #define IDC_ABOUT_NAME		1402
@@ -282,6 +298,12 @@
 #define IDS_VC_KEYFILES		141
 #define IDS_VC_PRF_AUTO		142
 #define IDS_VC_BADPIM		143
+#define IDS_MENU_PLAINMOUNT	150
+#define IDS_FMT_PM_TITLE	151
+#define IDS_PM_FAILED		152
+#define IDS_PM_KEYFILE		153
+#define IDS_PM_BADPARAM		154
+#define IDS_PM_HASH_NONE	155
 #define IDS_PROPS_NO_INODE	144
 
 #endif /* ! FSROVER_RESOURCE_H */

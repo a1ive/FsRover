@@ -67,6 +67,7 @@
 	mod (luks2)	\
 	mod (bitlocker)	\
 	mod (veracrypt)	\
+	mod (plainmount)	\
 	mod (geli)	\
 	mod (procfs)	\
 	/* partition maps */	\

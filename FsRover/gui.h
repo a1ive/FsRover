@@ -131,6 +131,8 @@ bool crypto_on_progress (backend_progress *p);
 void prompt_unlock_veracrypt (const std::string &devname);
 void veracrypt_unlock_done (backend_result *res);
 bool veracrypt_on_progress (backend_progress *p);
+void prompt_plainmount (const std::string &devname);
+void plainmount_done (backend_result *res);
 
 /* hexview.cpp */
 void show_hex (const std::string &path, const std::wstring &title = {}, UINT64 known_size = BACKEND_SIZE_UNKNOWN);

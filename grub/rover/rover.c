@@ -34,6 +34,7 @@
 #include <grub/diskfilter.h>
 #include <grub/cryptodisk.h>
 #include <grub/veracrypt.h>
+#include <grub/plainmount.h>
 
 #include "rover.h"
 
@@ -829,6 +830,33 @@ rover_veracrypt_unlock (const char *device, const void *pass,
 				    (grub_uint32_t) pim, prf,
 				    (grub_uint32_t) flags,
 				    out_dev, (grub_size_t) out_size);
+	if (err == GRUB_ERR_NONE)
+		grub_errno = GRUB_ERR_NONE;
+	return (int) err;
+}
+
+int
+rover_plainmount_unlock (const char *device, const char *cipher,
+			 const char *hash, unsigned long long key_bits,
+			 unsigned long long sector_size,
+			 unsigned long long offset, unsigned long long skip,
+			 const void *key, unsigned long long key_len,
+			 unsigned int flags, const char *uuid,
+			 char *out_dev, unsigned long long out_size)
+{
+	grub_err_t err;
+
+	COMPILE_TIME_ASSERT (ROVER_PM_KEYFILE == GRUB_PLAINMOUNT_KEYFILE);
+
+	grub_errno = GRUB_ERR_NONE;
+	err = grub_plainmount_mount (device, cipher, hash,
+				     (grub_size_t) key_bits,
+				     (grub_size_t) sector_size,
+				     (grub_uint64_t) offset,
+				     (grub_uint64_t) skip,
+				     key, (grub_size_t) key_len,
+				     (grub_uint32_t) flags, uuid,
+				     out_dev, (grub_size_t) out_size);
 	if (err == GRUB_ERR_NONE)
 		grub_errno = GRUB_ERR_NONE;
 	return (int) err;

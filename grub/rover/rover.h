@@ -276,6 +276,34 @@ int rover_veracrypt_unlock (const char *device,
 	char *out_dev, unsigned long long out_size);
 
 /*
+ * Plain mode (cryptsetup "plainOpen") volumes, which have no header at all:
+ * every parameter comes from the caller and nothing can be verified, so
+ * wrong parameters produce plausible garbage rather than an error.
+ *
+ * CIPHER is cryptsetup's specification "cipher-mode-iv" ("aes-xts-plain64").
+ * HASH names the digest the passphrase is stretched with ("ripemd160" is
+ * cryptsetup's default) or ROVER_PM_HASH_NONE to use it verbatim; it is
+ * ignored for a key file.  KEY_BITS is the volume key size in bits, and
+ * SECTOR_SIZE what the mapped device reports.  OFFSET and SKIP are
+ * cryptsetup's --offset and --skip, both in 512 byte sectors: OFFSET is where
+ * the encrypted data starts on the device, SKIP the sector number the IV
+ * counts from.  KEY is the passphrase, or the key file's bytes when
+ * ROVER_PM_KEYFILE is set -- the caller reads the file itself, so it also
+ * applies any key file offset.  UUID may be NULL to have one generated.  On
+ * success returns 0 and writes the crypto device name ("crypto0") into
+ * OUT_DEV.
+ */
+#define ROVER_PM_KEYFILE	0x1	/* KEY is raw key material */
+#define ROVER_PM_HASH_NONE	"plain"
+
+int rover_plainmount_unlock (const char *device,
+	const char *cipher, const char *hash,
+	unsigned long long key_bits, unsigned long long sector_size,
+	unsigned long long offset, unsigned long long skip,
+	const void *key, unsigned long long key_len, unsigned int flags,
+	const char *uuid, char *out_dev, unsigned long long out_size);
+
+/*
  * Progress for the slow unlock key derivation (PBKDF2/Argon2).  The
  * callback fires from inside rover_crypto_unlock() with the done/total
  * step count of the current KDF pass (not bytes).  Pass NULL to disable.

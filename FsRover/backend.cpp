@@ -1075,6 +1075,24 @@ run_veracrypt_unlock (const backend_task &task, backend_result *res)
 	rover_set_crypto_progress (nullptr, nullptr);
 }
 
+/* Plain dm-crypt volumes: no header, so every parameter comes from the
+   dialog and a wrong one yields garbage rather than an error.  */
+void
+run_plainmount_unlock (const backend_task &task, backend_result *res)
+{
+	char dev[64] = { 0 };
+
+	if (rover_plainmount_unlock (task.path.c_str (), task.pm_cipher.c_str (),
+				     task.pm_hash.c_str (), task.pm_key_bits,
+				     task.pm_sector_size, task.pm_offset, task.pm_skip,
+				     task.key.data (), task.key.size (),
+				     task.pm_keyfile ? ROVER_PM_KEYFILE : 0u, nullptr,
+				     dev, sizeof (dev)))
+		set_error (res, "cannot mount volume");
+	else
+		res->path = dev;
+}
+
 backend_result *
 run_task (queued_task &item)
 {
@@ -1155,6 +1173,9 @@ run_task (queued_task &item)
 		break;
 	case backend_task_type::veracrypt_unlock:
 		run_veracrypt_unlock (item.task, res);
+		break;
+	case backend_task_type::plainmount_unlock:
+		run_plainmount_unlock (item.task, res);
 		break;
 	case backend_task_type::crypto_unlock:
 		run_crypto_unlock (item.task, res);
