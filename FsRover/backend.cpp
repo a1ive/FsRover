@@ -234,6 +234,11 @@ run_list_dir (const std::string &path, backend_result *res)
  * when the file is opened, so a dangling or absolute-to-the-host link
  * would fail the copy and abort the whole run, and a link pointing at
  * one of its own parents would make the walk recurse forever.
+ *
+ * A directory entry can point at one of its own ancestors all the same
+ * on a corrupt image -- grub caps symlink nesting but has no cycle
+ * detection, and no filesystem driver is safe from it -- so the walk
+ * is bounded by depth instead of trusting the tree to be finite.
  */
 
 struct walk_item
@@ -358,13 +363,24 @@ top_rel_name (const std::string &src)
 	return sanitize_component (base);
 }
 
+/* Directory levels walked below a source: past any real tree (grub's
+   own path handling gives out well before this), short enough that the
+   recursion cannot run the stack out on a cyclic one.  */
+constexpr int WALK_MAX_DEPTH = 64;
+
 /* Returns false on error (error set) or cancellation (error empty);
-   LINKS counts the symlinks left out of the work list.  */
+   LINKS counts the symlinks left out of the work list.  DEPTH is how
+   far SRC itself sits below the source the walk started from.  */
 bool
-walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item> &out, UINT64 &links, std::string &error)
+walk_dir (const std::string &src, const std::wstring &rel, int depth, std::vector<walk_item> &out, UINT64 &links, std::string &error)
 {
 	std::vector<backend_dirent> children;
 
+	if (depth >= WALK_MAX_DEPTH)
+	{
+		error = src + ": directory nesting too deep";
+		return false;
+	}
 	if (rover_dir_list (src.c_str (), list_dir_hook, &children))
 	{
 		const char *msg = rover_last_error ();
@@ -387,7 +403,7 @@ walk_dir (const std::string &src, const std::wstring &rel, std::vector<walk_item
 		item.is_dir = e.is_dir;
 		item.mtime = e.mtime;
 		out.push_back (item);
-		if (e.is_dir && !walk_dir (item.src, item.rel, out, links, error))
+		if (e.is_dir && !walk_dir (item.src, item.rel, depth + 1, out, links, error))
 			return false;
 	}
 	return true;
@@ -499,7 +515,7 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 		item.mtime = st.mtime_set ? st.mtime : 0;
 		work.push_back (item);
 		if (item.is_dir
-		    && !walk_dir (item.src, item.rel, work, ctx.links_skipped, res->error))
+		    && !walk_dir (item.src, item.rel, 0, work, ctx.links_skipped, res->error))
 			goto fail;
 	}
 	for (const walk_item &item : work)
