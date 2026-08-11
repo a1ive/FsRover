@@ -1305,6 +1305,50 @@ test_zlib_header (grub_gzio_t gzio)
   return 1;
 }
 
+/*
+ * Open a bare zlib stream (RFC 1950) on the top of IO.  Unlike
+ * grub_gzio_open() this is never registered as a file filter: a two byte
+ * zlib header is far too weak to probe for, so only a caller that already
+ * knows the stream is zlib -- an archive that says so in its index -- may
+ * ask for it.  SIZE is the uncompressed length, which the format does not
+ * store.  Returns 0 without closing IO when the stream is not zlib.
+ */
+grub_file_t
+grub_zlibio_open (grub_file_t io, grub_off_t size)
+{
+  grub_file_t file;
+  grub_gzio_t gzio;
+
+  file = (grub_file_t) grub_zalloc (sizeof (*file));
+  if (! file)
+    return 0;
+
+  gzio = grub_zalloc (sizeof (*gzio));
+  if (! gzio)
+    {
+      grub_free (file);
+      return 0;
+    }
+
+  gzio->file = io;
+
+  file->device = io->device;
+  file->data = gzio;
+  file->fs = &grub_gzio_fs;
+  file->size = size;
+  file->not_easily_seekable = 1;
+
+  /* No hcontext: zlib carries an Adler-32, not the CRC-32 of gzip.  */
+  if (! test_zlib_header (gzio))
+    {
+      grub_free (gzio);
+      grub_free (file);
+      return 0;
+    }
+
+  return file;
+}
+
 static grub_ssize_t
 grub_gzio_read_real (grub_gzio_t gzio, grub_off_t offset,
 		     char *buf, grub_size_t len)
@@ -1324,6 +1368,7 @@ grub_gzio_read_real (grub_gzio_t gzio, grub_off_t offset,
   while (len > 0 && grub_errno == GRUB_ERR_NONE)
     {
       register grub_size_t size;
+      register grub_size_t wpos;
       register char *srcaddr;
 
       while (offset >= gzio->saved_offset)
@@ -1336,10 +1381,19 @@ grub_gzio_read_real (grub_gzio_t gzio, grub_off_t offset,
       if (gzio->wp == 0)
 	goto out;
 
-      srcaddr = (char *) ((offset & (WSIZE - 1)) + gzio->slide);
+      wpos = (grub_size_t) (offset & (WSIZE - 1));
+      srcaddr = (char *) (wpos + gzio->slide);
       size = gzio->saved_offset - offset;
       if (size > len)
 	size = len;
+      /*
+       * The window is a ring: a read that starts inside it and runs past
+       * its end continues at slide[0].  Stop here and let the next round
+       * of the loop pick the rest up from there.  Sequential reads always
+       * start at a multiple of WSIZE and never see this.
+       */
+      if (size > WSIZE - wpos)
+	size = WSIZE - wpos;
 
       grub_memmove (buf, srcaddr, size);
 

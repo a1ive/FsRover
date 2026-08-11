@@ -24,6 +24,7 @@
 #include <grub/disk.h>
 #include <grub/file.h>
 #include <grub/misc.h>
+#include <grub/deflate.h>
 #include <grub/dl.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
@@ -309,13 +310,51 @@ static struct grub_fs pkg_disk_fs =
 	.next = 0
 };
 
-/* opens the byte range [OFF, OFF + LEN) of DISK as a decompressed file */
+/* wraps the raw byte range RAW in the decoder CODEC names */
+static grub_file_t
+pkg_codec_open (grub_file_t raw, int codec, grub_off_t size)
+{
+	grub_file_filter_id_t id;
+	grub_file_t file;
+
+	switch (codec)
+	{
+	case GRUB_PKG_CODEC_ZLIB:
+		return grub_zlibio_open (raw, size);
+	case GRUB_PKG_CODEC_BZIP2:
+		id = GRUB_FILE_FILTER_BZ2IO;
+		break;
+	case GRUB_PKG_CODEC_XZ:
+		id = GRUB_FILE_FILTER_XZIO;
+		break;
+	default:
+		return 0;
+	}
+
+	if (!grub_file_filters[id])
+		return 0;
+	file = grub_file_filters[id] (raw, GRUB_FILE_TYPE_NONE);
+	/* a filter hands its argument back when the stream is not its own */
+	if (file == raw)
+		return 0;
+	if (file)
+		file->size = size;	/* the index knows better than the stream */
+	return file;
+}
+
+/*
+ * Opens the byte range [OFF, OFF + LEN) of DISK as a decompressed file.
+ * CODEC < 0 leaves the choice to the whole compression filter chain, which
+ * is what a deb or rpm payload needs; otherwise exactly one decoder runs
+ * and SIZE is the length it has to produce.
+ */
 static grub_file_t
 pkg_range_open (grub_disk_t disk, grub_uint64_t disk_size,
-		grub_off_t off, grub_off_t len)
+		grub_off_t off, grub_off_t len, int codec, grub_off_t size)
 {
 	struct pkg_diskfile *df;
-	grub_file_t base, file;
+	grub_file_t base, raw, file;
+	enum grub_file_type type;
 
 	df = grub_zalloc (sizeof (*df));
 	if (!df)
@@ -332,10 +371,22 @@ pkg_range_open (grub_disk_t disk, grub_uint64_t disk_size,
 	base->data = df;
 	base->size = disk_size;
 
-	file = grub_file_offset_open (base, GRUB_FILE_TYPE_NONE, off, len);
-	if (!file)
+	type = (codec < 0) ? GRUB_FILE_TYPE_NONE : GRUB_FILE_TYPE_NO_DECOMPRESS;
+	raw = grub_file_offset_open (base, type, off, len);
+	if (!raw)
 	{
 		grub_file_close (base);
+		return 0;
+	}
+	if (codec < 0 || codec == GRUB_PKG_CODEC_NONE)
+		return raw;
+
+	file = pkg_codec_open (raw, codec, size);
+	if (!file)
+	{
+		grub_file_close (raw);
+		grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+			    "cannot decode the package payload");
 		return 0;
 	}
 	return file;
@@ -346,7 +397,7 @@ grub_pkg_stream_open (struct grub_pkg_data *data, int stream)
 {
 	return pkg_range_open (data->disk, data->disk_size,
 			       data->streams[stream].off,
-			       data->streams[stream].len);
+			       data->streams[stream].len, -1, 0);
 }
 
 /* replaces *OUT with SIZE bytes read at OFF, NUL terminated */
@@ -1072,9 +1123,11 @@ struct pkg_file
 	grub_uint64_t disk_size;
 	struct grub_pkg_stream range;
 	grub_off_t data_off;
+	grub_off_t size;
 	grub_file_t stream;	/* opened on the first read */
 	char *mem;
 	int kind;
+	int codec;		/* -1 = whatever the filter chain detects */
 };
 
 grub_err_t
@@ -1118,7 +1171,9 @@ grub_pkg_open (grub_file_t file, struct grub_pkg_ops *ops, const char *name)
 	ctx->disk = data->disk;
 	ctx->disk_size = data->disk_size;
 	ctx->data_off = ent->off;
+	ctx->size = ent->size;
 	ctx->kind = ent->stream;
+	ctx->codec = -1;
 	if (ent->stream == GRUB_PKG_STREAM_MEM)
 	{
 		ctx->mem = grub_strdup (ent->target ? ent->target : "");
@@ -1129,12 +1184,21 @@ grub_pkg_open (grub_file_t file, struct grub_pkg_ops *ops, const char *name)
 			return grub_errno;
 		}
 	}
+	else if (ent->stream == GRUB_PKG_STREAM_SUB)
+	{
+		/* the whole range is this one file, so it starts at zero */
+		ctx->range.off = ent->off;
+		ctx->range.len = ent->plen;
+		ctx->data_off = 0;
+		ctx->codec = ent->codec;
+	}
 	else if (ent->stream >= 0)
 		ctx->range = data->streams[ent->stream];
 
 	file->data = ctx;
 	file->size = ent->size;
-	file->not_easily_seekable = (ent->stream >= 0);
+	file->not_easily_seekable = (ent->stream >= 0
+				     || ent->stream == GRUB_PKG_STREAM_SUB);
 	pkg_unmount (data);
 	return GRUB_ERR_NONE;
 }
@@ -1166,7 +1230,8 @@ grub_pkg_read (grub_file_t file, char *buf, grub_size_t len)
 		{
 			ctx->stream = pkg_range_open (ctx->disk, ctx->disk_size,
 						      ctx->range.off,
-						      ctx->range.len);
+						      ctx->range.len,
+						      ctx->codec, ctx->size);
 			if (!ctx->stream)
 				return -1;
 		}

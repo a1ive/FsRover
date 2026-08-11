@@ -551,6 +551,20 @@ fields with leading spaces, as old tars wrote them, are accepted, and a
 typeflag of `\0` is treated as a regular file (or a directory when the name ends
 in `/`).
 
+#### Apple XAR / macOS installer package — `xar`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: per-file + volume · Symlinks: flagged
+
+Handles `.xar`, `.pkg` and `.xip`. The table of contents itself is browsable as `/[TOC].xml`.
+
+**Encodings:** `application/octet-stream` (stored), `application/x-gzip`
+(a bare zlib stream), `application/x-bzip2`, `application/x-xz`.
+
+Names that would change the shape of the tree are rewritten: a `/` inside a name
+becomes `_`, and an empty, `.` or `..` name becomes `[index]`, as 7-Zip
+does. Extended attribute forks (`<ea>`), checksums, and the archive signature
+are not exposed.
+
 #### Windows Imaging — `wim`
 
 > Origin: FsRover · Label: no · UUID: WIM GUID · Timestamps: per-file · Symlinks: resolved

@@ -147,6 +147,7 @@
 	mod (vmfs)	\
 	mod (vxfs)	\
 	mod (wim)	\
+	mod (xar)	\
 	mod (xfs)	\
 	mod (zfs)	\
 	mod (zip)	\

@@ -19,6 +19,14 @@
 #ifndef GRUB_DEFLATE_HEADER
 #define GRUB_DEFLATE_HEADER 1
 
+#include <grub/file.h>
+
+/* Wraps IO in a decompressor for the bare zlib stream it holds.  SIZE is
+   the uncompressed length; the format does not store one.  Returns 0
+   without closing IO when the stream does not start with a zlib header.  */
+grub_file_t
+grub_zlibio_open (grub_file_t io, grub_off_t size);
+
 grub_ssize_t
 grub_zlib_decompress (char *inbuf, grub_size_t insize, grub_off_t off,
 		      char *outbuf, grub_size_t outsize);

@@ -29,6 +29,19 @@
 /* grub_pkg_entry.stream: a payload index, or one of these */
 #define GRUB_PKG_STREAM_RAW	(-1)	/* plain byte range of the disk */
 #define GRUB_PKG_STREAM_MEM	(-2)	/* grub_pkg_entry.target is the data */
+#define GRUB_PKG_STREAM_SUB	(-3)	/* own compressed byte range of the disk */
+
+/*
+ * grub_pkg_entry.codec, for GRUB_PKG_STREAM_SUB entries: which decoder
+ * turns the [off, off + plen) byte range into the SIZE bytes of the file.
+ * Formats that name their compressor in an index -- as opposed to the deb
+ * and rpm payloads, which are recognised by magic -- select it here.
+ */
+#define GRUB_PKG_CODEC_NONE	0	/* stored; plen must equal size */
+#define GRUB_PKG_CODEC_ZLIB	1	/* bare zlib stream, no gzip header */
+#define GRUB_PKG_CODEC_BZIP2	2
+#define GRUB_PKG_CODEC_XZ	3
+#define GRUB_PKG_CODEC_OTHER	4	/* named, but not built into grub.lib */
 
 #define GRUB_PKG_MAX_STREAMS	8
 #define GRUB_PKG_MAX_SIZE	((grub_off_t) 1 << 48)
@@ -46,9 +59,11 @@ struct grub_pkg_entry
 	char *name;
 	char *target;		/* link target, NULL when not a link */
 	grub_off_t off;		/* data offset within STREAM */
+	grub_off_t plen;	/* compressed length, GRUB_PKG_STREAM_SUB only */
 	grub_off_t size;
 	grub_int64_t mtime;
 	int stream;
+	int codec;		/* GRUB_PKG_CODEC_*, GRUB_PKG_STREAM_SUB only */
 	unsigned is_dir:1;
 	unsigned is_lnk:1;
 };
@@ -147,7 +162,8 @@ grub_pkg_drop_stream (struct grub_pkg_data *data);
  * grub_file_offset_open(), which runs the gzip / xz / lzop / lz4 / zstd io
  * filters over it, so every compressor with a filter built into grub.lib
  * is decoded transparently and anything else is seen verbatim.  Close the
- * result with grub_file_close().
+ * result with grub_file_close().  GRUB_PKG_STREAM_SUB entries do not come
+ * through here: their decoder is named by the index, not probed for.
  */
 grub_file_t
 grub_pkg_stream_open (struct grub_pkg_data *data, int stream);

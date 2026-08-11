@@ -121,6 +121,9 @@
     <Filter Include="grub-core\lib\brotli\include">
       <UniqueIdentifier>{4071bc93-6eda-4f4c-b258-903d4aec8f67}</UniqueIdentifier>
     </Filter>
+    <Filter Include="grub-core\lib\yxml">
+      <UniqueIdentifier>{5182cda4-7feb-405d-c369-a14e5bfd9078}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="rover\init.c">
@@ -400,6 +403,9 @@
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\ufs_be.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\xar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\xfs.c">
@@ -1068,6 +1074,9 @@
     <ClCompile Include="grub-core\lib\json\json.c">
       <Filter>grub-core\lib\json</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\yxml\yxml.c">
+      <Filter>grub-core\lib\yxml</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha512.c">
       <Filter>grub-core\lib\libgcrypt</Filter>
     </ClCompile>
@@ -1231,6 +1240,9 @@
     </ClInclude>
     <ClInclude Include="grub-core\lib\json\jsmn.h">
       <Filter>grub-core\lib\json</Filter>
+    </ClInclude>
+    <ClInclude Include="grub-core\lib\yxml\yxml.h">
+      <Filter>grub-core\lib\yxml</Filter>
     </ClInclude>
     <ClInclude Include="grub-core\lib\libgcrypt\gcry_wrap.h">
       <Filter>grub-core\lib\libgcrypt</Filter>
