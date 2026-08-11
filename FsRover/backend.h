@@ -175,6 +175,8 @@ struct backend_result
 	UINT64 stat_bytes = 0;	/* extract, export_image: bytes written */
 	UINT64 stat_links = 0;	/* extract: symlinks skipped */
 	std::string text;	/* file_props: libmagic description */
+	bool inode_set = false;	/* file_props: the driver reported an inode */
+	UINT64 inode = 0;
 	std::string hash[BACKEND_HASH_COUNT];	/* hash_file: lowercase hex */
 	std::vector<char> data;	/* read_chunk: short read = EOF */
 	UINT64 file_size = 0;	/* read_chunk */

@@ -169,6 +169,11 @@ props_on_type (backend_result *res)
 	if (!g_props || res->seq != g_seq_props)
 		return;
 	SetDlgItemTextW (g_props, IDC_PROPS_TYPE, widen (res->error.empty () ? res->text : res->error).c_str ());
+	/* Filled even when the type sniff failed: it is the directory
+	   entry's, not the file's.  Not every driver reports one.  */
+	SetDlgItemTextW (g_props, IDC_PROPS_INODE,
+		res->inode_set ? std::to_wstring (res->inode).c_str ()
+			       : res_str (IDS_PROPS_NO_INODE).c_str ());
 }
 
 void

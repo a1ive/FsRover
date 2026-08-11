@@ -727,8 +727,19 @@ constexpr size_t SNIFF_MAX = 1 << 20;
 void
 run_file_props (const std::string &path, backend_result *res)
 {
-	rover_file *f = rover_file_open (path.c_str ());
+	rover_stat_t st;
+	rover_file *f;
 
+	/* Identity first, and on its own: it comes from the directory
+	   entry rather than the file, so it is still worth showing for a
+	   file whose contents cannot be read.  */
+	if (!rover_stat (path.c_str (), &st) && st.inode_set)
+	{
+		res->inode_set = true;
+		res->inode = st.inode;
+	}
+
+	f = rover_file_open (path.c_str ());
 	if (!f)
 	{
 		set_error (res, "cannot open file");
