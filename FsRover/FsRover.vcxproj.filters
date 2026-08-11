@@ -17,6 +17,9 @@
     <Filter Include="SRC\md4c">
       <UniqueIdentifier>{6f2a8a1c-6b1e-4d4f-9a5b-0d7f2a1c8e34}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SRC\libcdi">
+      <UniqueIdentifier>{0f5b6a02-3c47-4a58-9f1d-2b6c8e4a71d9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp">
@@ -61,6 +64,9 @@
     <ClCompile Include="propsdlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="smartdlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="stb_impl.c">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -83,6 +89,9 @@
     </ClInclude>
     <ClInclude Include="gui.h">
       <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="libcdi\libcdi.h">
+      <Filter>SRC\libcdi</Filter>
     </ClInclude>
     <ClInclude Include="mdrtf.h">
       <Filter>SRC</Filter>

@@ -11,8 +11,9 @@ FsRover is a read-only multi-filesystem explorer for Windows.
 3. [Disk filters (RAID / LVM)](#3-disk-filters-raid--lvm)
 4. [Encrypted volumes](#4-encrypted-volumes)
 5. [Dokan](#5-dokan)
-6. [Keyboard shortcuts](#6-keyboard-shortcuts)
-7. [Command line](#7-command-line)
+6. [S.M.A.R.T.](#6-smart)
+7. [Keyboard shortcuts](#7-keyboard-shortcuts)
+8. [Command line](#8-command-line)
 
 ---
 
@@ -1256,7 +1257,34 @@ then creates and starts the `Dokan2` service.
 
 ---
 
-## 6. Keyboard shortcuts
+## 6. S.M.A.R.T.
+
+**View S.M.A.R.T.** on a physical disk (`hd0`, `hd1`, …) in the tree opens the
+drive's own health report: status and temperature, identity and transfer mode,
+the counters the drive keeps, and every S.M.A.R.T. attribute it exposes with the
+values behind it. **Refresh** re-reads the drive; **HEX** shows raw values in
+hexadecimal.
+
+### Requirements
+
+- **libcdi**, a DLL build of
+  [CrystalDiskInfo](https://github.com/hiyohiyo/CrystalDiskInfo), next to
+  `FsRover.exe`: `libcdi.dll` (x64), `libcdix86.dll` (x86) or `libcdiaa64.dll`
+  (ARM64). Download it from [NWinfo Releases](https://github.com/a1ive/nwinfo/releases).
+- **Administrator rights**, as for any raw drive access.
+
+### Notes
+
+- The first view scans every drive in the machine and takes a few seconds; the
+  result is kept for the rest of the session, so later views and other drives
+  open immediately.
+- ATA, SATA, NVMe and many USB bridges are read, along with Intel VROC, LSI
+  MegaRAID and CSMI RAID members. What each attribute means is the vendor's
+  business.
+
+---
+
+## 7. Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
@@ -1279,7 +1307,7 @@ context-menu key opens the right-click menu for the current selection, and
 
 ---
 
-## 7. Command line
+## 8. Command line
 
 ```
 FsRover.exe [options]

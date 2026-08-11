@@ -108,6 +108,7 @@ constexpr int IDM_EXPORT = 13;
 constexpr int IDM_MARKDOWN = 14;
 constexpr int IDM_VERACRYPT = 15;
 constexpr int IDM_PLAINMOUNT = 16;
+constexpr int IDM_SMART = 17;
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -1119,6 +1120,12 @@ on_tree_rclick (void)
 	bool can_vc = can_raw && d.size >= 256 * 1024
 		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
 	bool can_pm = can_raw && d.dev_id != BACKEND_DEV_CRYPTODISK;
+	/* S.M.A.R.T. belongs to a drive, not to a volume: only a whole
+	   windisk "hdN" has a \\.\PhysicalDriveN behind it to ask.  The
+	   optical drives ("cdN") and everything mapped or imaged are out,
+	   and the item is left off their menus entirely.  */
+	bool is_drive = d.dev_id == BACKEND_DEV_WINDISK && !d.is_partition
+		&& d.name.compare (0, 2, "hd") == 0;
 	UINT busy = g_extracting ? MF_GRAYED : 0u;
 
 	HMENU menu = CreatePopupMenu ();
@@ -1137,8 +1144,11 @@ on_tree_rclick (void)
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
-	/* Properties reads only the cached diskent, so it stays available
-	   during an extraction (unlike the backend-touching items above).  */
+	/* Neither S.M.A.R.T. nor Properties goes through the backend --
+	   one is libcdi's own I/O, the other reads the cached diskent --
+	   so both stay available during an extraction.  */
+	if (is_drive)
+		AppendMenuW (menu, MF_STRING | (smart_available () ? 0u : MF_GRAYED), IDM_SMART, res_str (IDS_MENU_SMART).c_str ());
 	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
 	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
 	DestroyMenu (menu);
@@ -1181,6 +1191,10 @@ on_tree_rclick (void)
 	case IDM_EXPORT:
 		if (can_raw)
 			start_export (d);
+		break;
+	case IDM_SMART:
+		if (is_drive)
+			show_smart (d);
 		break;
 	case IDM_PROPS:
 		show_disk_props (d, g_disks);
@@ -2084,6 +2098,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_DESTROY:
 		Shell_NotifyIconW (NIM_DELETE, &g_tray);
 		dokanfs_shutdown ();
+		smart_shutdown ();
 		backend_stop ();
 		PostQuitMessage (0);
 		return 0;

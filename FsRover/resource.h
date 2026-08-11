@@ -77,6 +77,9 @@
 /* Plain dm-crypt mount: cipher spec, hash, key size, sector size, secret.  */
 #define IDD_PLAINMOUNT		112
 
+/* Disk S.M.A.R.T.: a painted summary sheet above the attribute list.  */
+#define IDD_SMART		113
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303
@@ -140,6 +143,10 @@
 #define IDC_DOKAN_EXPLORER	1604
 
 #define IDC_DISKPROPS_COPY	1702
+
+#define IDC_SMART_LIST		1901
+#define IDC_SMART_REFRESH	1902
+#define IDC_SMART_HEX		1903
 
 #define IDC_PROPS_TYPE		1001
 #define IDC_PROPS_MD5		1002
@@ -305,5 +312,30 @@
 #define IDS_PM_BADPARAM		154
 #define IDS_PM_HASH_NONE	155
 #define IDS_PROPS_NO_INODE	144
+#define IDS_MENU_SMART		160
+#define IDS_SM_TITLE		161
+#define IDS_SM_HEALTH		162
+#define IDS_SM_TEMPERATURE	163
+#define IDS_SM_GOOD		164
+#define IDS_SM_CAUTION		165
+#define IDS_SM_BAD		166
+#define IDS_SM_UNKNOWN		167
+#define IDS_SM_FIRMWARE		168
+#define IDS_SM_SERIAL		169
+#define IDS_SM_INTERFACE	170
+#define IDS_SM_MODE		171
+#define IDS_SM_DRIVE		172
+#define IDS_SM_STANDARD		173
+#define IDS_SM_FEATURES		174
+#define IDS_SM_READS		175
+#define IDS_SM_WRITES		176
+#define IDS_SM_NAND		177
+#define IDS_SM_BUFFER		178
+#define IDS_SM_RPM		179
+#define IDS_SM_POWER_COUNT	180
+#define IDS_SM_POWER_HOURS	181
+#define IDS_SM_ATTR		182
+#define IDS_SM_NO_DATA		183
+#define IDS_SM_HEX		184
 
 #endif /* ! FSROVER_RESOURCE_H */

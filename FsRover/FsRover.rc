@@ -164,6 +164,24 @@ BEGIN
 	DEFPUSHBUTTON	"OK", IDOK, 263, 219, 50, 14
 END
 
+// Disk S.M.A.R.T.: only the header controls and the attribute list live
+// in the template.  The sheet between them -- model and capacity, the
+// health and temperature boxes, and the two columns of "field: value"
+// rows -- is painted by the dialog, which measures that content in
+// WM_INITDIALOG and sizes itself around it; the list then follows the
+// frame.  All translatable text is replaced from the string table at
+// runtime, so a single language-neutral template serves every UI
+// language.
+IDD_SMART DIALOGEX 0, 0, 360, 300
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "S.M.A.R.T."
+FONT 9, "Segoe UI"
+BEGIN
+	PUSHBUTTON	"", IDC_SMART_REFRESH, 249, 7, 50, 14
+	CONTROL		"", IDC_SMART_HEX, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 305, 9, 48, 10
+	CONTROL		"", IDC_SMART_LIST, "SysListView32", LVS_REPORT | LVS_SHOWSELALWAYS | WS_TABSTOP | WS_BORDER, 7, 160, 346, 133
+END
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION ROVER_VERSION
 PRODUCTVERSION ROVER_VERSION
@@ -354,6 +372,31 @@ BEGIN
 	IDS_PM_BADPARAM		"Enter a cipher of the form cipher-mode-iv and a key size in bits that is a multiple of 8."
 	IDS_PM_HASH_NONE	"none"
 	IDS_PROPS_NO_INODE	"not reported by this filesystem"
+	IDS_MENU_SMART		"View S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"Health status"
+	IDS_SM_TEMPERATURE	"Temperature"
+	IDS_SM_GOOD		"Good"
+	IDS_SM_CAUTION		"Caution"
+	IDS_SM_BAD		"Bad"
+	IDS_SM_UNKNOWN		"Unknown"
+	IDS_SM_FIRMWARE		"Firmware"
+	IDS_SM_SERIAL		"Serial number"
+	IDS_SM_INTERFACE	"Interface"
+	IDS_SM_MODE		"Transfer mode"
+	IDS_SM_DRIVE		"Drive letters"
+	IDS_SM_STANDARD		"Standard"
+	IDS_SM_FEATURES		"Features"
+	IDS_SM_READS		"Total host reads"
+	IDS_SM_WRITES		"Total host writes"
+	IDS_SM_NAND		"Total NAND writes"
+	IDS_SM_BUFFER		"Buffer size"
+	IDS_SM_RPM		"Rotation rate"
+	IDS_SM_POWER_COUNT	"Power on count"
+	IDS_SM_POWER_HOURS	"Power on hours"
+	IDS_SM_ATTR		"Attribute"
+	IDS_SM_NO_DATA		"No S.M.A.R.T. information is available for this disk."
+	IDS_SM_HEX		"HEX"
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -613,6 +656,31 @@ BEGIN
 	IDS_PM_BADPARAM		"加密算法需形如 cipher-mode-iv，密钥长度需为 8 的倍数（位）。"
 	IDS_PM_HASH_NONE	"无"
 	IDS_PROPS_NO_INODE	"该文件系统未提供"
+	IDS_MENU_SMART		"查看 S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"健康状态"
+	IDS_SM_TEMPERATURE	"温度"
+	IDS_SM_GOOD		"良好"
+	IDS_SM_CAUTION		"警告"
+	IDS_SM_BAD		"异常"
+	IDS_SM_UNKNOWN		"未知"
+	IDS_SM_FIRMWARE		"固件"
+	IDS_SM_SERIAL		"序列号"
+	IDS_SM_INTERFACE	"接口"
+	IDS_SM_MODE		"传输模式"
+	IDS_SM_DRIVE		"驱动器"
+	IDS_SM_STANDARD		"标准"
+	IDS_SM_FEATURES		"特性"
+	IDS_SM_READS		"总计读取"
+	IDS_SM_WRITES		"总计写入"
+	IDS_SM_NAND		"NAND 总计写入"
+	IDS_SM_BUFFER		"缓冲区大小"
+	IDS_SM_RPM		"转速"
+	IDS_SM_POWER_COUNT	"通电次数"
+	IDS_SM_POWER_HOURS	"通电时间"
+	IDS_SM_ATTR		"属性"
+	IDS_SM_NO_DATA		"无法获取该磁盘的 S.M.A.R.T. 信息。"
+	IDS_SM_HEX		"HEX"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -865,6 +933,31 @@ BEGIN
 	IDS_PM_BADPARAM		"加密演算法需形如 cipher-mode-iv，金鑰長度需為 8 的倍數（位元）。"
 	IDS_PM_HASH_NONE	"無"
 	IDS_PROPS_NO_INODE	"該檔案系統未提供"
+	IDS_MENU_SMART		"檢視 S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"健康狀態"
+	IDS_SM_TEMPERATURE	"溫度"
+	IDS_SM_GOOD		"良好"
+	IDS_SM_CAUTION		"警告"
+	IDS_SM_BAD		"異常"
+	IDS_SM_UNKNOWN		"未知"
+	IDS_SM_FIRMWARE		"韌體"
+	IDS_SM_SERIAL		"序號"
+	IDS_SM_INTERFACE	"介面"
+	IDS_SM_MODE		"傳輸模式"
+	IDS_SM_DRIVE		"磁碟機"
+	IDS_SM_STANDARD		"標準"
+	IDS_SM_FEATURES		"特性"
+	IDS_SM_READS		"總計讀取"
+	IDS_SM_WRITES		"總計寫入"
+	IDS_SM_NAND		"NAND 總計寫入"
+	IDS_SM_BUFFER		"緩衝區大小"
+	IDS_SM_RPM		"轉速"
+	IDS_SM_POWER_COUNT	"通電次數"
+	IDS_SM_POWER_HOURS	"通電時間"
+	IDS_SM_ATTR		"屬性"
+	IDS_SM_NO_DATA		"無法取得該磁碟的 S.M.A.R.T. 資訊。"
+	IDS_SM_HEX		"HEX"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -1117,6 +1210,31 @@ BEGIN
 	IDS_PM_BADPARAM		"暗号化方式は cipher-mode-iv の形式で、鍵長は 8 の倍数 (ビット) を指定してください。"
 	IDS_PM_HASH_NONE	"なし"
 	IDS_PROPS_NO_INODE	"このファイルシステムでは取得できません"
+	IDS_MENU_SMART		"S.M.A.R.T. を表示"
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"健康状態"
+	IDS_SM_TEMPERATURE	"温度"
+	IDS_SM_GOOD		"正常"
+	IDS_SM_CAUTION		"注意"
+	IDS_SM_BAD		"異常"
+	IDS_SM_UNKNOWN		"不明"
+	IDS_SM_FIRMWARE		"ファームウェア"
+	IDS_SM_SERIAL		"シリアル番号"
+	IDS_SM_INTERFACE	"インターフェイス"
+	IDS_SM_MODE		"転送モード"
+	IDS_SM_DRIVE		"ドライブ"
+	IDS_SM_STANDARD		"規格"
+	IDS_SM_FEATURES		"機能"
+	IDS_SM_READS		"総読み込み量"
+	IDS_SM_WRITES		"総書き込み量"
+	IDS_SM_NAND		"NAND 総書き込み量"
+	IDS_SM_BUFFER		"バッファサイズ"
+	IDS_SM_RPM		"回転数"
+	IDS_SM_POWER_COUNT	"電源投入回数"
+	IDS_SM_POWER_HOURS	"使用時間"
+	IDS_SM_ATTR		"属性"
+	IDS_SM_NO_DATA		"このディスクの S.M.A.R.T. 情報を取得できません。"
+	IDS_SM_HEX		"HEX"
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

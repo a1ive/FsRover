@@ -172,6 +172,7 @@
     <ClCompile Include="mdview.cpp" />
     <ClCompile Include="optparse.c" />
     <ClCompile Include="propsdlg.cpp" />
+    <ClCompile Include="smartdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />
     <ClCompile Include="util.cpp" />
@@ -183,6 +184,7 @@
     <ClInclude Include="dokan\public.h" />
     <ClInclude Include="dokanfs.h" />
     <ClInclude Include="gui.h" />
+    <ClInclude Include="libcdi\libcdi.h" />
     <ClInclude Include="md4c\entity.h" />
     <ClInclude Include="md4c\md4c.h" />
     <ClInclude Include="mdrtf.h" />

@@ -124,6 +124,14 @@ bool props_on_progress (backend_progress *p);
 void show_disk_props (const backend_diskent &d,
 		      const std::vector<backend_diskent> &disks);
 
+/* smartdlg.cpp */
+
+/* False = libcdi is not next to the executable, so nothing can be read
+   and the menu item stays grayed.  */
+bool smart_available (void);
+void show_smart (const backend_diskent &d);	/* windisk "hdN" only */
+void smart_shutdown (void);	/* before COM goes down */
+
 /* cryptodlg.cpp */
 void prompt_unlock (const std::string &devname, const std::string &uuid);
 void crypto_unlock_done (backend_result *res);
