@@ -111,6 +111,83 @@ join_path (const std::string &dir, const std::string &name)
 	return p + name;
 }
 
+size_t
+digit_run (const char *s)
+{
+	size_t n = 0;
+
+	while (s[n] >= '0' && s[n] <= '9')
+		n++;
+	return n;
+}
+
+/*
+ * Order for the names the GUI lists.  A run of digits compares as a
+ * number, so "img2" comes before "img10" and "hd0,gpt2" before
+ * "hd0,gpt10"; ASCII letters compare case-insensitively and everything
+ * else by byte, which for UTF-8 is codepoint order.
+ *
+ * Deliberately not the shell's StrCmpLogicalW: that one collates by the
+ * user's locale, which would tie a listing to the system language and
+ * pull a UTF-16 conversion into every comparison.  One rule, the same
+ * result on every machine, at the price of not matching Explorer on
+ * non-ASCII names.
+ *
+ * Two distinct names never compare equal, so std::sort cannot leave a
+ * pair in an arbitrary order: a difference these rules look past
+ * ("README"/"readme", "1"/"01") is held back as the tiebreak.
+ */
+int
+name_cmp (const char *a, const char *b)
+{
+	int tie = 0;
+
+	while (*a && *b)
+	{
+		size_t da = digit_run (a), db = digit_run (b);
+
+		if (da && db)
+		{
+			/* Leading zeros carry no value, so with those out
+			   of the way the longer run is the larger number.  */
+			size_t za = 0, zb = 0;
+			while (za < da - 1 && a[za] == '0')
+				za++;
+			while (zb < db - 1 && b[zb] == '0')
+				zb++;
+			if (da - za != db - zb)
+				return da - za < db - zb ? -1 : 1;
+			int r = memcmp (a + za, b + zb, da - za);
+			if (r)
+				return r < 0 ? -1 : 1;
+			if (!tie && za != zb)
+				tie = za < zb ? -1 : 1;
+			a += da;
+			b += db;
+			continue;
+		}
+		if (da != db)
+			return da ? -1 : 1;
+
+		unsigned char ca = (unsigned char) *a, cb = (unsigned char) *b;
+		if (ca >= 'A' && ca <= 'Z')
+			ca += 'a' - 'A';
+		if (cb >= 'A' && cb <= 'Z')
+			cb += 'a' - 'A';
+		if (ca != cb)
+			return ca < cb ? -1 : 1;
+		if (!tie && *a != *b)
+			tie = (unsigned char) *a < (unsigned char) *b ? -1 : 1;
+		a++;
+		b++;
+	}
+	/* A prefix sorts before what extends it, which is what puts a
+	   disk ahead of its own partitions in the device tree.  */
+	if (*a || *b)
+		return *a ? 1 : -1;
+	return tie;
+}
+
 static_assert (BACKEND_DEV_OTHER == ROVER_DEV_OTHER
 	&& BACKEND_DEV_WINDISK == ROVER_DEV_WINDISK
 	&& BACKEND_DEV_LOOPBACK == ROVER_DEV_LOOPBACK
@@ -196,7 +273,7 @@ run_list_dir (const std::string &path, backend_result *res)
 		{
 			if (a.is_dir != b.is_dir)
 				return a.is_dir;
-			return _stricmp (a.name.c_str (), b.name.c_str ()) < 0;
+			return name_cmp (a.name.c_str (), b.name.c_str ()) < 0;
 		});
 
 	/* File sizes: grub dir hooks do not report them, so open each
@@ -1108,7 +1185,7 @@ run_task (queued_task &item)
 		std::sort (res->disks.begin (), res->disks.end (),
 			[] (const backend_diskent &a, const backend_diskent &b)
 			{
-				return a.name < b.name;
+				return name_cmp (a.name.c_str (), b.name.c_str ()) < 0;
 			});
 		break;
 	case backend_task_type::list_dir:
@@ -1250,7 +1327,7 @@ backend_get_support (void)
 		std::sort (v->begin (), v->end (),
 			[] (const std::string &a, const std::string &b)
 			{
-				return _stricmp (a.c_str (), b.c_str ()) < 0;
+				return name_cmp (a.c_str (), b.c_str ()) < 0;
 			});
 	return s;
 }
