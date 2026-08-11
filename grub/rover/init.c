@@ -81,12 +81,14 @@
 	mod (part_plan)	\
 	mod (part_sun)	\
 	mod (part_sunpc)	\
+	mod (part_unixware)	\
 	/* filesystems */	\
 	mod (affs)	\
 	mod (afs)	\
 	mod (apfs)	\
 	mod (arj)	\
 	mod (bfs)	\
+	mod (bootfs)	\
 	mod (btrfs)	\
 	mod (cab)	\
 	mod (cbfs)	\
@@ -142,6 +144,7 @@
 	mod (ufs1_be)	\
 	mod (ufs2)	\
 	mod (vmfs)	\
+	mod (vxfs)	\
 	mod (wim)	\
 	mod (xfs)	\
 	mod (zfs)	\

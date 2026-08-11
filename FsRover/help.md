@@ -316,6 +316,17 @@ on-disk format (m68k, SPARC, PowerPC hosts).
 
 > Origin: GRUB · Label: yes · UUID: no · Timestamps: none · Symlinks: resolved
 
+#### SCO UnixWare BFS — `bootfs`
+
+> Origin: Linux · Label: yes · UUID: no · Timestamps: per-file · Symlinks: none
+
+The boot filesystem UnixWare mounts on `/stand`. It is named `bootfs` here
+because `bfs` is taken by the Be File System. Files occupy one contiguous run
+of 512-byte blocks each, the root is the only directory the format can hold,
+and there are no symbolic links.
+
+The volume label is only reported when the field holds printable text.
+
 #### Amiga Smart File System — `sfs`
 
 > Origin: GRUB · Label: yes · UUID: no · Timestamps: per-file · Symlinks: resolved
@@ -326,6 +337,21 @@ on-disk format (m68k, SPARC, PowerPC hosts).
 
 BSD and Solaris UFS. `ufs1_be` is the big-endian variant of UFS1; UFS2 handles
 both byte orders in one driver.
+
+#### VERITAS VxFS — `vxfs`
+
+> Origin: Linux · Label: yes · UUID: no · Timestamps: per-file · Symlinks: resolved
+
+**Supported disk layouts:** version 2, 3 and 4, in both byte orders (UnixWare
+volumes are little-endian, HP-UX ones big-endian). Version 5 and newer are
+refused at mount time.
+
+All three data layouts are read: immediate (small files stored in the inode),
+extent-based ("ext4") and typed extents, including their indirect blocks.
+Sparse files read back as zeros. The label is the pack name (`vs_fpack`) set
+by `labelit`.
+
+**Not supported:** multi-volume (DEV4) extents, extended attributes, quotas.
 
 #### VMFS — `vmfs`
 

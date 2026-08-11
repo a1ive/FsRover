@@ -234,6 +234,9 @@
     <ClCompile Include="grub-core\partmap\sunpc.c">
       <Filter>grub-core\partmap</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\partmap\unixware.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\affs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
@@ -247,6 +250,9 @@
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\bfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\bootfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\arj.c">
@@ -649,6 +655,9 @@
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\vmfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\vxfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\fs\zip.c">

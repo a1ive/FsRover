@@ -28,7 +28,7 @@ FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRU
 - **Linux:** Btrfs, cramfs, EROFS, ext2/3/4, F2FS, JFS, JFFS2, NILFS2, ReiserFS, UBIFS, XFS
 - **Windows:** FAT12/16/32, exFAT, NTFS, ReFS 3.x
 - **macOS:** APFS, HFS, HFS+
-- **Unix and other:** AFFS, AFS, BFS, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, UFS1/2, ZFS
+- **Unix and other:** AFFS, AFS, BFS, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, UFS1/2, UnixWare BFS, VxFS, ZFS
 - **Optical media:** ISO9660, UDF, CUE/BIN, Nero NRG, CloneCD CCD/IMG/SUB, Alcohol 120% MDS
 - **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, CAB, LZH/LHA, ARJ, DEB, RPM
 - **Firmware:** UEFI capsules, firmware volumes (FFS1/2/3), Intel flash descriptor images, coreboot CBFS
@@ -40,7 +40,7 @@ Filesystem encryption is not supported..
 - **Virtual disks:** VHD, VHDX, VDI, QCOW1/2/3, VMDK, DMG, ISZ, Parallels HDD, Android sparse, Windows FFU
 - **Compression:** gzip, bzip2, LZ4, LZOP, XZ, Zstandard, Brotli, LZMA
 - **Dynamic disks and RAID:** Windows LDM, Linux LVM, mdraid, RAID5/6, NVIDIA dmraid
-- **Partition tables:** MBR, GPT, Apple, BSD, DragonFly BSD, Acorn, Amiga, DVH, Plan 9, Sun
+- **Partition tables:** MBR, GPT, Apple, BSD, DragonFly BSD, Acorn, Amiga, DVH, Plan 9, Sun, UnixWare
 - **Backups:** Acronis True Image TIB/TIBX, DiskGenius PMF/PMFX, Drive Snapshot SNA, ntfsclone
 
 ## Credits
