@@ -80,6 +80,9 @@
 /* Disk S.M.A.R.T.: a painted summary sheet above the attribute list.  */
 #define IDD_SMART		113
 
+/* About-box easter egg: software-rendered 8-bit Mars runner.  */
+#define IDD_GAME		114
+
 #define IDC_TEXT_EDIT		1301
 #define IDC_TEXT_ENC_LABEL	1302
 #define IDC_TEXT_ENCODING	1303

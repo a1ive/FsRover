@@ -111,7 +111,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMEN
 CAPTION "About"
 FONT 9, "Segoe UI"
 BEGIN
-	CONTROL		"", IDC_ABOUT_ICON, "Static", SS_ICON, 12, 12, 21, 20
+	CONTROL		"", IDC_ABOUT_ICON, "Static", SS_ICON | SS_NOTIFY, 12, 12, 21, 20
 	LTEXT		"", IDC_ABOUT_NAME, 44, 12, 229, 10
 	CONTROL		"<a href=""https://github.com/a1ive/FsRover"">https://github.com/a1ive/FsRover</a>", IDC_ABOUT_URL, "SysLink", WS_TABSTOP, 44, 24, 229, 10
 	LTEXT		ROVER_COPYRIGHT, IDC_STATIC, 44, 36, 229, 10
@@ -119,6 +119,15 @@ BEGIN
 	LTEXT		"", IDC_ABOUT_CREDITS_LABEL, 12, 66, 261, 10
 	EDITTEXT	IDC_ABOUT_CREDITS, 12, 78, 261, 98, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
 	DEFPUSHBUTTON	"OK", IDOK, 223, 181, 50, 14
+END
+
+// About-box easter egg.  The client is a nearest-neighbour scaled
+// 320x180 software framebuffer; all visible game text is pixel-rendered.
+IDD_GAME DIALOGEX 0, 0, 480, 270
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX
+CAPTION "FsRover : Mars Runner"
+FONT 9, "Segoe UI"
+BEGIN
 END
 
 // Supported features: per-category name lists, filled at runtime from

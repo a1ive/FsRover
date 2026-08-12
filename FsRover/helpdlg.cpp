@@ -139,6 +139,11 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		break;
 	}
 	case WM_COMMAND:
+		if (LOWORD (wp) == IDC_ABOUT_ICON && HIWORD (wp) == STN_CLICKED)
+		{
+			show_rover_game (dlg);
+			return TRUE;
+		}
 		if (LOWORD (wp) == IDOK || LOWORD (wp) == IDCANCEL)
 		{
 			EndDialog (dlg, 0);

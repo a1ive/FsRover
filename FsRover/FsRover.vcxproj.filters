@@ -37,6 +37,9 @@
     <ClCompile Include="dokanfs.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="game.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="helpdlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>

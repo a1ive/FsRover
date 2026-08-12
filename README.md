@@ -33,7 +33,7 @@ FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRU
 - **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, CAB, LZH/LHA, ARJ, DEB, RPM, XAR
 - **Firmware:** UEFI capsules, firmware volumes (FFS1/2/3), Intel flash descriptor images, coreboot CBFS
 
-Filesystem encryption is not supported.
+File-level or filesystem-native encryption is not supported.
 
 ## Other Supported Formats
 

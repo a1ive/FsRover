@@ -196,4 +196,7 @@ void show_support (void);
 void show_shortcuts (void);
 void show_help_doc (void);	/* the bundled help page, IDR_HELP_MD */
 
+/* game.cpp: About-box icon easter egg.  */
+void show_rover_game (HWND owner);
+
 #endif /* ! FSROVER_GUI_H */

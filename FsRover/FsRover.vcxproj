@@ -162,6 +162,7 @@
     <ClCompile Include="cryptodlg.cpp" />
     <ClCompile Include="diskprops.cpp" />
     <ClCompile Include="dokanfs.cpp" />
+    <ClCompile Include="game.cpp" />
     <ClCompile Include="helpdlg.cpp" />
     <ClCompile Include="hexview.cpp" />
     <ClCompile Include="imageview.cpp" />
