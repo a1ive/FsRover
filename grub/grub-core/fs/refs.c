@@ -71,6 +71,12 @@ GRUB_MOD_LICENSE("GPLv2+");
 /* file flags */
 #define REFS_FLAG_DIRECTORY	0x10000000UL
 #define REFS_FLAG_REPARSE	0x00000400UL
+#define REFS_FLAG_SPARSE	0x00000200UL
+
+/* reparse tags that carry a filesystem link target */
+#define REFS_REPARSE_MOUNT_POINT	0xA0000003UL
+#define REFS_REPARSE_SYMLINK	0xA000000CUL
+#define REFS_REPARSE_LX_SYMLINK	0xA000001DUL
 
 #define REFS_SUPERBLOCK_BLOCK	30
 
@@ -144,6 +150,7 @@ struct grub_fshelp_node
 	struct grub_refs_data *data;
 	grub_uint8_t type;
 	grub_uint8_t reparse;
+	grub_uint8_t sparse;
 	grub_uint64_t oid;	/* DIR: directory object id;
 				   HARDLINK: parent directory object id */
 	grub_uint64_t hardlink_id;
@@ -604,7 +611,7 @@ grub_refs_mount(grub_disk_t disk)
 		goto fail;
 	cs = (grub_uint32_t) cs64;
 
-	if (bs[0x28] < 3)
+	if (bs[0x28] != 3)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "unsupported ReFS version %u.%u",
 			bs[0x28], bs[0x29]);
@@ -927,6 +934,89 @@ grub_refs_stream_setup(struct grub_refs_stream *st,
 	return GRUB_ERR_NONE;
 }
 
+struct grub_refs_reparse_ctx
+{
+	int depth;
+	int is_link;
+};
+
+static int
+grub_refs_reparse_hook(struct grub_refs_data *data, int is_index,
+	const grub_uint8_t *key, grub_uint16_t key_size,
+	const grub_uint8_t *value, grub_uint16_t value_size, void *ctx)
+{
+	struct grub_refs_reparse_ctx *c = ctx;
+	grub_uint16_t tyoff = (data->version_major > 3
+		|| data->version_minor >= 5) ? 0x0C : 0x08;
+
+	if (is_index)
+		return 0;
+	/* refsprogs treats a generic attribute with type 0xc0 as reparse
+	   data.  Its tag is at entry +0x2c; the generic value starts at
+	   entry +0x20 in observed v3 records. */
+	if (key && key_size >= (grub_uint16_t) (tyoff + 2)
+		&& refs_get16(key + tyoff) == 0x00C0 && value_size >= 0x10)
+	{
+		grub_uint32_t tag = refs_get32(value + 0x0C);
+
+		if (tag == REFS_REPARSE_MOUNT_POINT
+			|| tag == REFS_REPARSE_SYMLINK
+			|| tag == REFS_REPARSE_LX_SYMLINK)
+		{
+			c->is_link = 1;
+			return 1;
+		}
+	}
+	else if (!key_size && value && value_size >= 0x30 && c->depth == 0)
+	{
+		struct grub_refs_reparse_ctx sub = { 1, 0 };
+		grub_uint64_t b[4];
+		int ret;
+
+		b[0] = refs_get64(value);
+		b[1] = refs_get64(value + 8);
+		b[2] = refs_get64(value + 16);
+		b[3] = refs_get64(value + 24);
+		if (!b[0])
+			return 0;
+		ret = grub_refs_walk_tree(data, b, 0,
+			grub_refs_reparse_hook, &sub);
+		if (ret < 0)
+			return ret;
+		if (sub.is_link)
+		{
+			c->is_link = 1;
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/* A reparse-point file attribute alone does not imply a link: cloud
+   placeholders, sockets and other objects use it too.  Inspect the reparse
+   tag and expose only junctions and Windows/WSL symbolic links as links. */
+static int
+grub_refs_record_is_link(struct grub_refs_data *data,
+	const grub_uint8_t *record, grub_uint32_t record_size)
+{
+	struct grub_refs_reparse_ctx ctx = { 0, 0 };
+	grub_uint32_t basic;
+	int ret;
+
+	if (record_size < 2)
+		return 0;
+	basic = refs_get16(record);
+	if (!basic)
+		basic = 0xA8;
+	if (basic < 0x10 || basic >= record_size
+		|| record_size - basic < 0x28)
+		return 0;
+	ret = grub_refs_iter_table(data, record + basic,
+		record_size - basic, 0, grub_refs_reparse_hook, &ctx);
+	return ret < 0 ? -1 : ctx.is_link;
+}
+
 /* resolve a hard link (0x40 key in the parent directory tree) */
 struct grub_refs_hl_ctx
 {
@@ -1023,6 +1113,8 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 
 	if (dtype == REFS_DIRENT_LONG)
 	{
+		int is_link;
+
 		/* file record with embedded attributes */
 		if (value_size < 96)
 			return 0;
@@ -1030,11 +1122,21 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		if (!node)
 			return -1;
 		flags = refs_get32(value + 72);
-		ft = refs_get64(value + 48);
+		ft = refs_get64(value + 56);
 		node->type = REFS_NODE_REG;
 		node->size = refs_get64(value + 88);
 		node->record_size = value_size;
 		grub_memcpy(node->record, value, value_size);
+		if (flags & REFS_FLAG_REPARSE)
+		{
+			is_link = grub_refs_record_is_link(data, value, value_size);
+			if (is_link < 0)
+			{
+				grub_free(node);
+				return -1;
+			}
+			node->reparse = is_link;
+		}
 	}
 	else if (dtype == REFS_DIRENT_SHORT)
 	{
@@ -1065,7 +1167,7 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		return 0;
 
 	node->data = data;
-	node->reparse = (flags & REFS_FLAG_REPARSE) ? 1 : 0;
+	node->sparse = (flags & REFS_FLAG_SPARSE) ? 1 : 0;
 	node->mtime = grub_refs_filetime_to_unix(ft);
 
 	name = grub_refs_get_utf8(key + 4, name_len);
@@ -1196,10 +1298,25 @@ grub_refs_open(struct grub_file *file, const char *name)
 	}
 	else if (fdiro->type == REFS_NODE_HARDLINK)
 	{
+		grub_uint32_t flags;
+		int is_link;
+
 		if (grub_refs_resolve_hardlink(st))
 			goto fail;
 		if (st->hl_record_size >= 96)
+		{
 			fdiro->size = refs_get64(st->hl_record + 88);
+			flags = refs_get32(st->hl_record + 72);
+			fdiro->sparse = (flags & REFS_FLAG_SPARSE) ? 1 : 0;
+			if (flags & REFS_FLAG_REPARSE)
+			{
+				is_link = grub_refs_record_is_link(data,
+					st->hl_record, st->hl_record_size);
+				if (is_link < 0)
+					goto fail;
+				fdiro->reparse = is_link;
+			}
+		}
 		if (grub_refs_stream_setup(st, st->hl_record,
 			st->hl_record_size))
 			goto fail;
@@ -1258,7 +1375,12 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 			p += have;
 			remaining -= have;
 		}
-		/* pad a size mismatch with zeroes */
+		if (remaining && !st->node->sparse)
+		{
+			grub_error(GRUB_ERR_BAD_FS,
+				"refs: resident data shorter than file");
+			return -1;
+		}
 		grub_memset(p, 0, remaining);
 		return (grub_ssize_t) len;
 	}
@@ -1327,6 +1449,12 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 		{
 			/* sparse hole (or allocation shorter than the file
 			   size): zero-fill up to the next extent */
+			if (!st->node->sparse)
+			{
+				grub_error(GRUB_ERR_BAD_FS,
+					"refs: missing file extent");
+				return -1;
+			}
 			chunk = remaining;
 			if (next_start != ~(grub_uint64_t) 0
 				&& next_start - pos < chunk)
