@@ -81,6 +81,21 @@ menu_caption (UINT id)
 	return s;
 }
 
+/* The app icon at 32 px for this dialog's own DPI.  The only metric the
+   About box scales, so the DPI is read from the window each time rather
+   than kept beside it; STM_SETICON hands back the icon it replaces, and
+   that one is ours to free.  */
+void
+about_apply_dpi (HWND dlg)
+{
+	int size = dpi_scale (dpi_for_window (dlg), 32);
+	HICON icon = (HICON) LoadImageW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDI_APP), IMAGE_ICON, size, size, 0);
+	HICON prev = (HICON) SendDlgItemMessageW (dlg, IDC_ABOUT_ICON, STM_SETICON, (WPARAM) icon, 0);
+
+	if (prev)
+		DestroyIcon (prev);
+}
+
 INT_PTR CALLBACK
 about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -90,10 +105,7 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 	{
 		g_about = dlg;
 		SetWindowTextW (dlg, menu_caption (IDS_MENU_ABOUT).c_str ());
-
-		int size = dpi_scale (32);
-		HICON icon = (HICON) LoadImageW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDI_APP), IMAGE_ICON, size, size, 0);
-		SendDlgItemMessageW (dlg, IDC_ABOUT_ICON, STM_SETICON, (WPARAM) icon, 0);
+		about_apply_dpi (dlg);
 
 		std::wstring name = L"FsRover " + widen (ROVER_VERSION_STR) + L" (" ROVER_ARCH_W L")";
 		SetDlgItemTextW (dlg, IDC_ABOUT_NAME, name.c_str ());
@@ -104,6 +116,13 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		SetFocus (GetDlgItem (dlg, IDOK));
 		return FALSE;	/* focus was set explicitly */
 	}
+	case WM_APP_DPI_CHANGED:
+		about_apply_dpi (dlg);
+		return TRUE;
+	case WM_DPICHANGED:
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
 	case WM_NOTIFY:
 	{
 		/* The project link.  Its target is the href baked into the

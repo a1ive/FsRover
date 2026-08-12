@@ -31,8 +31,15 @@ namespace
 {
 
 HWND g_diskprops;	/* disk properties dialog, null when closed */
+UINT g_dp_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
 
-/* Layout metrics authored at 96 DPI; scaled through dpi_scale().  */
+int
+dp_scale (int value)
+{
+	return dpi_scale (g_dp_dpi, value);
+}
+
+/* Layout metrics authored at 96 DPI; scaled through dp_scale().  */
 constexpr int DP_MARGIN = 12;
 constexpr int DP_GAP = 8;	/* icon to text, button to button */
 constexpr int DP_ICON = 32;
@@ -387,8 +394,8 @@ dp_place_boxes (int width)
 
 	for (const dp_box &b : g_dp_boxes)
 		total += b.size;
-	if (min_w < dpi_scale (DP_BOX_MIN))
-		min_w = dpi_scale (DP_BOX_MIN);
+	if (min_w < dp_scale (DP_BOX_MIN))
+		min_w = dp_scale (DP_BOX_MIN);
 	if (n * min_w > width * 3 / 4)
 		min_w = width * 3 / 4 / n;
 	extra = width - n * min_w;
@@ -411,8 +418,8 @@ dp_measure (HWND dlg)
 	HFONT old = (HFONT) SelectObject (dc, g_dp_head_font);
 	TEXTMETRICW tm;
 	RECT rc;
-	int m = dpi_scale (DP_MARGIN);
-	int icon = dpi_scale (DP_ICON);
+	int m = dp_scale (DP_MARGIN);
+	int icon = dp_scale (DP_ICON);
 	int y;
 
 	GetClientRect (dlg, &rc);
@@ -425,7 +432,7 @@ dp_measure (HWND dlg)
 	/* Field rows: a label column as wide as the widest label.  */
 	SelectObject (dc, body);
 	GetTextMetricsW (dc, &tm);
-	g_dp_lay.row_h = tm.tmHeight + dpi_scale (6);
+	g_dp_lay.row_h = tm.tmHeight + dp_scale (6);
 	g_dp_lay.label_w = 0;
 	for (const dp_field &f : g_dp_fields)
 	{
@@ -446,56 +453,45 @@ dp_measure (HWND dlg)
 	g_dp_lay.y_map = 0;
 	if (!g_dp_boxes.empty ())
 	{
-		g_dp_lay.y_rule2 = y + m - dpi_scale (2);
+		g_dp_lay.y_rule2 = y + m - dp_scale (2);
 		g_dp_lay.y_map = g_dp_lay.y_rule2 + m;
-		y = g_dp_lay.y_map + g_dp_lay.small_h + dpi_scale (4) + dpi_scale (DP_BAR_H);
+		y = g_dp_lay.y_map + g_dp_lay.small_h + dp_scale (4) + dp_scale (DP_BAR_H);
 		dp_place_boxes (rc.right - 2 * m);
 	}
 
 	g_dp_lay.y_btn = y + m;
-	g_dp_lay.height = g_dp_lay.y_btn + dpi_scale (DP_BTN_H) + m;
+	g_dp_lay.height = g_dp_lay.y_btn + dp_scale (DP_BTN_H) + m;
 
 	SelectObject (dc, old);
 	ReleaseDC (dlg, dc);
 }
 
 /* Grow the template to the measured content and put the buttons back in
-   its bottom-right corner.  DS_CENTER centred the template, so the
-   dialog is centred on the owner again at its real size.  */
+   its bottom-right corner.  CENTRE puts the result on the owner, which
+   is what the template's DS_CENTER did for its placeholder size; a
+   dialog that is only being re-measured for a new DPI stays where the
+   user dragged it.  */
 void
-dp_resize (HWND dlg)
+dp_resize (HWND dlg, bool centre)
 {
-	MONITORINFO mi = { sizeof (mi) };
-	RECT wr, cr, owner;
-	int m = dpi_scale (DP_MARGIN);
-	int bw = dpi_scale (DP_BTN_W);
-	int bh = dpi_scale (DP_BTN_H);
+	RECT wr, cr;
+	int m = dp_scale (DP_MARGIN);
+	int bw = dp_scale (DP_BTN_W);
+	int bh = dp_scale (DP_BTN_H);
 
 	GetWindowRect (dlg, &wr);
 	GetClientRect (dlg, &cr);
 	int w = wr.right - wr.left;	/* the template's width is kept */
 	int h = g_dp_lay.height + (wr.bottom - wr.top) - cr.bottom;
 
-	GetWindowRect (g_main, &owner);
-	int x = owner.left + ((owner.right - owner.left) - w) / 2;
-	int y = owner.top + ((owner.bottom - owner.top) - h) / 2;
-	if (GetMonitorInfoW (MonitorFromWindow (g_main, MONITOR_DEFAULTTONEAREST), &mi))
-	{
-		if (h > mi.rcWork.bottom - mi.rcWork.top)
-			h = mi.rcWork.bottom - mi.rcWork.top;
-		if (x + w > mi.rcWork.right)
-			x = mi.rcWork.right - w;
-		if (y + h > mi.rcWork.bottom)
-			y = mi.rcWork.bottom - h;
-		if (x < mi.rcWork.left)
-			x = mi.rcWork.left;
-		if (y < mi.rcWork.top)
-			y = mi.rcWork.top;
-	}
-	SetWindowPos (dlg, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+	if (centre)
+		center_on_owner (dlg, w, h);
+	else
+		SetWindowPos (dlg, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
+	GetClientRect (dlg, &cr);
 	MoveWindow (GetDlgItem (dlg, IDOK), cr.right - m - bw, g_dp_lay.y_btn, bw, bh, TRUE);
-	MoveWindow (GetDlgItem (dlg, IDC_DISKPROPS_COPY), cr.right - m - 2 * bw - dpi_scale (DP_GAP), g_dp_lay.y_btn, bw, bh, TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_DISKPROPS_COPY), cr.right - m - 2 * bw - dp_scale (DP_GAP), g_dp_lay.y_btn, bw, bh, TRUE);
 }
 
 void
@@ -516,8 +512,8 @@ dp_draw_box (HDC dc, const dp_box &b, int x, int y, int h)
 	COLORREF face = GetSysColor (COLOR_WINDOW);
 	COLORREF accent = b.free ? GetSysColor (COLOR_BTNSHADOW) : GetSysColor (COLOR_HIGHLIGHT);
 	RECT box = { x, y, x + b.w, y + h };
-	RECT stripe = { x, y, x + b.w, y + dpi_scale (DP_STRIPE_H) };
-	int pad = dpi_scale (DP_PAD);
+	RECT stripe = { x, y, x + b.w, y + dp_scale (DP_STRIPE_H) };
+	int pad = dp_scale (DP_PAD);
 	HBRUSH brush;
 
 	brush = CreateSolidBrush (mix (accent, face, b.self ? 22 : 8));
@@ -537,14 +533,14 @@ dp_draw_box (HDC dc, const dp_box &b, int x, int y, int h)
 	}
 	DeleteObject (brush);
 
-	if (b.w - 2 * pad < dpi_scale (DP_BOX_TEXT))
+	if (b.w - 2 * pad < dp_scale (DP_BOX_TEXT))
 		return;
 
-	RECT tr = { x + pad, y + dpi_scale (DP_STRIPE_H) + pad, x + b.w - pad, y + h - pad };
+	RECT tr = { x + pad, y + dp_scale (DP_STRIPE_H) + pad, x + b.w - pad, y + h - pad };
 	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
 
 	SelectObject (dc, g_dp_small_font);
-	if (b.w < dpi_scale (DP_BOX_TWOLINE))
+	if (b.w < dp_scale (DP_BOX_TWOLINE))
 	{
 		/* Only room for the number, like Disk Management's slivers.  */
 		SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
@@ -553,7 +549,7 @@ dp_draw_box (HDC dc, const dp_box &b, int x, int y, int h)
 	}
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, b.name.c_str (), -1, &tr, fmt);
-	tr.top += g_dp_lay.small_h + dpi_scale (2);
+	tr.top += g_dp_lay.small_h + dp_scale (2);
 	SetTextColor (dc, GetSysColor (COLOR_GRAYTEXT));
 	DrawTextW (dc, b.info.c_str (), -1, &tr, fmt);
 }
@@ -564,8 +560,8 @@ dp_paint (HWND dlg, HDC dc)
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	HFONT old = (HFONT) SelectObject (dc, g_dp_head_font);
 	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
-	int m = dpi_scale (DP_MARGIN);
-	int icon = dpi_scale (DP_ICON);
+	int m = dp_scale (DP_MARGIN);
+	int icon = dp_scale (DP_ICON);
 	RECT rc, tr;
 
 	GetClientRect (dlg, &rc);
@@ -573,7 +569,7 @@ dp_paint (HWND dlg, HDC dc)
 
 	if (g_dp_hicon)
 		DrawIconEx (dc, m, m, g_dp_hicon, icon, icon, 0, nullptr, DI_NORMAL);
-	tr = { m + icon + dpi_scale (DP_GAP), g_dp_lay.y_spec, rc.right - m, g_dp_lay.height };
+	tr = { m + icon + dp_scale (DP_GAP), g_dp_lay.y_spec, rc.right - m, g_dp_lay.height };
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, g_dp_spec.c_str (), -1, &tr, fmt);
 	dp_rule (dc, m, rc.right - m, g_dp_lay.y_rule1);
@@ -585,7 +581,7 @@ dp_paint (HWND dlg, HDC dc)
 		tr = { m, y, m + g_dp_lay.label_w, y + g_dp_lay.row_h };
 		SetTextColor (dc, GetSysColor (COLOR_GRAYTEXT));
 		DrawTextW (dc, f.label.c_str (), -1, &tr, fmt);
-		tr = { m + g_dp_lay.label_w + dpi_scale (DP_GAP), y, rc.right - m, y + g_dp_lay.row_h };
+		tr = { m + g_dp_lay.label_w + dp_scale (DP_GAP), y, rc.right - m, y + g_dp_lay.row_h };
 		SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 		DrawTextW (dc, f.value.c_str (), -1, &tr, fmt);
 		y += g_dp_lay.row_h;
@@ -593,8 +589,8 @@ dp_paint (HWND dlg, HDC dc)
 
 	if (!g_dp_boxes.empty ())
 	{
-		int bar_y = g_dp_lay.y_map + g_dp_lay.small_h + dpi_scale (4);
-		int bar_h = dpi_scale (DP_BAR_H);
+		int bar_y = g_dp_lay.y_map + g_dp_lay.small_h + dp_scale (4);
+		int bar_h = dp_scale (DP_BAR_H);
 
 		dp_rule (dc, m, rc.right - m, g_dp_lay.y_rule2);
 
@@ -612,36 +608,50 @@ dp_paint (HWND dlg, HDC dc)
 	SelectObject (dc, old);
 }
 
+/* The GDI objects that depend on the dialog's DPI.  The two fonts are
+   derived from the dialog font, which the dialog manager has already
+   sized for this monitor (lfHeight is negative, so a bigger factor is a
+   bigger font); the icon is asked for in pixels outright.  On a DPI
+   change this runs again, after the manager has resized that font.  */
 void
-dp_init (HWND dlg)
+dp_apply_dpi (HWND dlg)
 {
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	LOGFONTW lf = {};
 	LONG height;
 
-	g_diskprops = dlg;
-	SetWindowTextW (dlg, g_dp_caption.c_str ());
-	SetDlgItemTextW (dlg, IDC_DISKPROPS_COPY, res_str (IDS_DP_COPY).c_str ());
-
-	/* Both derived from the dialog font, which the dialog manager has
-	   already sized for this monitor.  lfHeight is negative, so a bigger
-	   factor is a bigger font.  */
 	GetObjectW (body, (int) sizeof (lf), &lf);
 	height = lf.lfHeight;
 	lf.lfHeight = height * 6 / 5;
 	lf.lfWeight = FW_SEMIBOLD;
+	if (g_dp_head_font)
+		DeleteObject (g_dp_head_font);
 	g_dp_head_font = CreateFontIndirectW (&lf);
 	lf.lfHeight = height * 6 / 7;
 	lf.lfWeight = FW_NORMAL;
+	if (g_dp_small_font)
+		DeleteObject (g_dp_small_font);
 	g_dp_small_font = CreateFontIndirectW (&lf);
-	g_dp_hicon = load_system_icon (L"\\imageres.dll", g_dp_icon, dpi_scale (DP_ICON));
+	if (g_dp_hicon)
+		DestroyIcon (g_dp_hicon);
+	g_dp_hicon = load_system_icon (L"\\imageres.dll", g_dp_icon, dp_scale (DP_ICON));
+}
 
+void
+dp_init (HWND dlg)
+{
+	g_diskprops = dlg;
+	g_dp_dpi = dpi_for_window (dlg);
+	SetWindowTextW (dlg, g_dp_caption.c_str ());
+	SetDlgItemTextW (dlg, IDC_DISKPROPS_COPY, res_str (IDS_DP_COPY).c_str ());
+
+	dp_apply_dpi (dlg);
 	dp_measure (dlg);
-	dp_resize (dlg);
+	dp_resize (dlg, true);
 }
 
 INT_PTR CALLBACK
-disk_props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+disk_props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 {
 	switch (msg)
 	{
@@ -659,6 +669,19 @@ disk_props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		EndPaint (dlg, &ps);
 		return TRUE;
 	}
+	case WM_DPICHANGED:
+		/* The suggested frame carries the width the sheet is measured
+		   against; dp_resize() puts the height back afterwards.  */
+		g_dp_dpi = HIWORD (wp);
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
+	case WM_APP_DPI_CHANGED:
+		dp_apply_dpi (dlg);
+		dp_measure (dlg);
+		dp_resize (dlg, false);
+		InvalidateRect (dlg, nullptr, TRUE);
+		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD (wp))
 		{

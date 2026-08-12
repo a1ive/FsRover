@@ -39,6 +39,12 @@
 #define WM_DPICHANGED 0x02E0
 #endif
 
+/* Posted by a dialog to itself from WM_DPICHANGED: everything that has
+   to run after the dialog manager has rescaled the frame, the dialog
+   font and the controls.  (WM_APP + 1..6 are taken by backend.h and
+   dokanfs.h, + 5 by the tray icon in main.cpp.)  */
+constexpr UINT WM_APP_DPI_CHANGED = WM_APP + 7;
+
 /*
  * Modal loops.  A dialog or message box owned by the main window
  * disables it and runs a message loop of its own; the tray menu keeps
@@ -93,7 +99,6 @@ extern cmdline_options g_cmdline;
 bool cmdline_parse (void);
 
 /* util.cpp */
-extern UINT g_dpi;	/* main-window DPI; drives all layout scaling */
 std::wstring window_text (HWND wnd);
 std::wstring res_str (UINT id);
 void init_language (void);
@@ -103,12 +108,21 @@ HICON load_system_icon (const wchar_t *dll, int id, int size);
 HIMAGELIST icon_list (const wchar_t *dll, const int *ids, int count, int size);
 HIMAGELIST button_icons (const wchar_t *dll, int id, int size);
 void set_button_icon (HWND btn, HIMAGELIST himl);
+void center_on_owner (HWND wnd, int w, int h);	/* on g_main's monitor */
+
+/* Per-monitor DPI; see the block comment in util.cpp.  Every top-level
+   window keeps its own DPI and passes it in -- there is deliberately no
+   program-wide one.  */
 void load_dpi_api (void);
-int dpi_scale (int value);
-int dpi_unscale (int value);
+int dpi_scale (UINT dpi, int value);
+int dpi_unscale (UINT dpi, int value);
 UINT dpi_for_window (HWND wnd);
-int system_metric_dpi (int index);
-HFONT create_message_font (void);
+UINT dpi_system (void);	/* the DPI GDI measures in */
+void richedit_dpi_zoom (HWND edit, UINT dpi, UINT device);
+void dpi_take_suggested (HWND wnd, LPARAM lp);	/* WM_DPICHANGED frame */
+int system_metric_dpi (UINT dpi, int index);
+HFONT create_message_font (UINT dpi);
+
 std::wstring format_size (UINT64 size);
 std::wstring format_mtime (INT64 mtime);
 std::string join_path (const std::string &dir, const std::string &name);

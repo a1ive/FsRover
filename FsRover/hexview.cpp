@@ -59,9 +59,16 @@ std::wstring g_hex_title;	/* caption override; empty = path basename */
 UINT64 g_hex_size;	/* ~0 until the first chunk reports it */
 UINT64 g_hex_view_base;	/* byte offset represented by list row zero */
 HFONT g_hex_font;	/* fixed-pitch, owned by the viewer */
+UINT g_hex_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
 std::map<UINT64, std::vector<char>> g_hex_cache;	/* by chunk base */
 std::deque<UINT64> g_hex_fifo;	/* cache eviction order */
 std::map<UINT, UINT64> g_hex_pending;	/* task seq -> chunk base */
+
+int
+hex_scale (int value)
+{
+	return dpi_scale (g_hex_dpi, value);
+}
 
 int
 hex_text_width (HWND list, const wchar_t *text)
@@ -205,32 +212,80 @@ hex_layout (HWND dlg)
 	RECT rc;
 
 	GetClientRect (dlg, &rc);
-	int margin = dpi_scale (6);
-	int gap = dpi_scale (4);
-	int bar_h = dpi_scale (30);
-	int label_w = dpi_scale (66);
-	int go_w = dpi_scale (44);
-	int step_w = dpi_scale (32);
+	int margin = hex_scale (6);
+	int gap = hex_scale (4);
+	int bar_h = hex_scale (30);
+	int label_w = hex_scale (66);
+	int go_w = hex_scale (44);
+	int step_w = hex_scale (32);
 	int edit_w = rc.right - 2 * margin - label_w - go_w - 2 * step_w - 4 * gap;
-	if (edit_w < dpi_scale (80))
-		edit_w = dpi_scale (80);
+	if (edit_w < hex_scale (80))
+		edit_w = hex_scale (80);
 	int x = margin;
-	MoveWindow (GetDlgItem (dlg, IDC_HEX_OFFSET_LABEL), x, dpi_scale (8), label_w, dpi_scale (18), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_HEX_OFFSET_LABEL), x, hex_scale (8), label_w, hex_scale (18), TRUE);
 	x += label_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_HEX_OFFSET_EDIT), x, dpi_scale (4), edit_w, dpi_scale (22), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_HEX_OFFSET_EDIT), x, hex_scale (4), edit_w, hex_scale (22), TRUE);
 	x += edit_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_HEX_GO), x, dpi_scale (4), go_w, dpi_scale (22), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_HEX_GO), x, hex_scale (4), go_w, hex_scale (22), TRUE);
 	x += go_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_HEX_PREV), x, dpi_scale (4), step_w, dpi_scale (22), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_HEX_PREV), x, hex_scale (4), step_w, hex_scale (22), TRUE);
 	x += step_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_HEX_NEXT), x, dpi_scale (4), step_w, dpi_scale (22), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_HEX_NEXT), x, hex_scale (4), step_w, hex_scale (22), TRUE);
 	MoveWindow (GetDlgItem (dlg, IDC_HEX_LIST), 0, bar_h, rc.right, rc.bottom - bar_h, TRUE);
+}
+
+/* On a monitor change the dialog manager hands every control the
+   rescaled dialog font.  The dump only lines up in the fixed-pitch one
+   the viewer builds for itself, so that is the only font let through
+   (the list passes its font on to the header, which is covered too).  */
+LRESULT CALLBACK
+hex_list_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
+{
+	if (msg == WM_SETFONT && (HFONT) wp != g_hex_font)
+		return 0;
+	if (msg == WM_NCDESTROY)
+		RemoveWindowSubclass (wnd, hex_list_proc, 0);
+	return DefSubclassProc (wnd, msg, wp, lp);
+}
+
+/* The dump font, at 10 pt for this window's DPI: a screen DC would
+   answer for the primary monitor and leave the bytes unreadable on any
+   other.  Rebuilt from scratch on a DPI change, which is also when the
+   list drops the old font, so the replacement is installed before the
+   previous one goes away.  */
+void
+hex_apply_dpi (HWND dlg)
+{
+	HWND list = GetDlgItem (dlg, IDC_HEX_LIST);
+	HFONT prev = g_hex_font;
+
+	g_hex_font = CreateFontW (-MulDiv (10, (int) g_hex_dpi, 72), 0, 0, 0,
+		FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+		FIXED_PITCH | FF_MODERN, L"Consolas");
+	SendMessageW (list, WM_SETFONT, (WPARAM) g_hex_font, TRUE);
+	/* Same font on the header so the 00..0F ruler lines up with the
+	   byte columns underneath it.  */
+	SendMessageW (ListView_GetHeader (list), WM_SETFONT, (WPARAM) g_hex_font, TRUE);
+	if (prev)
+		DeleteObject (prev);
+}
+
+/* Column widths follow the font, so they are measured again whenever it
+   changes.  */
+void
+hex_size_columns (HWND list)
+{
+	ListView_SetColumnWidth (list, 0, hex_text_width (list, L"00000000") + hex_scale (24));
+	ListView_SetColumnWidth (list, 1, hex_text_width (list, HEX_RULER) + hex_scale (24));
+	ListView_SetColumnWidth (list, 2, hex_text_width (list, L"0123456789ABCDEF") + hex_scale (24));
 }
 
 void
 hex_init_dialog (HWND dlg)
 {
 	g_hex = dlg;
+	g_hex_dpi = dpi_for_window (dlg);
 	g_hex_view_base = 0;
 
 	std::wstring name;
@@ -248,50 +303,34 @@ hex_init_dialog (HWND dlg)
 	SetDlgItemTextW (dlg, IDC_HEX_GO, res_str (IDS_HEX_GO).c_str ());
 	SetWindowTheme (list, L"Explorer", nullptr);
 	ListView_SetExtendedListViewStyle (list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
+	SetWindowSubclass (list, hex_list_proc, 0, 0);
 
-	HDC dc = GetDC (list);
-	int font_h = -MulDiv (10, GetDeviceCaps (dc, LOGPIXELSY), 72);
-	ReleaseDC (list, dc);
-	g_hex_font = CreateFontW (font_h, 0, 0, 0, FW_NORMAL, FALSE, FALSE,
-		FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-		CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-		FIXED_PITCH | FF_MODERN, L"Consolas");
-	SendMessageW (list, WM_SETFONT, (WPARAM) g_hex_font, TRUE);
-	/* Same font on the header so the 00..0F ruler lines up with
-	   the byte columns underneath it.  */
-	SendMessageW (ListView_GetHeader (list), WM_SETFONT, (WPARAM) g_hex_font, TRUE);
+	hex_apply_dpi (dlg);
 
 	LVCOLUMNW col = {};
 	std::wstring col_off = res_str (IDS_HEX_OFFSET);
 	std::wstring col_text = res_str (IDS_HEX_TEXT);
-	col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
+	col.mask = LVCF_TEXT | LVCF_FMT;
 	col.fmt = LVCFMT_LEFT;
 	col.pszText = const_cast<wchar_t *> (col_off.c_str ());
-	col.cx = hex_text_width (list, L"00000000") + 24;
 	ListView_InsertColumn (list, 0, &col);
 	col.pszText = const_cast<wchar_t *> (HEX_RULER);
-	col.cx = hex_text_width (list, HEX_RULER) + 24;
 	ListView_InsertColumn (list, 1, &col);
 	col.pszText = const_cast<wchar_t *> (col_text.c_str ());
-	col.cx = hex_text_width (list, L"0123456789ABCDEF") + 24;
 	ListView_InsertColumn (list, 2, &col);
+	hex_size_columns (list);
 
 	/* Widen the frame so all three columns fit, then center it on
-	   the work area (the template size is just a fallback).  */
+	   the owner (the template size is just a fallback).  */
 	int want = ListView_GetColumnWidth (list, 0)
 		+ ListView_GetColumnWidth (list, 1)
 		+ ListView_GetColumnWidth (list, 2)
-		+ GetSystemMetrics (SM_CXVSCROLL) + 8;
-	RECT wrc, crc, wa;
+		+ system_metric_dpi (g_hex_dpi, SM_CXVSCROLL) + hex_scale (8);
+	RECT wrc, crc;
 	GetWindowRect (dlg, &wrc);
 	GetClientRect (dlg, &crc);
-	int width = want + (wrc.right - wrc.left) - crc.right;
-	int height = wrc.bottom - wrc.top;
-	SystemParametersInfoW (SPI_GETWORKAREA, 0, &wa, 0);
-	SetWindowPos (dlg, nullptr,
-		wa.left + ((wa.right - wa.left) - width) / 2,
-		wa.top + ((wa.bottom - wa.top) - height) / 2,
-		width, height, SWP_NOZORDER);
+	center_on_owner (dlg, want + (wrc.right - wrc.left) - crc.right,
+		wrc.bottom - wrc.top);
 
 	if (g_hex_size == BACKEND_SIZE_UNKNOWN)
 	{
@@ -315,8 +354,18 @@ hex_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_SIZE:
 		hex_layout (dlg);
 		return TRUE;
+	case WM_DPICHANGED:
+		g_hex_dpi = HIWORD (wp);
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
+	case WM_APP_DPI_CHANGED:
+		hex_apply_dpi (dlg);
+		hex_size_columns (GetDlgItem (dlg, IDC_HEX_LIST));
+		hex_layout (dlg);
+		return TRUE;
 	case WM_GETMINMAXINFO:
-		((MINMAXINFO *) lp)->ptMinTrackSize = { dpi_scale (420), dpi_scale (240) };
+		((MINMAXINFO *) lp)->ptMinTrackSize = { hex_scale (420), hex_scale (240) };
 		return TRUE;
 	case WM_NOTIFY:
 	{

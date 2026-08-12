@@ -116,7 +116,18 @@ constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
 /* tray -> window: mouse events on the notification icon.  */
 constexpr UINT WM_APP_TRAY = WM_APP + 5;
 
-/* Layout metrics authored at 96 DPI; scaled through dpi_scale().  */
+/* This window's DPI, and the layout metrics it scales.  Read from the
+   creation monitor in WM_CREATE and refreshed on WM_DPICHANGED; every
+   other top-level window keeps one of its own.  */
+UINT g_main_dpi = 96;
+
+int
+main_scale (int value)
+{
+	return dpi_scale (g_main_dpi, value);
+}
+
+/* Layout metrics authored at 96 DPI; scaled through main_scale().  */
 constexpr int TOP_BAR_H = 28;
 constexpr int TREE_W = 280;	/* initial splitter position */
 constexpr int TREE_MIN_W = 120;	/* neither pane can be dragged away */
@@ -235,16 +246,16 @@ set_status (UINT id)
 
 int list_icon (const std::string &name, bool is_dir);
 
-/* (Re)create every DPI-dependent GDI object at g_dpi and hand it to the
+/* (Re)create every DPI-dependent GDI object at g_main_dpi and hand it to the
    controls that use it, freeing the previous generation.  Called once when
    the controls are built and again on each WM_DPICHANGED.  */
 void
 apply_dpi_resources (void)
 {
-	int sm = system_metric_dpi (SM_CXSMICON);
+	int sm = system_metric_dpi (g_main_dpi, SM_CXSMICON);
 
 	/* Shared message font.  */
-	HFONT font = create_message_font ();
+	HFONT font = create_message_font (g_main_dpi);
 	for (HWND ctl : { g_address, g_btn_extract, g_btn_up, g_btn_back, g_btn_fwd, g_tree, g_list })
 		SendMessageW (ctl, WM_SETFONT, (WPARAM) font, TRUE);
 	if (g_font)
@@ -1649,15 +1660,15 @@ create_children (HWND wnd)
 	col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
 	col.fmt = LVCFMT_LEFT;
 	col.pszText = const_cast<wchar_t *> (col_name.c_str ());
-	col.cx = dpi_scale (260);
+	col.cx = main_scale (260);
 	ListView_InsertColumn (g_list, 0, &col);
 	col.fmt = LVCFMT_RIGHT;
 	col.pszText = const_cast<wchar_t *> (col_size.c_str ());
-	col.cx = dpi_scale (100);
+	col.cx = main_scale (100);
 	ListView_InsertColumn (g_list, 1, &col);
 	col.fmt = LVCFMT_LEFT;
 	col.pszText = const_cast<wchar_t *> (col_mtime.c_str ());
-	col.cx = dpi_scale (140);
+	col.cx = main_scale (140);
 	ListView_InsertColumn (g_list, 2, &col);
 
 	set_status (IDS_STATUS_STARTING);
@@ -1767,8 +1778,8 @@ on_menu_popup (HMENU menu)
 int
 clamp_split_x (int x, int client_w)
 {
-	const int min_w = dpi_scale (TREE_MIN_W);
-	const int max_w = client_w - dpi_scale (SPLIT_W + LIST_MIN_W);
+	const int min_w = main_scale (TREE_MIN_W);
+	const int max_w = client_w - main_scale (SPLIT_W + LIST_MIN_W);
 
 	if (x > max_w)
 		x = max_w;
@@ -1783,7 +1794,7 @@ clamp_split_x (int x, int client_w)
 int
 splitter_x (int client_w)
 {
-	return clamp_split_x (dpi_scale (g_tree_w), client_w);
+	return clamp_split_x (main_scale (g_tree_w), client_w);
 }
 
 /* The bar itself: the gap between the two panes, below the top row.
@@ -1795,36 +1806,36 @@ in_splitter (HWND wnd, POINT pt)
 	RECT rc;
 	int x;
 
-	if (pt.y < dpi_scale (TOP_BAR_H + MARGIN))
+	if (pt.y < main_scale (TOP_BAR_H + MARGIN))
 		return false;
 	GetClientRect (wnd, &rc);
 	x = splitter_x (rc.right);
-	return pt.x >= x && pt.x < x + dpi_scale (SPLIT_W);
+	return pt.x >= x && pt.x < x + main_scale (SPLIT_W);
 }
 
 void
 layout (HWND wnd)
 {
 	RECT rc;
-	const int margin = dpi_scale (MARGIN);
-	const int top_bar_h = dpi_scale (TOP_BAR_H);
-	const int split_w = dpi_scale (SPLIT_W);
-	const int btn_w = dpi_scale (BTN_W);
-	const int nav_w = dpi_scale (NAV_W);
-	const int progress_w = dpi_scale (PROGRESS_W);
+	const int margin = main_scale (MARGIN);
+	const int top_bar_h = main_scale (TOP_BAR_H);
+	const int split_w = main_scale (SPLIT_W);
+	const int btn_w = main_scale (BTN_W);
+	const int nav_w = main_scale (NAV_W);
+	const int progress_w = main_scale (PROGRESS_W);
 
 	GetClientRect (wnd, &rc);
 	const int tree_w = splitter_x (rc.right);
 	SendMessageW (g_status, WM_SIZE, 0, 0);
 
-	int parts[2] = { rc.right - progress_w - dpi_scale (20), -1 };
+	int parts[2] = { rc.right - progress_w - main_scale (20), -1 };
 	SendMessageW (g_status, SB_SETPARTS, 2, (LPARAM) parts);
 	RECT prc;
 	SendMessageW (g_status, SB_GETRECT, 1, (LPARAM) &prc);
 	MoveWindow (g_progress,
-		prc.left + dpi_scale (2), prc.top + dpi_scale (2),
-		prc.right - prc.left - dpi_scale (22),
-		prc.bottom - prc.top - dpi_scale (4), TRUE);
+		prc.left + main_scale (2), prc.top + main_scale (2),
+		prc.right - prc.left - main_scale (22),
+		prc.bottom - prc.top - main_scale (4), TRUE);
 
 	RECT src;
 	GetWindowRect (g_status, &src);
@@ -1936,7 +1947,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	{
 	case WM_CREATE:
 		g_main = wnd;
-		g_dpi = dpi_for_window (wnd);
+		g_main_dpi = dpi_for_window (wnd);
 		create_children (wnd);
 		create_menu_bar (wnd);
 		backend_start (wnd, g_cmdline.no_windisk);
@@ -1945,8 +1956,8 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		enable_file_drop (wnd);
 		/* Grow the default frame for a high-DPI creation monitor
 		   (WM_DPICHANGED takes over once it is on screen).  */
-		if (g_dpi != 96)
-			SetWindowPos (wnd, nullptr, 0, 0, dpi_scale (DEF_W), dpi_scale (DEF_H), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+		if (g_main_dpi != 96)
+			SetWindowPos (wnd, nullptr, 0, 0, main_scale (DEF_W), main_scale (DEF_H), SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 		return 0;
 	case WM_SIZE:
 		/* The tray icon is already the app's resident presence, so a
@@ -1965,19 +1976,16 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		/* Moved to a monitor with a different scale: rebuild the
 		   DPI-sized fonts/icons, carry the columns over, and take the
 		   suggested frame (which re-lays-out through WM_SIZE).  */
-		UINT prev = g_dpi;
-		RECT *sug = (RECT *) lp;
+		UINT prev = g_main_dpi;
 
-		g_dpi = HIWORD (wp);
+		g_main_dpi = HIWORD (wp);
 		apply_dpi_resources ();
 		for (int c = 0; c < 3; c++)
 		{
 			int w = ListView_GetColumnWidth (g_list, c);
-			ListView_SetColumnWidth (g_list, c, MulDiv (w, (int) g_dpi, (int) prev));
+			ListView_SetColumnWidth (g_list, c, MulDiv (w, (int) g_main_dpi, (int) prev));
 		}
-		SetWindowPos (wnd, nullptr,
-			sug->left, sug->top, sug->right - sug->left, sug->bottom - sug->top,
-			SWP_NOZORDER | SWP_NOACTIVATE);
+		dpi_take_suggested (wnd, lp);
 		return 0;
 	}
 	case WM_SETCURSOR:
@@ -2016,7 +2024,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		   again the moment the cursor comes back, instead of
 		   trailing however far it was dragged past it.  */
 		GetClientRect (wnd, &rc);
-		g_tree_w = dpi_unscale (clamp_split_x ((short) LOWORD (lp) - g_split_grab, rc.right));
+		g_tree_w = dpi_unscale (g_main_dpi, clamp_split_x ((short) LOWORD (lp) - g_split_grab, rc.right));
 		layout (wnd);
 		return 0;
 	}

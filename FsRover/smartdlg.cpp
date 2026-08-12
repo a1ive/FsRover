@@ -191,6 +191,14 @@ HFONT g_sm_head_font;	/* model and box text: a step up and semibold */
 HFONT g_sm_small_font;	/* box captions */
 HFONT g_sm_list_font;	/* fixed pitch, so the value columns line up */
 
+UINT g_sm_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
+
+int
+sm_scale (int value)
+{
+	return dpi_scale (g_sm_dpi, value);
+}
+
 /* Painted layout, measured from the snapshot and the client width.  */
 struct sm_layout
 {
@@ -485,25 +493,25 @@ sm_measure (HWND dlg)
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	HFONT old = (HFONT) SelectObject (dc, g_sm_head_font);
 	TEXTMETRICW tm;
-	int m = dpi_scale (SM_MARGIN);
+	int m = sm_scale (SM_MARGIN);
 	int label_w, grid_h, boxes_h;
 
 	GetTextMetricsW (dc, &tm);
 	g_sm_lay.head_h = tm.tmHeight;
-	if (g_sm_lay.head_h < dpi_scale (SM_BTN_H))
-		g_sm_lay.head_h = dpi_scale (SM_BTN_H);
+	if (g_sm_lay.head_h < sm_scale (SM_BTN_H))
+		g_sm_lay.head_h = sm_scale (SM_BTN_H);
 
 	SelectObject (dc, body);
 	GetTextMetricsW (dc, &tm);
-	g_sm_lay.row_h = tm.tmHeight + dpi_scale (6);
+	g_sm_lay.row_h = tm.tmHeight + sm_scale (6);
 	label_w = sm_text_w (dc, g_sm_features.label);
 	g_sm_lay.lw_left = sm_widest (dc, g_sm_left, false);
 	if (g_sm_lay.lw_left < label_w)
 		g_sm_lay.lw_left = label_w;
 	g_sm_lay.lw_right = sm_widest (dc, g_sm_right, false);
 	g_sm_lay.vw_right = sm_widest (dc, g_sm_right, true);
-	if (g_sm_lay.vw_right < dpi_scale (SM_VAL_MIN))
-		g_sm_lay.vw_right = dpi_scale (SM_VAL_MIN);
+	if (g_sm_lay.vw_right < sm_scale (SM_VAL_MIN))
+		g_sm_lay.vw_right = sm_scale (SM_VAL_MIN);
 
 	SelectObject (dc, g_sm_small_font);
 	GetTextMetricsW (dc, &tm);
@@ -513,7 +521,7 @@ sm_measure (HWND dlg)
 	g_sm_lay.y_body = g_sm_lay.y_rule1 + m;
 	/* One row per pair plus the features row, which spans both.  */
 	grid_h = ((int) sm_rows () + 1) * g_sm_lay.row_h;
-	boxes_h = 2 * (g_sm_lay.small_h + dpi_scale (2) + dpi_scale (SM_BOX_H)) + dpi_scale (SM_GAP);
+	boxes_h = 2 * (g_sm_lay.small_h + sm_scale (2) + sm_scale (SM_BOX_H)) + sm_scale (SM_GAP);
 	g_sm_lay.body_h = grid_h > boxes_h ? grid_h : boxes_h;
 	g_sm_lay.y_rule2 = g_sm_lay.y_body + g_sm_lay.body_h + m;
 	g_sm_lay.y_list = g_sm_lay.y_rule2 + m;
@@ -529,7 +537,7 @@ sm_fit_columns (HWND list)
 {
 	HDC dc = GetDC (list);
 	HFONT old = (HFONT) SelectObject (dc, (HFONT) SendMessageW (list, WM_GETFONT, 0, 0));
-	int pad = dpi_scale (18);
+	int pad = sm_scale (18);
 	int id_w = sm_text_w (dc, L"ID");
 	int val_w = sm_text_w (dc, g_sm_format);
 	int name_w;
@@ -551,9 +559,9 @@ sm_fit_columns (HWND list)
 	ListView_SetColumnWidth (list, 0, id_w + pad);
 	ListView_SetColumnWidth (list, 2, val_w + pad);
 	GetClientRect (list, &rc);
-	name_w = rc.right - (id_w + pad) - (val_w + pad) - system_metric_dpi (SM_CXVSCROLL);
-	if (name_w < dpi_scale (SM_NAME_MIN))
-		name_w = dpi_scale (SM_NAME_MIN);
+	name_w = rc.right - (id_w + pad) - (val_w + pad) - system_metric_dpi (g_sm_dpi, SM_CXVSCROLL);
+	if (name_w < sm_scale (SM_NAME_MIN))
+		name_w = sm_scale (SM_NAME_MIN);
 	ListView_SetColumnWidth (list, 1, name_w);
 }
 
@@ -592,13 +600,13 @@ sm_columns (HWND list)
 
 	col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
 	col.fmt = LVCFMT_LEFT;
-	col.cx = dpi_scale (40);
+	col.cx = sm_scale (40);
 	col.pszText = id.data ();
 	ListView_InsertColumn (list, 0, &col);
-	col.cx = dpi_scale (SM_NAME_MIN);
+	col.cx = sm_scale (SM_NAME_MIN);
 	col.pszText = name.data ();
 	ListView_InsertColumn (list, 1, &col);
-	col.cx = dpi_scale (SM_VAL_MIN);
+	col.cx = sm_scale (SM_VAL_MIN);
 	col.pszText = g_sm_format.data ();
 	ListView_InsertColumn (list, 2, &col);
 }
@@ -607,11 +615,11 @@ void
 sm_place (HWND dlg)
 {
 	HWND list = GetDlgItem (dlg, IDC_SMART_LIST);
-	int m = dpi_scale (SM_MARGIN);
-	int gap = dpi_scale (SM_GAP);
-	int bw = dpi_scale (SM_BTN_W);
-	int bh = dpi_scale (SM_BTN_H);
-	int hex_w = dpi_scale (SM_HEX_W);
+	int m = sm_scale (SM_MARGIN);
+	int gap = sm_scale (SM_GAP);
+	int bw = sm_scale (SM_BTN_W);
+	int bh = sm_scale (SM_BTN_H);
+	int hex_w = sm_scale (SM_HEX_W);
 	int y = m + (g_sm_lay.head_h - bh) / 2;
 	int h;
 	RECT rc;
@@ -623,8 +631,8 @@ sm_place (HWND dlg)
 	g_sm_lay.x_size = rc.right - m - hex_w - gap - bw - gap;
 
 	h = rc.bottom - m - g_sm_lay.y_list;
-	if (h < dpi_scale (40))
-		h = dpi_scale (40);
+	if (h < sm_scale (40))
+		h = sm_scale (40);
 	MoveWindow (list, m, g_sm_lay.y_list, rc.right - 2 * m, h, TRUE);
 	sm_fit_columns (list);
 }
@@ -646,10 +654,10 @@ sm_draw_box (HDC dc, int x, int y, const std::wstring &caption, const std::wstri
 {
 	COLORREF face = GetSysColor (COLOR_WINDOW);
 	COLORREF accent = sm_status_color (status);
-	int w = dpi_scale (SM_BOX_W);
-	int h = dpi_scale (SM_BOX_H);
+	int w = sm_scale (SM_BOX_W);
+	int h = sm_scale (SM_BOX_H);
 	RECT tr = { x, y, x + w, y + g_sm_lay.small_h };
-	RECT box = { x, tr.bottom + dpi_scale (2), x + w, tr.bottom + dpi_scale (2) + h };
+	RECT box = { x, tr.bottom + sm_scale (2), x + w, tr.bottom + sm_scale (2) + h };
 	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
 	HBRUSH brush;
 
@@ -664,7 +672,7 @@ sm_draw_box (HDC dc, int x, int y, const std::wstring &caption, const std::wstri
 	FrameRect (dc, &box, brush);
 	DeleteObject (brush);
 
-	InflateRect (&box, -dpi_scale (2), 0);
+	InflateRect (&box, -sm_scale (2), 0);
 	SelectObject (dc, g_sm_head_font);
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, value.c_str (), -1, &box,
@@ -691,8 +699,8 @@ sm_paint (HWND dlg, HDC dc)
 	HFONT old = (HFONT) SelectObject (dc, g_sm_head_font);
 	UINT left = DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
 	UINT right = DT_RIGHT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
-	int m = dpi_scale (SM_MARGIN);
-	int gap = dpi_scale (SM_GAP);
+	int m = sm_scale (SM_MARGIN);
+	int gap = sm_scale (SM_GAP);
 	int x0, x_lv, x_rv, x_rl, w_lv, y;
 	RECT rc, tr;
 
@@ -711,14 +719,14 @@ sm_paint (HWND dlg, HDC dc)
 	sm_rule (dc, m, rc.right - m, g_sm_lay.y_rule1);
 
 	sm_draw_box (dc, m, g_sm_lay.y_body, res_str (IDS_SM_HEALTH), g_sm_health, g_sm_health_status);
-	sm_draw_box (dc, m, g_sm_lay.y_body + g_sm_lay.small_h + dpi_scale (2)
-		+ dpi_scale (SM_BOX_H) + dpi_scale (SM_GAP),
+	sm_draw_box (dc, m, g_sm_lay.y_body + g_sm_lay.small_h + sm_scale (2)
+		+ sm_scale (SM_BOX_H) + sm_scale (SM_GAP),
 		res_str (IDS_SM_TEMPERATURE), g_sm_temp, g_sm_temp_status);
 
 	/* Two label/value pairs per row, the right-hand values flush with
 	   the right margin; the features row spans the whole width.  */
 	SelectObject (dc, body);
-	x0 = m + dpi_scale (SM_BOX_W) + m;
+	x0 = m + sm_scale (SM_BOX_W) + m;
 	x_lv = x0 + g_sm_lay.lw_left + gap;
 	x_rv = rc.right - m - g_sm_lay.vw_right;
 	x_rl = x_rv - gap - g_sm_lay.lw_right;
@@ -774,32 +782,42 @@ sm_reload (HWND dlg)
 	InvalidateRect (dlg, nullptr, TRUE);
 }
 
+/* On a monitor change the dialog manager hands every control the
+   rescaled dialog font.  The attribute list only lines up in the
+   fixed-pitch one built below, so that is the only font let through.  */
+LRESULT CALLBACK
+sm_list_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
+{
+	if (msg == WM_SETFONT && (HFONT) wp != g_sm_list_font)
+		return 0;
+	if (msg == WM_NCDESTROY)
+		RemoveWindowSubclass (wnd, sm_list_proc, 0);
+	return DefSubclassProc (wnd, msg, wp, lp);
+}
+
+/* The three fonts, all derived from the dialog font, which the dialog
+   manager has already sized for this monitor (lfHeight is negative, so
+   a bigger factor is a bigger font).  On a DPI change this runs again,
+   after the manager has resized that font.  */
 void
-sm_init (HWND dlg)
+sm_apply_dpi (HWND dlg)
 {
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	HWND list = GetDlgItem (dlg, IDC_SMART_LIST);
 	LOGFONTW lf = {};
 	LONG height;
-	RECT wr, cr;
-	int rows;
 
-	g_smart = dlg;
-	SetWindowTextW (dlg, g_sm_caption.c_str ());
-	SetDlgItemTextW (dlg, IDC_SMART_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
-	SetDlgItemTextW (dlg, IDC_SMART_HEX, res_str (IDS_SM_HEX).c_str ());
-	CheckDlgButton (dlg, IDC_SMART_HEX, g_sm_hex ? BST_CHECKED : BST_UNCHECKED);
-
-	/* All three derived from the dialog font, which the dialog manager
-	   has already sized for this monitor.  lfHeight is negative, so a
-	   bigger factor is a bigger font.  */
 	GetObjectW (body, (int) sizeof (lf), &lf);
 	height = lf.lfHeight;
 	lf.lfHeight = height * 6 / 5;
 	lf.lfWeight = FW_SEMIBOLD;
+	if (g_sm_head_font)
+		DeleteObject (g_sm_head_font);
 	g_sm_head_font = CreateFontIndirectW (&lf);
 	lf.lfHeight = height * 6 / 7;
 	lf.lfWeight = FW_NORMAL;
+	if (g_sm_small_font)
+		DeleteObject (g_sm_small_font);
 	g_sm_small_font = CreateFontIndirectW (&lf);
 	/* libcdi pads the format string and the values into the same
 	   fields, so the list only lines up in a fixed-pitch font.
@@ -807,45 +825,46 @@ sm_init (HWND dlg)
 	lf.lfHeight = height;
 	lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
 	wcscpy_s (lf.lfFaceName, L"Consolas");
+	HFONT prev_list = g_sm_list_font;
 	g_sm_list_font = CreateFontIndirectW (&lf);
 
-	SetWindowTheme (list, L"Explorer", nullptr);
-	ListView_SetExtendedListViewStyle (list, LVS_EX_DOUBLEBUFFER);
 	SendMessageW (list, WM_SETFONT, (WPARAM) g_sm_list_font, TRUE);
 	/* The header carries the format string over the values it
 	   describes, so it has to be the same font.  */
 	SendMessageW (ListView_GetHeader (list), WM_SETFONT, (WPARAM) g_sm_list_font, TRUE);
+	if (prev_list)
+		DeleteObject (prev_list);
+}
+
+void
+sm_init (HWND dlg)
+{
+	HWND list = GetDlgItem (dlg, IDC_SMART_LIST);
+	RECT wr, cr;
+	int rows;
+
+	g_smart = dlg;
+	g_sm_dpi = dpi_for_window (dlg);
+	SetWindowTextW (dlg, g_sm_caption.c_str ());
+	SetDlgItemTextW (dlg, IDC_SMART_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
+	SetDlgItemTextW (dlg, IDC_SMART_HEX, res_str (IDS_SM_HEX).c_str ());
+	CheckDlgButton (dlg, IDC_SMART_HEX, g_sm_hex ? BST_CHECKED : BST_UNCHECKED);
+
+	SetWindowTheme (list, L"Explorer", nullptr);
+	ListView_SetExtendedListViewStyle (list, LVS_EX_DOUBLEBUFFER);
+	SetWindowSubclass (list, sm_list_proc, 0, 0);
+	sm_apply_dpi (dlg);
 	sm_columns (list);
 
 	sm_measure (dlg);
 
 	/* Grow the template to the measured sheet plus a few attribute
 	   rows, then centre what came out on the owner.  */
-	rows = g_sm_lay.row_h * SM_LIST_ROWS + dpi_scale (28);
+	rows = g_sm_lay.row_h * SM_LIST_ROWS + sm_scale (28);
 	GetWindowRect (dlg, &wr);
 	GetClientRect (dlg, &cr);
-	int w = wr.right - wr.left;
-	int h = g_sm_lay.y_list + rows + dpi_scale (SM_MARGIN) + (wr.bottom - wr.top) - cr.bottom;
-	RECT owner;
-	MONITORINFO mi = { sizeof (mi) };
-
-	GetWindowRect (g_main, &owner);
-	int x = owner.left + ((owner.right - owner.left) - w) / 2;
-	int y = owner.top + ((owner.bottom - owner.top) - h) / 2;
-	if (GetMonitorInfoW (MonitorFromWindow (g_main, MONITOR_DEFAULTTONEAREST), &mi))
-	{
-		if (h > mi.rcWork.bottom - mi.rcWork.top)
-			h = mi.rcWork.bottom - mi.rcWork.top;
-		if (x + w > mi.rcWork.right)
-			x = mi.rcWork.right - w;
-		if (y + h > mi.rcWork.bottom)
-			y = mi.rcWork.bottom - h;
-		if (x < mi.rcWork.left)
-			x = mi.rcWork.left;
-		if (y < mi.rcWork.top)
-			y = mi.rcWork.top;
-	}
-	SetWindowPos (dlg, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+	center_on_owner (dlg, wr.right - wr.left,
+		g_sm_lay.y_list + rows + sm_scale (SM_MARGIN) + (wr.bottom - wr.top) - cr.bottom);
 
 	sm_place (dlg);
 	sm_fill (list);
@@ -876,8 +895,22 @@ smart_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		InvalidateRect (dlg, &rc, TRUE);
 		return TRUE;
 	}
+	case WM_DPICHANGED:
+		g_sm_dpi = HIWORD (wp);
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
+	case WM_APP_DPI_CHANGED:
+		/* The sheet is re-measured against the new fonts and the list
+		   re-fitted by sm_place(); the frame is where the dialog
+		   manager (or the user) left it.  */
+		sm_apply_dpi (dlg);
+		sm_measure (dlg);
+		sm_place (dlg);
+		InvalidateRect (dlg, nullptr, TRUE);
+		return TRUE;
 	case WM_GETMINMAXINFO:
-		((MINMAXINFO *) lp)->ptMinTrackSize = { dpi_scale (520), dpi_scale (360) };
+		((MINMAXINFO *) lp)->ptMinTrackSize = { sm_scale (520), sm_scale (360) };
 		return TRUE;
 	case WM_PAINT:
 	{

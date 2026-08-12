@@ -74,6 +74,13 @@ HMODULE g_d2d1;	/* d2d1.dll, loaded on first use, kept loaded */
 ID2D1Factory *g_d2d_factory;
 ID2D1HwndRenderTarget *g_img_rt;	/* per-viewer, lost on device reset */
 ID2D1Bitmap *g_img_bmp;	/* current frame */
+UINT g_img_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
+
+int
+img_scale (int value)
+{
+	return dpi_scale (g_img_dpi, value);
+}
 
 bool
 img_load_d2d (void)
@@ -150,8 +157,8 @@ img_clamp_offset (HWND dlg)
 	RECT rc;
 
 	GetClientRect (dlg, &rc);
-	float lim_x = ((float) g_img_w * g_img_zoom + (float) rc.right) / 2 - (float) dpi_scale (32);
-	float lim_y = ((float) g_img_h * g_img_zoom + (float) rc.bottom) / 2 - (float) dpi_scale (32);
+	float lim_x = ((float) g_img_w * g_img_zoom + (float) rc.right) / 2 - (float) img_scale (32);
+	float lim_y = ((float) g_img_h * g_img_zoom + (float) rc.bottom) / 2 - (float) img_scale (32);
 	if (lim_x < 0.0f)
 		lim_x = 0.0f;
 	if (lim_y < 0.0f)
@@ -454,22 +461,12 @@ void
 img_init_dialog (HWND dlg)
 {
 	g_img = dlg;
+	g_img_dpi = dpi_for_window (dlg);
 	img_update_title (dlg);
 
-	/* Default frame centered on the work area (the template size is
-	   just a fallback).  */
-	RECT wa;
-	SystemParametersInfoW (SPI_GETWORKAREA, 0, &wa, 0);
-	int width = dpi_scale (760);
-	int height = dpi_scale (540);
-	if (width > wa.right - wa.left)
-		width = wa.right - wa.left;
-	if (height > wa.bottom - wa.top)
-		height = wa.bottom - wa.top;
-	SetWindowPos (dlg, nullptr,
-		wa.left + ((wa.right - wa.left) - width) / 2,
-		wa.top + ((wa.bottom - wa.top) - height) / 2,
-		width, height, SWP_NOZORDER);
+	/* Default frame centered on the owner (the template size is just
+	   a fallback).  */
+	center_on_owner (dlg, img_scale (760), img_scale (540));
 
 	backend_task task;
 	task.type = backend_task_type::read_chunk;
@@ -505,9 +502,15 @@ img_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 			img_clamp_offset (dlg);
 		InvalidateRect (dlg, nullptr, FALSE);
 		return TRUE;
+	case WM_DPICHANGED:
+		/* Only the pan margin and the minimum size are scaled here;
+		   the picture itself is drawn in device pixels.  */
+		g_img_dpi = HIWORD (wp);
+		dpi_take_suggested (dlg, lp);
+		return FALSE;
 	case WM_GETMINMAXINFO:
 		((MINMAXINFO *) lp)->ptMinTrackSize =
-			{ dpi_scale (240), dpi_scale (180) };
+			{ img_scale (240), img_scale (180) };
 		return TRUE;
 	case WM_PAINT:
 		img_paint (dlg);

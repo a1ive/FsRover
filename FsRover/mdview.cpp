@@ -44,6 +44,14 @@ UINT g_seq_md;	/* in-flight read_chunk task */
 bool g_md_probing;	/* the in-flight read is the sniff stage */
 std::vector<md_rtf_link> g_md_links;	/* clickable ranges, document order */
 std::vector<md_rtf_anchor> g_md_anchors;	/* heading slug -> position */
+UINT g_md_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
+UINT g_md_edit_dpi = 96;	/* what the RichEdit lays out at; see richedit_dpi_zoom */
+
+int
+md_scale (int value)
+{
+	return dpi_scale (g_md_dpi, value);
+}
 
 /* Feeds the converted RTF to EM_STREAMIN.  */
 struct md_stream
@@ -98,6 +106,7 @@ md_render (HWND dlg)
 	es.dwCookie = (DWORD_PTR) &src;
 	es.pfnCallback = md_stream_read;
 	SendMessageW (edit, EM_STREAMIN, SF_RTF, (LPARAM) &es);
+	richedit_dpi_zoom (edit, g_md_dpi, g_md_edit_dpi);	/* the streamed document starts unzoomed */
 
 	GETTEXTLENGTHEX gtl = { GTL_NUMCHARS | GTL_PRECISE, 1200 };
 	LONG len = (LONG) SendMessageW (edit, EM_GETTEXTLENGTHEX, (WPARAM) &gtl, 0);
@@ -174,10 +183,36 @@ md_open_link (HWND dlg, CHARRANGE cr)
 	}
 }
 
+/* The rendered document is the converter's, not the dialog's: see the
+   same guard in textview.cpp.  Without it a monitor change reformats
+   every heading, rule and code span away.  */
+LRESULT CALLBACK
+md_edit_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
+{
+	if (msg == WM_SETFONT)
+		return 0;
+	if (msg == WM_NCDESTROY)
+		RemoveWindowSubclass (wnd, md_edit_proc, 0);
+	return DefSubclassProc (wnd, msg, wp, lp);
+}
+
+/* The document is authored in points and the margins in pixels, so both
+   have to be told which monitor the window is on.  */
+void
+md_apply_dpi (HWND dlg)
+{
+	HWND edit = GetDlgItem (dlg, IDC_MD_EDIT);
+
+	SendMessageW (edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM (md_scale (12), md_scale (12)));
+	richedit_dpi_zoom (edit, g_md_dpi, g_md_edit_dpi);
+}
+
 void
 md_init_dialog (HWND dlg)
 {
 	g_md = dlg;
+	g_md_dpi = dpi_for_window (dlg);
+	g_md_edit_dpi = dpi_system ();	/* a new control goes by GDI */
 	g_md_links.clear ();
 	g_md_anchors.clear ();
 	SetWindowTextW (dlg, g_md_doc.title.c_str ());
@@ -186,21 +221,11 @@ md_init_dialog (HWND dlg)
 	SendMessageW (edit, EM_EXLIMITTEXT, 0, 0x7ffffffe);
 	SendMessageW (edit, EM_SETEVENTMASK, 0, ENM_LINK);
 	SendMessageW (edit, EM_SETTARGETDEVICE, 0, 0);	/* wrap to the window */
-	SendMessageW (edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM (dpi_scale (12), dpi_scale (12)));
+	SetWindowSubclass (edit, md_edit_proc, 0, 0);
+	md_apply_dpi (dlg);
 
-	/* Default frame centered on the work area (the template size is just a fallback).  */
-	RECT wa;
-	SystemParametersInfoW (SPI_GETWORKAREA, 0, &wa, 0);
-	int width = dpi_scale (820);
-	int height = dpi_scale (620);
-	if (width > wa.right - wa.left)
-		width = wa.right - wa.left;
-	if (height > wa.bottom - wa.top)
-		height = wa.bottom - wa.top;
-	SetWindowPos (dlg, nullptr,
-		wa.left + ((wa.right - wa.left) - width) / 2,
-		wa.top + ((wa.bottom - wa.top) - height) / 2,
-		width, height, SWP_NOZORDER);
+	/* Default frame centered on the owner (the template size is just a fallback).  */
+	center_on_owner (dlg, md_scale (820), md_scale (620));
 
 	if (g_md_path.empty ())
 	{
@@ -233,8 +258,20 @@ md_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_SIZE:
 		md_layout (dlg);
 		return TRUE;
+	case WM_DPICHANGED:
+		/* From here on the control has been told about the move and
+		   lays out for the window rather than for GDI.  */
+		g_md_dpi = HIWORD (wp);
+		g_md_edit_dpi = g_md_dpi;
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
+	case WM_APP_DPI_CHANGED:
+		md_apply_dpi (dlg);
+		md_layout (dlg);
+		return TRUE;
 	case WM_GETMINMAXINFO:
-		((MINMAXINFO *) lp)->ptMinTrackSize = { dpi_scale (400), dpi_scale (240) };
+		((MINMAXINFO *) lp)->ptMinTrackSize = { md_scale (400), md_scale (240) };
 		return TRUE;
 	case WM_NOTIFY:
 	{

@@ -18,6 +18,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <richedit.h>
 #include <shlobj.h>
 #include <time.h>
 
@@ -213,27 +214,74 @@ set_button_icon (HWND btn, HIMAGELIST himl)
 	SendMessageW (btn, BCM_SETIMAGELIST, 0, (LPARAM) &bil);
 }
 
-/*
- * Per-monitor DPI.  The window is PerMonitorV2 aware,
- * so every pixel metric is authored at 96 DPI and scaled through dpi_scale()
- * for the monitor the window currently lives on; moving to a differently
- * scaled monitor arrives as WM_DPICHANGED, which refreshes g_dpi and rebuilds
- * the DPI-dependent GDI objects.  The scaling helpers (GetDpiForWindow,
- * GetSystemMetricsForDpi, SystemParametersInfoForDpi) are Windows 10 1607+,
- * so they are resolved at runtime and degrade to the system-DPI equivalents
- * on the older Windows the app still supports.
- */
+/* Put WND at W x H device pixels over the middle of the main window,
+   kept inside the work area of the monitor the main window is on.
+   SPI_GETWORKAREA answers for the primary monitor no matter where the
+   program sits, which parked the viewers on the wrong screen -- and,
+   since the layout metrics are scaled for the main window's DPI, at
+   the wrong scale too.  */
+void
+center_on_owner (HWND wnd, int w, int h)
+{
+	MONITORINFO mi = { sizeof (mi) };
+	RECT owner;
+	bool work = GetMonitorInfoW (MonitorFromWindow (g_main, MONITOR_DEFAULTTONEAREST), &mi) != FALSE;
 
-UINT g_dpi = 96;	/* main-window DPI; drives all layout scaling */
+	if (work)
+	{
+		if (w > mi.rcWork.right - mi.rcWork.left)
+			w = mi.rcWork.right - mi.rcWork.left;
+		if (h > mi.rcWork.bottom - mi.rcWork.top)
+			h = mi.rcWork.bottom - mi.rcWork.top;
+	}
+	GetWindowRect (g_main, &owner);
+	int x = owner.left + ((owner.right - owner.left) - w) / 2;
+	int y = owner.top + ((owner.bottom - owner.top) - h) / 2;
+	if (work)
+	{
+		if (x + w > mi.rcWork.right)
+			x = mi.rcWork.right - w;
+		if (y + h > mi.rcWork.bottom)
+			y = mi.rcWork.bottom - h;
+		if (x < mi.rcWork.left)
+			x = mi.rcWork.left;
+		if (y < mi.rcWork.top)
+			y = mi.rcWork.top;
+	}
+	SetWindowPos (wnd, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/*
+ * Per-monitor DPI.  The process is PerMonitorV2 aware, so DPI is a
+ * property of a window and not of the program: two top-level windows on
+ * two differently scaled monitors are both live at the same time, and
+ * dragging one across changes only that one.
+ *
+ * Every pixel metric is therefore authored at 96 DPI and scaled through
+ * the DPI of the window it belongs to.  Each top-level window keeps that
+ * DPI next to its other state (g_main_dpi, g_hex_dpi, ...), reads it from
+ * dpi_for_window() when the window comes up, and refreshes it -- together
+ * with whatever GDI objects were built at the old one -- on WM_DPICHANGED;
+ * the file-local scale() helpers below each of those variables are what
+ * the layout code calls.  Nothing here holds a program-wide DPI: a value
+ * that is right for one window is wrong for the next.
+ *
+ * The scaling helpers (GetDpiForWindow, GetDpiForSystem,
+ * GetSystemMetricsForDpi, SystemParametersInfoForDpi) are Windows 10
+ * 1607+, so they are resolved at runtime and degrade to the system-DPI
+ * equivalents on the older Windows the app still supports.
+ */
 
 namespace
 {
 
 using GetDpiForWindow_t = UINT (WINAPI *) (HWND);
+using GetDpiForSystem_t = UINT (WINAPI *) (void);
 using GetSystemMetricsForDpi_t = int (WINAPI *) (int, UINT);
 using SystemParametersInfoForDpi_t = BOOL (WINAPI *) (UINT, UINT, PVOID, UINT, UINT);
 
 GetDpiForWindow_t p_GetDpiForWindow;
+GetDpiForSystem_t p_GetDpiForSystem;
 GetSystemMetricsForDpi_t p_GetSystemMetricsForDpi;
 SystemParametersInfoForDpi_t p_SystemParametersInfoForDpi;
 
@@ -247,22 +295,24 @@ load_dpi_api (void)
 	if (!u)
 		return;
 	p_GetDpiForWindow = reinterpret_cast<GetDpiForWindow_t> (GetProcAddress (u, "GetDpiForWindow"));
+	p_GetDpiForSystem = reinterpret_cast<GetDpiForSystem_t> (GetProcAddress (u, "GetDpiForSystem"));
 	p_GetSystemMetricsForDpi = reinterpret_cast<GetSystemMetricsForDpi_t> (GetProcAddress (u, "GetSystemMetricsForDpi"));
 	p_SystemParametersInfoForDpi = reinterpret_cast<SystemParametersInfoForDpi_t> (GetProcAddress (u, "SystemParametersInfoForDpi"));
 }
 
+/* An authored 96-DPI metric in device pixels on a DPI monitor.  */
 int
-dpi_scale (int value)
+dpi_scale (UINT dpi, int value)
 {
-	return MulDiv (value, (int) g_dpi, 96);
+	return MulDiv (value, (int) dpi, 96);
 }
 
 /* Device pixels back to a 96-DPI metric, for the few sizes the user
    sets with the mouse and the app then stores like an authored one.  */
 int
-dpi_unscale (int value)
+dpi_unscale (UINT dpi, int value)
 {
-	return MulDiv (value, 96, (int) g_dpi);
+	return MulDiv (value, 96, (int) dpi);
 }
 
 UINT
@@ -280,25 +330,78 @@ dpi_for_window (HWND wnd)
 	return d > 0 ? (UINT) d : 96;
 }
 
+/* The DPI everything that goes through GDI is measured in.  A screen DC
+   reports the system DPI whatever monitor the window is on -- GDI has
+   no per-monitor notion -- so anything that converts points to pixels
+   outside our own layout code (RichEdit, the ChooseFont dialog) works
+   at this DPI rather than at the window's.  */
+UINT
+dpi_system (void)
+{
+	if (p_GetDpiForSystem)
+	{
+		UINT d = p_GetDpiForSystem ();
+		if (d)
+			return d;
+	}
+	HDC dc = GetDC (nullptr);
+	int d = GetDeviceCaps (dc, LOGPIXELSY);
+	ReleaseDC (nullptr, dc);
+	return d > 0 ? (UINT) d : 96;
+}
+
+/* Match the document to the window.  A RichEdit lays out for the
+   resolution it believes the screen has, and that is not the window's:
+   a control that has just been created asks GDI, which answers with the
+   system DPI whatever monitor the window is on, while one that Windows
+   has since told about a monitor change follows the window from then
+   on.  DEVICE is whichever of the two the control is working in and the
+   zoom makes up the difference -- so a viewer that opens on a monitor
+   scaled differently from the primary one zooms, and goes back to 1:1
+   once the control has been through a DPI change of its own.  Client
+   coordinates (EM_POSFROMCHAR, EM_CHARFROMPOS) follow the zoom; pixel
+   metrics such as EM_SETMARGINS do not.  */
+void
+richedit_dpi_zoom (HWND edit, UINT dpi, UINT device)
+{
+	SendMessageW (edit, EM_SETZOOM, (WPARAM) dpi, (LPARAM) device);
+}
+
+/* Take the frame Windows suggests for the new DPI.  A top-level window
+   has to resize itself on WM_DPICHANGED -- neither the system nor the
+   dialog manager does it -- and leaving it out is what strands a window
+   at its old pixel size with freshly rescaled contents inside.  The
+   dialogs that size themselves to their content put their own height
+   back once they have re-measured.  */
+void
+dpi_take_suggested (HWND wnd, LPARAM lp)
+{
+	const RECT *r = (const RECT *) lp;
+
+	SetWindowPos (wnd, nullptr, r->left, r->top,
+		r->right - r->left, r->bottom - r->top,
+		SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 int
-system_metric_dpi (int index)
+system_metric_dpi (UINT dpi, int index)
 {
 	if (p_GetSystemMetricsForDpi)
-		return p_GetSystemMetricsForDpi (index, g_dpi);
+		return p_GetSystemMetricsForDpi (index, dpi);
 	return GetSystemMetrics (index);
 }
 
-/* Message font sized for the current DPI.  SystemParametersInfoForDpi
-   returns metrics already scaled to g_dpi; the down-level fallback returns
+/* Message font sized for one window's DPI.  SystemParametersInfoForDpi
+   returns metrics already scaled to DPI; the down-level fallback returns
    them at the system DPI, which is correct on the single-DPI systems that
    lack the per-DPI variant.  */
 HFONT
-create_message_font (void)
+create_message_font (UINT dpi)
 {
 	NONCLIENTMETRICSW ncm = { sizeof (ncm) };
 
 	if (p_SystemParametersInfoForDpi)
-		p_SystemParametersInfoForDpi (SPI_GETNONCLIENTMETRICS, sizeof (ncm), &ncm, 0, g_dpi);
+		p_SystemParametersInfoForDpi (SPI_GETNONCLIENTMETRICS, sizeof (ncm), &ncm, 0, dpi);
 	else
 		SystemParametersInfoW (SPI_GETNONCLIENTMETRICS, sizeof (ncm), &ncm, 0);
 	return CreateFontIndirectW (&ncm.lfMessageFont);

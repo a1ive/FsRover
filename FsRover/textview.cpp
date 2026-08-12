@@ -90,6 +90,14 @@ COLORREF g_text_color;
 bool g_text_wrap = true;
 bool g_text_linenum;
 int g_text_gutter;	/* line-number strip width, pixels */
+UINT g_text_dpi = 96;	/* this window's DPI, refreshed on WM_DPICHANGED */
+UINT g_text_edit_dpi = 96;	/* what the RichEdit lays out at; see richedit_dpi_zoom */
+
+int
+text_scale (int value)
+{
+	return dpi_scale (g_text_dpi, value);
+}
 
 int
 text_detect (const std::vector<char> &raw)
@@ -225,7 +233,7 @@ text_make_font (void)
 {
 	LOGFONTW lf = g_text_lf;
 
-	lf.lfHeight = -MulDiv (g_text_ptsize, (int) g_dpi, 720);
+	lf.lfHeight = -MulDiv (g_text_ptsize, (int) g_text_dpi, 720);
 	lf.lfWidth = 0;
 	if (g_text_font)
 		DeleteObject (g_text_font);
@@ -283,7 +291,7 @@ text_update_gutter (HWND dlg)
 	GetTextExtentPoint32W (dc, L"0", 1, &size);
 	SelectObject (dc, old);
 	ReleaseDC (dlg, dc);
-	g_text_gutter = size.cx * digits + dpi_scale (10);
+	g_text_gutter = size.cx * digits + text_scale (10);
 }
 
 /* With the gutter off the strip is covered by the RichEdit, and the
@@ -301,7 +309,7 @@ text_invalidate_gutter (HWND dlg)
 		return;
 	GetClientRect (dlg, &rc);
 	rc.right = g_text_gutter;
-	rc.top = dpi_scale (30);
+	rc.top = text_scale (30);
 	InvalidateRect (dlg, &rc, FALSE);
 }
 
@@ -311,30 +319,30 @@ text_layout (HWND dlg)
 	RECT rc;
 
 	GetClientRect (dlg, &rc);
-	int margin = dpi_scale (6);
-	int gap = dpi_scale (4);
-	int bar_h = dpi_scale (30);
-	int label_w = dpi_scale (70);
-	int combo_w = dpi_scale (110);
-	int wrap_w = dpi_scale (100);
-	int num_w = dpi_scale (110);
-	int font_w = dpi_scale (64);
+	int margin = text_scale (6);
+	int gap = text_scale (4);
+	int bar_h = text_scale (30);
+	int label_w = text_scale (70);
+	int combo_w = text_scale (110);
+	int wrap_w = text_scale (100);
+	int num_w = text_scale (110);
+	int font_w = text_scale (64);
 	int x = margin;
 
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_ENC_LABEL), x, dpi_scale (8), label_w, dpi_scale (18), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_ENC_LABEL), x, text_scale (8), label_w, text_scale (18), TRUE);
 	x += label_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_ENCODING), x, dpi_scale (4), combo_w, dpi_scale (160), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_ENCODING), x, text_scale (4), combo_w, text_scale (160), TRUE);
 	x += combo_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_WRAP), x, dpi_scale (6), wrap_w, dpi_scale (18), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_WRAP), x, text_scale (6), wrap_w, text_scale (18), TRUE);
 	x += wrap_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_LINENUM), x, dpi_scale (6), num_w, dpi_scale (18), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_LINENUM), x, text_scale (6), num_w, text_scale (18), TRUE);
 	x += num_w + gap;
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_FONT), x, dpi_scale (4), font_w, dpi_scale (22), TRUE);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_FONT), x, text_scale (4), font_w, text_scale (22), TRUE);
 	x += font_w + gap;
 	int info_w = rc.right - margin - x;
-	if (info_w < dpi_scale (40))
-		info_w = dpi_scale (40);
-	MoveWindow (GetDlgItem (dlg, IDC_TEXT_INFO), x, dpi_scale (8), info_w, dpi_scale (18), TRUE);
+	if (info_w < text_scale (40))
+		info_w = text_scale (40);
+	MoveWindow (GetDlgItem (dlg, IDC_TEXT_INFO), x, text_scale (8), info_w, text_scale (18), TRUE);
 
 	int gutter = g_text_linenum ? g_text_gutter : 0;
 	MoveWindow (GetDlgItem (dlg, IDC_TEXT_EDIT), gutter, bar_h, rc.right - gutter, rc.bottom - bar_h, TRUE);
@@ -383,7 +391,7 @@ text_paint_gutter (HWND dlg)
 				continue;	/* wrapped continuation */
 			wchar_t buf[24];
 			swprintf (buf, 24, L"%u", (UINT) line);
-			ExtTextOutW (dc, g_text_gutter - dpi_scale (6), pt.y, 0, nullptr, buf, (UINT) lstrlenW (buf), nullptr);
+			ExtTextOutW (dc, g_text_gutter - text_scale (6), pt.y, 0, nullptr, buf, (UINT) lstrlenW (buf), nullptr);
 		}
 		SetBkMode (dc, bkmode);
 		SetTextAlign (dc, align);
@@ -395,6 +403,16 @@ text_paint_gutter (HWND dlg)
 LRESULT CALLBACK
 text_edit_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
 {
+	/* On a monitor change the dialog manager hands every control the
+	   rescaled dialog font.  A RichEdit answers WM_SETFONT by
+	   reformatting the whole document with it -- dropping the format
+	   the viewer applied, and sizing the text as though the control
+	   were on the primary monitor, because that is the DPI a font's
+	   pixel height means to GDI.  The viewer owns this document's
+	   formatting outright, so the message is not passed on.  */
+	if (msg == WM_SETFONT)
+		return 0;
+
 	LRESULT r = DefSubclassProc (wnd, msg, wp, lp);
 
 	switch (msg)
@@ -424,6 +442,8 @@ text_reload (HWND dlg)
 	int enc = sel > 0 ? sel - 1 : text_detect (g_text_raw);
 	std::wstring body = text_reflow (text_decode (enc));
 	SetDlgItemTextW (dlg, IDC_TEXT_EDIT, body.c_str ());
+	/* The new document starts unzoomed.  */
+	richedit_dpi_zoom (GetDlgItem (dlg, IDC_TEXT_EDIT), g_text_dpi, g_text_edit_dpi);
 	text_apply_format (dlg);
 	text_update_info (dlg, enc);
 	text_update_gutter (dlg);
@@ -436,7 +456,10 @@ text_choose_font (HWND dlg)
 	CHOOSEFONTW cf = { sizeof (cf) };
 	LOGFONTW lf = g_text_lf;
 
-	lf.lfHeight = -MulDiv (g_text_ptsize, (int) g_dpi, 720);
+	/* The dialog turns the height back into points against the GDI
+	   DPI, so a height built from g_text_dpi would show as the wrong size
+	   -- and come back as one.  */
+	lf.lfHeight = -MulDiv (g_text_ptsize, (int) dpi_system (), 720);
 	cf.hwndOwner = dlg;
 	cf.lpLogFont = &lf;
 	cf.rgbColors = g_text_color;
@@ -452,10 +475,28 @@ text_choose_font (HWND dlg)
 	text_layout (dlg);
 }
 
+/* Everything sized for this window's DPI: the gutter font (built at the
+   RichEdit's point size so the numbers line up with the text), the
+   control's own pixel metrics, and the zoom that makes the document
+   follow the window rather than the GDI screen.  */
+void
+text_apply_dpi (HWND dlg)
+{
+	HWND edit = GetDlgItem (dlg, IDC_TEXT_EDIT);
+
+	text_make_font ();
+	SendMessageW (edit, EM_SETMARGINS, EC_LEFTMARGIN, (LPARAM) text_scale (4));
+	richedit_dpi_zoom (edit, g_text_dpi, g_text_edit_dpi);
+	text_apply_format (dlg);
+	text_update_gutter (dlg);
+}
+
 void
 text_init_dialog (HWND dlg)
 {
 	g_text = dlg;
+	g_text_dpi = dpi_for_window (dlg);
+	g_text_edit_dpi = dpi_system ();	/* a new control goes by GDI */
 	g_text_loaded = false;
 
 	size_t cut = g_text_path.find_last_of ('/');
@@ -485,30 +526,15 @@ text_init_dialog (HWND dlg)
 		wcscpy_s (g_text_lf.lfFaceName, L"Consolas");
 		g_text_color = GetSysColor (COLOR_WINDOWTEXT);
 	}
-	text_make_font ();
-	text_update_gutter (dlg);
-
 	HWND edit = GetDlgItem (dlg, IDC_TEXT_EDIT);
 	SendMessageW (edit, EM_EXLIMITTEXT, 0, 0x7ffffffe);
 	SendMessageW (edit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 	SendMessageW (edit, EM_SETTARGETDEVICE, 0, g_text_wrap ? 0 : 1);
-	SendMessageW (edit, EM_SETMARGINS, EC_LEFTMARGIN, (LPARAM) dpi_scale (4));
 	SetWindowSubclass (edit, text_edit_proc, 0, 0);
-	text_apply_format (dlg);
+	text_apply_dpi (dlg);
 
-	/* Default frame centered on the work area (the template size is just a fallback).  */
-	RECT wa;
-	SystemParametersInfoW (SPI_GETWORKAREA, 0, &wa, 0);
-	int width = dpi_scale (760);
-	int height = dpi_scale (540);
-	if (width > wa.right - wa.left)
-		width = wa.right - wa.left;
-	if (height > wa.bottom - wa.top)
-		height = wa.bottom - wa.top;
-	SetWindowPos (dlg, nullptr,
-		wa.left + ((wa.right - wa.left) - width) / 2,
-		wa.top + ((wa.bottom - wa.top) - height) / 2,
-		width, height, SWP_NOZORDER);
+	/* Default frame centered on the owner (the template size is just a fallback).  */
+	center_on_owner (dlg, text_scale (760), text_scale (540));
 
 	backend_task task;
 	task.type = backend_task_type::read_chunk;
@@ -532,8 +558,20 @@ text_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_SIZE:
 		text_layout (dlg);
 		return TRUE;
+	case WM_DPICHANGED:
+		/* From here on the control has been told about the move and
+		   lays out for the window rather than for GDI.  */
+		g_text_dpi = HIWORD (wp);
+		g_text_edit_dpi = g_text_dpi;
+		dpi_take_suggested (dlg, lp);
+		PostMessageW (dlg, WM_APP_DPI_CHANGED, 0, 0);
+		return FALSE;	/* the dialog manager still rescales the control fonts */
+	case WM_APP_DPI_CHANGED:
+		text_apply_dpi (dlg);
+		text_layout (dlg);
+		return TRUE;
 	case WM_GETMINMAXINFO:
-		((MINMAXINFO *) lp)->ptMinTrackSize = { dpi_scale (560), dpi_scale (240) };
+		((MINMAXINFO *) lp)->ptMinTrackSize = { text_scale (560), text_scale (240) };
 		return TRUE;
 	case WM_PAINT:
 		text_paint_gutter (dlg);
