@@ -243,6 +243,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\jfs.c" />
+    <ClCompile Include="grub-core\fs\littlefs.c" />
     <ClCompile Include="grub-core\fs\lynxfs.c" />
     <ClCompile Include="grub-core\fs\lzh.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

@@ -309,6 +309,9 @@
     <ClCompile Include="grub-core\fs\jfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\littlefs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\lzh.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

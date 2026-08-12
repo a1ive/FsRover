@@ -110,6 +110,7 @@
 	mod (iso9660)	\
 	mod (jffs2)	\
 	mod (jfs)	\
+	mod (littlefs)	\
 	mod (lynxfs)	\
 	mod (lzh)	\
 	mod (minix)	\

@@ -89,6 +89,12 @@ rejected.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved
 
+#### littlefs — `littlefs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: none · Symlinks: none
+
+**Supported versions:** 2.0 and 2.1.
+
 #### NILFS2 — `nilfs2`
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved
