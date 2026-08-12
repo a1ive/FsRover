@@ -103,9 +103,14 @@ GRUB_MOD_LICENSE("GPLv3+");
 #define GRUB_APFS_DT_REG	8
 #define GRUB_APFS_DT_LNK	10
 
+/* container incompatible features */
+#define GRUB_APFS_NX_INCOMPAT_FUSION	0x100
+
 /* volume incompatible features */
 #define GRUB_APFS_INCOMPAT_CASE_INSENSITIVE	0x01
+#define GRUB_APFS_INCOMPAT_DATALESS_SNAPS	0x02
 #define GRUB_APFS_INCOMPAT_NORM_INSENSITIVE	0x08
+#define GRUB_APFS_INCOMPAT_SEALED_VOLUME	0x20
 
 /* volume flags */
 #define GRUB_APFS_FS_UNENCRYPTED	0x01
@@ -399,6 +404,7 @@ struct grub_apfs_volume
 	grub_int64_t mtime;		/* seconds since the epoch */
 	int hashed_names;		/* directory records carry name hashes */
 	int case_insensitive;
+	int dataless;			/* file data may legitimately be evicted */
 };
 
 struct grub_fshelp_node
@@ -792,8 +798,10 @@ grub_apfs_btree_find(struct grub_apfs_tree *tree,
 				err = grub_errno;
 				goto fail;
 			}
-			grub_memcpy(*key_out, key, klen);
-			grub_memcpy(*val_out, val, vlen);
+			if (klen)
+				grub_memcpy(*key_out, key, klen);
+			if (vlen)	/* ghost record: VAL is NULL */
+				grub_memcpy(*val_out, val, vlen);
 			*klen_out = klen;
 			*vlen_out = vlen;
 			*found = 1;
@@ -942,7 +950,8 @@ grub_apfs_omap_lookup(struct grub_apfs_data *data, grub_uint64_t omap_root,
 			(const struct grub_apfs_omap_val *) val;
 
 		flags = grub_le_to_cpu32(ov->flags);
-		if (!(flags & GRUB_APFS_OMAP_VAL_DELETED))
+		if (!(flags & GRUB_APFS_OMAP_VAL_DELETED)
+			&& grub_le_to_cpu32(ov->size) == data->blksz)
 		{
 			*paddr = grub_le_to_cpu64(ov->paddr);
 			*noheader = (flags & GRUB_APFS_OMAP_VAL_NOHEADER) != 0;
@@ -1029,10 +1038,40 @@ grub_apfs_next_extent_hook(const grub_uint8_t *key, grub_uint32_t klen,
 	return 1;
 }
 
+/* does the extent tree hold any record at all for EXT_ID? */
+static grub_err_t
+grub_apfs_have_extents(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
+	int *have)
+{
+	struct grub_apfs_tree tree;
+	struct grub_apfs_key_target target;
+	grub_uint8_t *key = NULL, *val = NULL;
+	grub_uint32_t klen, vlen;
+	grub_uint64_t laddr;
+	int found = 0;
+	grub_err_t err;
+
+	*have = 0;
+	grub_apfs_extent_tree(vol, &tree, &target, ext_id);
+	target.mode = GRUB_APFS_MATCH_PREFIX;
+	err = grub_apfs_btree_find(&tree, &target, &key, &klen, &val, &vlen, &found);
+	if (err || !found)
+		return err;
+	*have = grub_apfs_extent_key_ok(vol, key, klen, ext_id, &laddr);
+	grub_free(key);
+	grub_free(val);
+	return GRUB_ERR_NONE;
+}
+
 /*
- * Read POS..POS+LEN of the data stream identified by EXT_ID.  Ranges
- * not covered by an extent (sparse holes) read as zeros.  FILE, when
- * non-NULL, receives read progress.
+ * Read POS..POS+LEN of the data stream identified by EXT_ID.  A sparse
+ * range is normally recorded as an extent with a zero physical block;
+ * ranges with no extent record at all still read as zeros.  A stream
+ * without a single extent record is what a lookup against the wrong
+ * extent tree looks like, so it is reported as a bad file system --
+ * except on volumes that may hold evicted (dataless) file data, where
+ * it is a legitimate empty read.  FILE, when non-NULL, receives read
+ * progress.
  */
 static grub_err_t
 grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
@@ -1040,6 +1079,7 @@ grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
 {
 	struct grub_apfs_data *data = vol->data;
 	grub_err_t err = GRUB_ERR_NONE;
+	int probed = 0;
 
 	while (len)
 	{
@@ -1096,6 +1136,20 @@ grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
 		{
 			/* hole: zero-fill up to the next extent */
 			struct grub_apfs_next_extent_ctx nctx;
+
+			if (!probed)
+			{
+				int any = 0;
+
+				err = grub_apfs_have_extents(vol, ext_id, &any);
+				if (err)
+					return err;
+				if (!any && !vol->dataless)
+					return grub_error(GRUB_ERR_BAD_FS,
+						"APFS data stream %llu has no extents",
+						(unsigned long long) ext_id);
+				probed = 1;
+			}
 
 			grub_memset(&nctx, 0, sizeof(nctx));
 			grub_apfs_extent_tree(vol, &tree, &target, ext_id);
@@ -1335,7 +1389,11 @@ grub_apfs_xattr_read_all(struct grub_apfs_volume *vol,
 		return grub_errno;
 	err = grub_apfs_dstream_read(vol, res->stream_id, 0, *len, *buf, NULL);
 	if (err)
+	{
 		grub_free(*buf);
+		*buf = NULL;
+		*len = 0;
+	}
 	return err;
 }
 
@@ -1402,7 +1460,9 @@ grub_apfs_cmp_decompress(struct grub_apfs_cmp *cmp, const grub_uint8_t *cdata,
 				(char *) cmp->cbuf, bsize);
 
 			if (n < 0)
-				return grub_errno;
+				return grub_errno ? grub_errno
+					: grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
+						"zlib decompression failed");
 			cmp->cbuf_len = (grub_uint32_t) n;
 		}
 		break;
@@ -1910,7 +1970,8 @@ grub_apfs_read_omap(struct grub_apfs_data *data, grub_uint64_t paddr,
 	om = (const struct grub_apfs_omap_phys *) blkbuf;
 	if (!grub_apfs_checksum_ok(blkbuf, data->blksz)
 		|| (grub_le_to_cpu32(om->o.type) & GRUB_APFS_OBJECT_TYPE_MASK)
-			!= GRUB_APFS_OBJECT_TYPE_OMAP)
+			!= GRUB_APFS_OBJECT_TYPE_OMAP
+		|| grub_le_to_cpu64(om->o.oid) != paddr)
 		return grub_error(GRUB_ERR_BAD_FS, "bad APFS object map");
 	*tree_root = grub_le_to_cpu64(om->tree_oid);
 	if (*tree_root >= data->blocks)
@@ -1924,7 +1985,7 @@ grub_apfs_add_volume(struct grub_apfs_data *data, grub_uint64_t fs_oid,
 {
 	const struct grub_apfs_vol_super *vsb;
 	struct grub_apfs_volume *vol;
-	grub_uint64_t paddr, omap_root, root_paddr;
+	grub_uint64_t paddr, omap_root, root_paddr, incompat;
 	grub_uint32_t i, fext_type;
 	int noheader, found = 0, root_noheader = 0;
 	char *name;
@@ -1952,20 +2013,20 @@ grub_apfs_add_volume(struct grub_apfs_data *data, grub_uint64_t fs_oid,
 	grub_memset(vol, 0, sizeof(*vol));
 	vol->data = data;
 	vol->root_tree_oid = grub_le_to_cpu64(vsb->root_tree_oid);
-	{
-		grub_uint64_t incompat = grub_le_to_cpu64(vsb->incompat_features);
-
-		vol->case_insensitive =
-			(incompat & GRUB_APFS_INCOMPAT_CASE_INSENSITIVE) != 0;
-		vol->hashed_names = (incompat
-			& (GRUB_APFS_INCOMPAT_CASE_INSENSITIVE
-				| GRUB_APFS_INCOMPAT_NORM_INSENSITIVE)) != 0;
-	}
+	incompat = grub_le_to_cpu64(vsb->incompat_features);
+	vol->case_insensitive =
+		(incompat & GRUB_APFS_INCOMPAT_CASE_INSENSITIVE) != 0;
+	vol->hashed_names = (incompat
+		& (GRUB_APFS_INCOMPAT_CASE_INSENSITIVE
+			| GRUB_APFS_INCOMPAT_NORM_INSENSITIVE)) != 0;
+	vol->dataless = (incompat & GRUB_APFS_INCOMPAT_DATALESS_SNAPS) != 0;
 	vol->mtime = (grub_int64_t) (grub_le_to_cpu64(vsb->last_mod_time)
 		/ 1000000000ULL);
 
+	/* only sealed volumes keep their file extents in the fext tree */
 	fext_type = grub_le_to_cpu32(vsb->fext_tree_type);
-	if (vsb->fext_tree_oid && (fext_type & GRUB_APFS_OBJ_PHYSICAL))
+	if ((incompat & GRUB_APFS_INCOMPAT_SEALED_VOLUME) && vsb->fext_tree_oid
+		&& (fext_type & GRUB_APFS_OBJ_PHYSICAL))
 	{
 		vol->fext_root = grub_le_to_cpu64(vsb->fext_tree_oid);
 		if (vol->fext_root >= data->blocks)
@@ -2089,9 +2150,14 @@ grub_apfs_mount(grub_disk_t disk)
 			const struct grub_apfs_nx_super *cand =
 				(const struct grub_apfs_nx_super *) scan;
 
-			if (base + i >= data->blocks
-				|| grub_apfs_read_block(data, base + i, scan))
+			if (base + i >= data->blocks)
 				break;
+			if (grub_apfs_read_block(data, base + i, scan))
+			{
+				/* a bad block must not truncate the search */
+				grub_errno = GRUB_ERR_NONE;
+				continue;
+			}
 			if ((grub_le_to_cpu32(cand->o.type)
 					& GRUB_APFS_OBJECT_TYPE_MASK)
 					!= GRUB_APFS_OBJECT_TYPE_NX_SUPERBLOCK
@@ -2104,6 +2170,18 @@ grub_apfs_mount(grub_disk_t disk)
 			best_xid = grub_le_to_cpu64(cand->o.xid);
 		}
 		grub_errno = GRUB_ERR_NONE;
+	}
+
+	/* everything below comes from the checkpoint we settled on, so the
+	   container size has to be taken from it too: the copy in block 0
+	   may describe a smaller container than the newest checkpoint */
+	data->blocks = grub_le_to_cpu64(nxsb->block_count);
+	if (grub_le_to_cpu64(nxsb->incompat_features)
+		& GRUB_APFS_NX_INCOMPAT_FUSION)
+	{
+		grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET,
+			"APFS fusion container not supported");
+		goto fail;
 	}
 
 	grub_memcpy(data->uuid, nxsb->uuid, sizeof(data->uuid));
