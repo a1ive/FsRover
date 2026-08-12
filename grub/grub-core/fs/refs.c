@@ -17,7 +17,7 @@
  */
 
 /*
- * ReFS (Resilient File System) 3.x read-only driver.
+ * ReFS (Resilient File System) 1.x / 3.x read-only driver.
  *
  * On-disk layout follows refsprogs (librefs\node.c):
  * boot sector -> superblock ("SUPB", block 30) -> checkpoint ("CHKP",
@@ -33,9 +33,15 @@
  * extent list that may overflow into subtree nodes or a separate
  * non-resident attribute list node.
  *
- * Limitations: ReFS 1.x volumes are rejected; alternate data streams,
- * reparse point targets and the rare short-form file records are not
- * supported.
+ * Version 1 volumes use the same tree machinery with a smaller
+ * metadata block header (no signature), a single block number per node
+ * reference, one less field in the node allocation entry and wider
+ * extent records.  Everything is addressed in fixed 16 KiB blocks
+ * independent of the cluster size and there is no container table, so
+ * block numbers are always physical.  Data is never resident.
+ *
+ * Limitations: alternate data streams, reparse point targets and the
+ * rare short-form file records are not supported.
  */
 
 #include <grub/types.h>
@@ -85,6 +91,13 @@ GRUB_MOD_LICENSE("GPLv2+");
 #define REFS_NODE_SELF_BLOCKS	0x20	/* le64[4] */
 #define REFS_NODE_OBJECT_ID	0x48
 
+/* v1 metadata block header: block number, then the object id */
+#define REFS_V1_NODE_HEADER_SIZE	0x30
+#define REFS_V1_NODE_OBJECT_ID		0x18
+
+/* v1 addresses metadata and file data in fixed 16 KiB blocks */
+#define REFS_V1_BLOCK_SHIFT	14
+
 /* seconds between 1601-01-01 (FILETIME epoch) and 1970-01-01 */
 #define REFS_EPOCH_BIAS		11644473600ULL
 
@@ -122,7 +135,12 @@ struct grub_refs_data
 	grub_disk_t disk;
 	grub_uint8_t version_major;
 	grub_uint8_t version_minor;
-	grub_uint32_t cluster_size;
+	grub_uint8_t v1;		/* 1.x on-disk layout */
+	grub_uint32_t header_size;	/* metadata block header */
+	grub_uint32_t table_min;	/* minimum node allocation entry */
+	grub_uint16_t ref_size;		/* node reference */
+	grub_uint16_t extent_size;	/* raw extent record */
+	grub_uint32_t cluster_size;	/* allocation unit (v1: 16 KiB) */
 	int cluster_shift;
 	grub_uint32_t block_size;	/* metadata node size */
 	grub_uint32_t chunk_count;	/* clusters per node (1..4) */
@@ -273,10 +291,35 @@ grub_refs_read_node(struct grub_refs_data *data, const grub_uint64_t *blocks,
 			return grub_errno;
 	}
 
-	if (grub_memcmp(buf, sig, 4) != 0
-		|| refs_get64(buf + REFS_NODE_SELF_BLOCKS) != blocks[0])
+	/* v1 headers carry no signature, only the self block number */
+	if (data->v1 ? (refs_get64(buf) != blocks[0])
+		: (grub_memcmp(buf, sig, 4) != 0
+			|| refs_get64(buf + REFS_NODE_SELF_BLOCKS) != blocks[0]))
 		return grub_error(GRUB_ERR_BAD_FS, "refs: bad metadata node");
 	return GRUB_ERR_NONE;
+}
+
+/*
+ * Decode a node reference (index entry value, object table value, ...):
+ * four block numbers in v3, a single one in v1.  Returns 0 when the
+ * reference is too short or null.
+ */
+static int
+grub_refs_get_ref(struct grub_refs_data *data, const grub_uint8_t *value,
+	grub_uint16_t value_size, grub_uint64_t *b)
+{
+	if (value_size < data->ref_size)
+		return 0;
+	b[0] = refs_get64(value);
+	if (data->v1)
+		b[1] = b[2] = b[3] = 0;
+	else
+	{
+		b[1] = refs_get64(value + 8);
+		b[2] = refs_get64(value + 16);
+		b[3] = refs_get64(value + 24);
+	}
+	return b[0] != 0;
 }
 
 /*
@@ -302,14 +345,15 @@ grub_refs_iter_table(struct grub_refs_data *data, const grub_uint8_t *table,
 	grub_uint32_t i;
 	int is_index;
 
-	if (avail < 0x28)
+	if (avail < data->table_min + 4)
 		goto corrupt;
 	asize = refs_get32(table);
 	is_index = (table[0xD] & 0x1) != 0;
 	vo_start = refs_get32(table + 0x10);
 	count = refs_get32(table + 0x14);
-	vo_end = refs_get32(table + 0x20);
-	if (asize < 0x24 || asize > avail || vo_start < asize
+	/* the value offsets array end trails the entry in v1 */
+	vo_end = refs_get32(table + (data->v1 ? 0x18 : 0x20));
+	if (asize < data->table_min || asize > avail || vo_start < asize
 		|| vo_start > vo_end || vo_end > avail
 		|| count > (vo_end - vo_start) / 4)
 		goto corrupt;
@@ -419,13 +463,7 @@ grub_refs_walk_entry(struct grub_refs_data *data, int is_index,
 	{
 		grub_uint64_t b[4];
 
-		if (value_size < 0x20)
-			return 0;
-		b[0] = refs_get64(value);
-		b[1] = refs_get64(value + 8);
-		b[2] = refs_get64(value + 16);
-		b[3] = refs_get64(value + 24);
-		if (!b[0])
+		if (!grub_refs_get_ref(data, value, value_size, b))
 			return 0;
 		return grub_refs_walk_push(w, b) ? -1 : 0;
 	}
@@ -465,16 +503,16 @@ grub_refs_walk_tree(struct grub_refs_data *data, const grub_uint64_t *root,
 		}
 		if (grub_refs_read_node(data, w.queue[head], 0, "MSB+", buf))
 			goto out;
-		hsize = refs_get32(buf + REFS_NODE_HEADER_SIZE);
+		hsize = refs_get32(buf + data->header_size);
 		if (hsize < 4 || hsize > data->block_size
-			- REFS_NODE_HEADER_SIZE - 0x28)
+			- data->header_size - data->table_min - 4)
 		{
 			grub_error(GRUB_ERR_BAD_FS, "refs: corrupt node");
 			goto out;
 		}
 		r = grub_refs_iter_table(data,
-			buf + REFS_NODE_HEADER_SIZE + hsize,
-			data->block_size - REFS_NODE_HEADER_SIZE - hsize,
+			buf + data->header_size + hsize,
+			data->block_size - data->header_size - hsize,
 			raw_leaf_size, grub_refs_walk_entry, &w);
 		if (r)
 		{
@@ -499,22 +537,22 @@ struct grub_refs_oid_ctx
 };
 
 static int
-grub_refs_oid_hook(struct grub_refs_data *data __attribute__((unused)),
+grub_refs_oid_hook(struct grub_refs_data *data,
 	int is_index __attribute__((unused)),
 	const grub_uint8_t *key, grub_uint16_t key_size,
 	const grub_uint8_t *value, grub_uint16_t value_size, void *ctx)
 {
 	struct grub_refs_oid_ctx *c = ctx;
+	/* v3 prefixes the node reference with a 0x20-byte value header */
+	grub_uint16_t off = data->v1 ? 0 : 0x20;
 
-	if (key_size < 0x10 || value_size < 0x50)
+	if (key_size < 0x10 || value_size < off)
 		return 0;
 	if (refs_get16(key) != 0 || refs_get64(key + 8) != c->oid)
 		return 0;
-	/* skip the 0x20-byte value header; then a node reference */
-	c->root[0] = refs_get64(value + 0x20);
-	c->root[1] = refs_get64(value + 0x28);
-	c->root[2] = refs_get64(value + 0x30);
-	c->root[3] = refs_get64(value + 0x38);
+	if (!grub_refs_get_ref(data, value + off,
+		(grub_uint16_t) (value_size - off), c->root))
+		return 0;
 	c->found = 1;
 	return 1;
 }
@@ -611,7 +649,7 @@ grub_refs_mount(grub_disk_t disk)
 		goto fail;
 	cs = (grub_uint32_t) cs64;
 
-	if (bs[0x28] != 3)
+	if (bs[0x28] != 1 && bs[0x28] != 3)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "unsupported ReFS version %u.%u",
 			bs[0x28], bs[0x29]);
@@ -624,15 +662,36 @@ grub_refs_mount(grub_disk_t disk)
 	data->disk = disk;
 	data->version_major = bs[0x28];
 	data->version_minor = bs[0x29];
-	data->cluster_size = cs;
-	while (((grub_uint32_t) 1 << data->cluster_shift) < cs)
-		data->cluster_shift++;
-	data->block_size = (cs > 16384) ? cs : 16384;
-	data->chunk_count = data->block_size / cs;
+	data->v1 = (bs[0x28] == 1);
+	data->header_size = data->v1 ? REFS_V1_NODE_HEADER_SIZE
+		: REFS_NODE_HEADER_SIZE;
+	data->table_min = data->v1 ? 0x1C : 0x24;
+	data->ref_size = data->v1 ? 0x18 : 0x20;
+	data->extent_size = data->v1 ? 48 : 24;
 	data->serial = refs_get64(bs + 0x38);
-	data->linear_limit = (cs == 4096) ? 0x10000 : 0x1000;
-	data->bpc_shift = (cs == 4096) ? 14 : 10;
-	data->bpc_mask = ((grub_uint64_t) 1 << data->bpc_shift) - 1;
+
+	if (data->v1)
+	{
+		/* v1 ignores the cluster size: metadata nodes and file
+		   extents alike are counted in 16 KiB blocks, and block
+		   numbers are physical (no container table). */
+		data->cluster_shift = REFS_V1_BLOCK_SHIFT;
+		data->cluster_size = 1U << REFS_V1_BLOCK_SHIFT;
+		data->block_size = data->cluster_size;
+		data->chunk_count = 1;
+		data->linear_limit = ~(grub_uint64_t) 0;
+	}
+	else
+	{
+		data->cluster_size = cs;
+		while (((grub_uint32_t) 1 << data->cluster_shift) < cs)
+			data->cluster_shift++;
+		data->block_size = (cs > 16384) ? cs : 16384;
+		data->chunk_count = data->block_size / cs;
+		data->linear_limit = (cs == 4096) ? 0x10000 : 0x1000;
+		data->bpc_shift = (cs == 4096) ? 14 : 10;
+		data->bpc_mask = ((grub_uint64_t) 1 << data->bpc_shift) - 1;
+	}
 
 	v314 = (data->version_major > 3
 		|| (data->version_major == 3 && data->version_minor >= 14));
@@ -646,8 +705,10 @@ grub_refs_mount(grub_disk_t disk)
 		sb_blocks[i] = REFS_SUPERBLOCK_BLOCK + i;
 	if (grub_refs_read_node(data, sb_blocks, 1, "SUPB", node))
 		goto fail;
-	l1_off = refs_get32(node + 0x70);
-	l1_count = refs_get32(node + 0x74);
+	/* the checkpoint list trails the volume guid and two reserved
+	   fields at the start of the superblock body */
+	l1_off = refs_get32(node + data->header_size + 0x20);
+	l1_count = refs_get32(node + data->header_size + 0x24);
 	if (!l1_count || l1_off > data->block_size
 		|| l1_count > (data->block_size - l1_off) / 8)
 	{
@@ -682,8 +743,8 @@ grub_refs_mount(grub_disk_t disk)
 	}
 
 	/* level 2 tree root references */
-	ref_count = refs_get32(node + 0x90);
-	ref_base = 0x94 + (v314 ? 5 * 4 : 0);
+	ref_count = refs_get32(node + (data->v1 ? 0x58 : 0x90));
+	ref_base = (data->v1 ? 0x5C : 0x94) + (v314 ? 5 * 4 : 0);
 	if (ref_count > 64 || ref_base + ref_count * 4 > data->block_size)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "refs: corrupt checkpoint");
@@ -694,13 +755,14 @@ grub_refs_mount(grub_disk_t disk)
 	 * Two passes over the level 2 roots: the container table (0xB)
 	 * lives in the identity-mapped region and must be found first so
 	 * that the second pass can reach trees in mapped space (the
-	 * object table root moves anywhere on copy-on-write).
+	 * object table root moves anywhere on copy-on-write).  v1 has no
+	 * container table, so its first pass is skipped.
 	 */
 	tmp = grub_malloc(data->block_size);
 	if (!tmp)
 		goto fail;
 	grub_memset(containers, 0, sizeof(containers));
-	for (pass = 0; pass < 2; pass++)
+	for (pass = data->v1 ? 1 : 0; pass < 2; pass++)
 	{
 		for (i = 0; i < ref_count; i++)
 		{
@@ -708,21 +770,21 @@ grub_refs_mount(grub_disk_t disk)
 				refs_get32(node + ref_base + 4 * i);
 			grub_uint64_t b[4];
 			grub_uint64_t oid;
-			grub_uint32_t j;
 
 			if (roff > data->block_size
-				|| data->block_size - roff < 0x30)
+				|| data->block_size - roff < data->ref_size)
 				continue;
-			for (j = 0; j < 4; j++)
-				b[j] = refs_get64(node + roff + 8 * j);
-			if (!b[0])
+			if (!grub_refs_get_ref(data, node + roff,
+				data->ref_size, b))
 				continue;
 			if (grub_refs_read_node(data, b, 0, "MSB+", tmp))
 			{
 				grub_errno = GRUB_ERR_NONE;
 				continue;
 			}
-			oid = refs_get64(tmp + REFS_NODE_OBJECT_ID);
+			oid = refs_get64(tmp + (data->v1
+				? REFS_V1_NODE_OBJECT_ID
+				: REFS_NODE_OBJECT_ID));
 			if (pass == 0 && oid == REFS_OID_CONTAINERS)
 			{
 				grub_memcpy(containers, b,
@@ -776,32 +838,38 @@ grub_refs_extent_hook(struct grub_refs_data *data, int is_index,
 	const grub_uint8_t *value, grub_uint16_t value_size, void *ctx)
 {
 	struct grub_refs_stream *st = ctx;
-	grub_uint64_t disk_block, vcn, phys;
-	grub_uint32_t count;
+	grub_uint64_t disk_block, vcn, phys, count;
 
 	if (is_index)
 	{
 		/* embedded index entry -> extent subtree node */
 		grub_uint64_t b[4];
 
-		if (value_size < 0x20)
+		if (!grub_refs_get_ref(data, value, value_size, b))
 			return 0;
-		b[0] = refs_get64(value);
-		b[1] = refs_get64(value + 8);
-		b[2] = refs_get64(value + 16);
-		b[3] = refs_get64(value + 24);
-		if (!b[0])
-			return 0;
-		return grub_refs_walk_tree(data, b, 24,
+		return grub_refs_walk_tree(data, b, data->extent_size,
 			grub_refs_extent_hook, st);
 	}
 
-	if (value_size < 24)
+	if (value_size < data->extent_size)
 		return 0;
-	disk_block = refs_get64(value);
-	vcn = refs_get64(value + 12);
-	count = refs_get32(value + 20);
-	if (!disk_block || !count)
+	if (data->v1)
+	{
+		/* the record header is part of the raw v1 extent */
+		vcn = refs_get64(value + 0x10);
+		count = refs_get64(value + 0x18);
+		disk_block = refs_get64(value + 0x20);
+	}
+	else
+	{
+		disk_block = refs_get64(value);
+		vcn = refs_get64(value + 12);
+		count = refs_get32(value + 20);
+	}
+	/* keep the byte arithmetic in grub_refs_read from wrapping */
+	if (!disk_block || !count
+		|| count > (~(grub_uint64_t) 0 >> data->cluster_shift)
+		|| vcn > (~(grub_uint64_t) 0 >> data->cluster_shift) - count)
 		return 0;
 	phys = grub_refs_map_block(data, disk_block);
 	if (!phys)
@@ -846,16 +914,35 @@ grub_refs_attr_hook(struct grub_refs_data *data, int is_index,
 	const grub_uint8_t *value, grub_uint16_t value_size, void *ctx)
 {
 	struct grub_refs_attr_ctx *c = ctx;
-	grub_uint16_t tyoff = (data->version_major > 3
-		|| data->version_minor >= 5) ? 0x0C : 0x08;
+	grub_uint16_t tyoff = (!data->v1 && (data->version_major > 3
+		|| data->version_minor >= 5)) ? 0x0C : 0x08;
 
-	if (is_index || !value)
+	if (!value)
 		return 0;
+
+	if (is_index)
+	{
+		/*
+		 * A record whose attribute table is an index table keeps its
+		 * attributes in a separate tree; v1 uses this in place of the
+		 * keyless entry below.
+		 */
+		struct grub_refs_attr_ctx sub;
+		grub_uint64_t b[4];
+
+		if (c->depth || !grub_refs_get_ref(data, value, value_size, b))
+			return 0;
+		sub.st = c->st;
+		sub.depth = 1;
+		return grub_refs_walk_tree(data, b, 0, grub_refs_attr_hook,
+			&sub);
+	}
 
 	if (key && key_size >= (grub_uint16_t) (tyoff + 2)
 		&& refs_get16(key + tyoff) == REFS_ATTR_DATA)
 	{
-		grub_uint16_t stype = (key_size >= 0x0A) ?
+		/* v1 has no resident data and reuses key+0x08 for the type */
+		grub_uint16_t stype = (!data->v1 && key_size >= 0x0A) ?
 			refs_get16(key + 0x08) : 0;
 
 		if (stype == 0x1)
@@ -880,11 +967,12 @@ grub_refs_attr_hook(struct grub_refs_data *data, int is_index,
 			grub_uint32_t payload = refs_get32(value);
 
 			if (payload < 4 || payload >= value_size
-				|| value_size - payload < 0x28)
+				|| value_size - payload < data->table_min + 4)
 				return 0;
 			return grub_refs_iter_table(data, value + payload,
-				(grub_uint32_t) value_size - payload, 24,
-				grub_refs_extent_hook, c->st);
+				(grub_uint32_t) value_size - payload,
+				data->extent_size, grub_refs_extent_hook,
+				c->st);
 		}
 	}
 
@@ -894,11 +982,7 @@ grub_refs_attr_hook(struct grub_refs_data *data, int is_index,
 		struct grub_refs_attr_ctx sub;
 		grub_uint64_t b[4];
 
-		b[0] = refs_get64(value);
-		b[1] = refs_get64(value + 8);
-		b[2] = refs_get64(value + 16);
-		b[3] = refs_get64(value + 24);
-		if (!b[0])
+		if (!grub_refs_get_ref(data, value, value_size, b))
 			return 0;
 		sub.st = c->st;
 		sub.depth = 1;
@@ -923,7 +1007,7 @@ grub_refs_stream_setup(struct grub_refs_stream *st,
 	if (!basic)
 		basic = 0xA8;	/* size field unset: fixed basic info size */
 	if (basic < 0x10 || basic >= record_size
-		|| record_size - basic < 0x28)
+		|| record_size - basic < st->data->table_min + 4)
 		return GRUB_ERR_NONE;	/* no attribute table: empty file */
 
 	ctx.st = st;
@@ -946,11 +1030,28 @@ grub_refs_reparse_hook(struct grub_refs_data *data, int is_index,
 	const grub_uint8_t *value, grub_uint16_t value_size, void *ctx)
 {
 	struct grub_refs_reparse_ctx *c = ctx;
-	grub_uint16_t tyoff = (data->version_major > 3
-		|| data->version_minor >= 5) ? 0x0C : 0x08;
+	grub_uint16_t tyoff = (!data->v1 && (data->version_major > 3
+		|| data->version_minor >= 5)) ? 0x0C : 0x08;
 
 	if (is_index)
-		return 0;
+	{
+		/* attributes kept in a separate tree (see the attribute hook) */
+		struct grub_refs_reparse_ctx sub = { 1, 0 };
+		grub_uint64_t b[4];
+		int ret;
+
+		if (c->depth || !value
+			|| !grub_refs_get_ref(data, value, value_size, b))
+			return 0;
+		ret = grub_refs_walk_tree(data, b, 0, grub_refs_reparse_hook,
+			&sub);
+		if (ret < 0)
+			return ret;
+		if (!sub.is_link)
+			return 0;
+		c->is_link = 1;
+		return 1;
+	}
 	/* refsprogs treats a generic attribute with type 0xc0 as reparse
 	   data.  Its tag is at entry +0x2c; the generic value starts at
 	   entry +0x20 in observed v3 records. */
@@ -973,11 +1074,7 @@ grub_refs_reparse_hook(struct grub_refs_data *data, int is_index,
 		grub_uint64_t b[4];
 		int ret;
 
-		b[0] = refs_get64(value);
-		b[1] = refs_get64(value + 8);
-		b[2] = refs_get64(value + 16);
-		b[3] = refs_get64(value + 24);
-		if (!b[0])
+		if (!grub_refs_get_ref(data, value, value_size, b))
 			return 0;
 		ret = grub_refs_walk_tree(data, b, 0,
 			grub_refs_reparse_hook, &sub);
@@ -1010,7 +1107,7 @@ grub_refs_record_is_link(struct grub_refs_data *data,
 	if (!basic)
 		basic = 0xA8;
 	if (basic < 0x10 || basic >= record_size
-		|| record_size - basic < 0x28)
+		|| record_size - basic < data->table_min + 4)
 		return 0;
 	ret = grub_refs_iter_table(data, record + basic,
 		record_size - basic, 0, grub_refs_reparse_hook, &ctx);
@@ -1113,10 +1210,12 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 
 	if (dtype == REFS_DIRENT_LONG)
 	{
+		/* v1 keeps two extra 64-bit fields before the sizes */
+		grub_uint16_t szoff = data->v1 ? 104 : 88;
 		int is_link;
 
 		/* file record with embedded attributes */
-		if (value_size < 96)
+		if (value_size < szoff + 8)
 			return 0;
 		node = grub_zalloc(sizeof(*node) + value_size);
 		if (!node)
@@ -1124,7 +1223,7 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		flags = refs_get32(value + 72);
 		ft = refs_get64(value + 56);
 		node->type = REFS_NODE_REG;
-		node->size = refs_get64(value + 88);
+		node->size = refs_get64(value + szoff);
 		node->record_size = value_size;
 		grub_memcpy(node->record, value, value_size);
 		if (flags & REFS_FLAG_REPARSE)
@@ -1140,6 +1239,9 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 	}
 	else if (dtype == REFS_DIRENT_SHORT)
 	{
+		/* v1 has no hard link id and starts with the object id */
+		grub_uint16_t oidoff = data->v1 ? 0 : 8;
+
 		/* directory, hard link or short-form file */
 		if (value_size < 72)
 			return 0;
@@ -1148,16 +1250,15 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 			return -1;
 		flags = refs_get32(value + 64);
 		ft = refs_get64(value + 24);
+		node->oid = refs_get64(value + oidoff);
 		if (flags & REFS_FLAG_DIRECTORY)
 		{
 			node->type = REFS_NODE_DIR;
-			node->oid = refs_get64(value + 8);
 			ftype = GRUB_FSHELP_DIR;
 		}
 		else
 		{
-			node->hardlink_id = refs_get64(value);
-			node->oid = refs_get64(value + 8);
+			node->hardlink_id = data->v1 ? 0 : refs_get64(value);
 			node->size = refs_get64(value + 56);
 			node->type = node->hardlink_id ?
 				REFS_NODE_HARDLINK : REFS_NODE_SHORT;

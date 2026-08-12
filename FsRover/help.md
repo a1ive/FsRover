@@ -195,14 +195,12 @@ supported WOF files are exposed as regular files.
 
 > Origin: refsprogs · Label: yes · UUID: boot serial · Timestamps: per-file · Symlinks: flagged
 
-**ReFS 3.x only.** The boot-sector version field is checked and ReFS 1.x is
-rejected outright.
+**Supported versions:** ReFS 1.x and ReFS 3.x.
 
-Resident data, extent subtrees, non-resident attribute lists, hard links and
-sparse zero-fill are handled. Lookups are case-insensitive, as on Windows.
+**Not supported:**
 
-**Not supported:** alternate data streams, reparse-point target resolution
-(reparse entries are flagged only), and the rare short-form file records.
+- alternate data streams (ADS);
+- reparse-point target resolution;
 
 #### Windows registry hive — `regfs`
 
