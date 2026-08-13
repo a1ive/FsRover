@@ -84,12 +84,16 @@ void mount_host_image (std::wstring file, bool decompress);	/* winfile */
 struct cmdline_options
 {
 	bool minimize = false;	/* -m: come up in the tray, no window */
-	bool decompress = false;	/* -d rather than -f */
 	/* -f/-d: the physical disks are the one thing an unprivileged
 	   process cannot read, and a session about someone's own image
 	   file has no use for them.  */
 	bool no_windisk = false;
-	std::wstring mount_file;	/* -f/-d: host image, empty if none */
+	struct mount
+	{
+		std::wstring file;
+		bool decompress;	/* -d rather than -f */
+	};
+	std::vector<mount> mounts;	/* -f/-d, in command-line order */
 };
 
 extern cmdline_options g_cmdline;

@@ -118,8 +118,8 @@ cmdline_parse (void)
 			/* Browsing a file of one's own needs no privileges, so
 			   the physical disks (the only thing that does) stay
 			   out of this session entirely.  */
-			g_cmdline.mount_file = full_path (parser.optarg);
-			g_cmdline.decompress = opt == OPT_FILE_DEC;
+			g_cmdline.mounts.push_back ({ full_path (parser.optarg),
+				opt == OPT_FILE_DEC });
 			g_cmdline.no_windisk = true;
 			break;
 		case OPT_HELP:

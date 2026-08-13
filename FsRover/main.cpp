@@ -2047,11 +2047,14 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		on_drop_files ((HDROP) wp);
 		return 0;
 	case WM_APP_BACKEND_READY:
-		/* --file stands in for the first refresh: mounting ends in
-		   one of its own (on_task_done), and doing both would leave
-		   two enumerations racing for the tree.  */
-		if (!g_cmdline.mount_file.empty ())
-			mount_host_image (g_cmdline.mount_file, g_cmdline.decompress);
+		/* --file/--file-dec stand in for the first refresh: each mount
+		   ends in one of its own (on_task_done), and doing both would
+		   leave two enumerations racing for the tree.  */
+		if (!g_cmdline.mounts.empty ())
+		{
+			for (const auto &mount : g_cmdline.mounts)
+				mount_host_image (mount.file, mount.decompress);
+		}
 		else
 			refresh ();
 		return 0;

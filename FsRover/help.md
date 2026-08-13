@@ -1328,6 +1328,8 @@ FsRover.exe [options]
 
 - Long options accept both `--file=PATH` and `--file PATH`; short options accept
   both `-fPATH` and `-f PATH`.
+- `-f` and `-d` may be repeated and mixed; every image is mounted in the order
+  given, with decompression applied only to the corresponding `-d` argument.
 - Option names are matched **case-insensitively**, and the Windows-style
   `/file=PATH` / `/m` spelling is accepted alongside `--file=PATH` / `-m`.
 - `--` ends option parsing.
