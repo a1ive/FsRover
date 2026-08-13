@@ -1207,12 +1207,7 @@ Camellia-128 (`0x15`) in CBC, and AES (`0x16`) in XTS.
 **Hashes:** SHA-256, SHA-512.
 **Key derivation:** PBKDF2, plus the v5+ rekey scheme.
 
-Metadata versions 1–7 are read. The metadata lives in the volume's **last**
-sector, and the UUID is not stored but derived —
-`hex(HMAC-SHA256(salt, "uuid"))`.
-
-**Not supported:** Skipjack (`0x05`) and the null cipher (`0x10`), which GRUB's
-algorithm table leaves unnamed.
+**Not supported:** Skipjack (`0x05`) and the null cipher (`0x10`).
 
 ---
 
@@ -1253,20 +1248,18 @@ then creates and starts the `Dokan2` service.
 
 ### Behaviour of a mounted volume
 
-- **Read-only, enforced by the driver.** The mount is created with
-  `DOKAN_OPTION_WRITE_PROTECT` and every write-side callback is left null, so
-  Windows reports `FILE_READ_ONLY_VOLUME` and refuses write opens itself.
+- **Read-only.**
 - The volume reports **case-sensitive search**, **case-preserved names** and
   **Unicode on disk**, with a maximum path component length of 255.
 - The Windows volume label is the grub device name (`hd0,gpt2`, `loop0`, …) and
   the filesystem name is the driver name (`ntfs`, `squash4`, …).
-- Free space is reported as **0** — the volume is full by definition.
+- Free space is reported as **0**.
 
 ### Mounting and unmounting
 
 - **Mount to drive letter** opens a dialog where you pick a free letter
-  (**D:–Z:**, highest free letter preselected) and optionally tick *Open in
-  Explorer after mounting*. That choice is remembered for the session.
+   and optionally tick *Open in
+  Explorer after mounting*.
 - Mounted drives are listed under the **Dokan** menu and in the tray icon's
   context menu; either one unmounts a single drive.
 - Closing FsRover while drives are still mounted prompts to unmount them all.

@@ -41,7 +41,7 @@ constexpr int GAME_W = 320;
 constexpr int GAME_H = 180;
 constexpr int GROUND_Y = 145;
 constexpr int ROVER_X = 48;
-constexpr double METRES_PER_SECOND = 4.0;
+constexpr double METRES_PER_SECOND = 6.0;
 constexpr double PIXELS_PER_METRE = 24.0;
 constexpr double JUMP_VELOCITY = 205.0;
 constexpr double JUMP_GRAVITY = 330.0;
@@ -53,8 +53,8 @@ constexpr int UFO_MAX_HEIGHT_ABOVE_GROUND = 80;
 
 constexpr unsigned ROCK_SPAWN_PERCENT = 45;
 constexpr unsigned TRENCH_SPAWN_PERCENT = 45;
-constexpr unsigned SATELLITE_SPAWN_PERCENT = 8;
-constexpr unsigned UFO_SPAWN_PERCENT = 2;
+constexpr unsigned SATELLITE_SPAWN_PERCENT = 9;
+constexpr unsigned UFO_SPAWN_PERCENT = 1;
 constexpr unsigned RANDOM_SPAWN_PERCENT_TOTAL = 100;
 constexpr double ROCK_SPEED_METRES_PER_SECOND = 0.0;
 constexpr double TRENCH_SPEED_METRES_PER_SECOND = 0.0;
@@ -62,7 +62,7 @@ constexpr double SATELLITE_SPEED_METRES_PER_SECOND = -4.0;
 constexpr double UFO_SPEED_METRES_PER_SECOND = 2.0;
 constexpr double ACTIVE_ROVER_SPEED_METRES_PER_SECOND = 1.0;
 constexpr double FIRST_RANDOM_OBSTACLE_METRES = 22.0;
-constexpr double RANDOM_OBSTACLE_MIN_SPACING_METRES = 8.0;
+constexpr double RANDOM_OBSTACLE_MIN_SPACING_METRES = 6.0;
 constexpr double RANDOM_OBSTACLE_MAX_SPACING_METRES = 16.0;
 
 static_assert (ROCK_SPAWN_PERCENT + TRENCH_SPAWN_PERCENT
@@ -76,7 +76,7 @@ constexpr double SYSTEM_DRAIN_PER_SECOND = 1.0;
 constexpr double HEATER_DRAIN_PER_SECOND = 1.0;
 constexpr double STORM_DRAG_DRAIN_PER_SECOND = 4.0;
 constexpr double TRENCH_BATTERY_COST = 10.0;
-constexpr double UFO_BATTERY_CHARGE = 200.0;
+constexpr double UFO_BATTERY_CHARGE = 100.0;
 constexpr double JUMP_BATTERY_COST = 1.0;
 
 static_assert (UFO_MIN_HEIGHT_ABOVE_GROUND <= UFO_MAX_HEIGHT_ABOVE_GROUND);
