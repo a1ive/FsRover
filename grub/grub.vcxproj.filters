@@ -651,6 +651,9 @@
     <ClCompile Include="grub-core\fs\fbfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\sqlitefs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\lynxfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

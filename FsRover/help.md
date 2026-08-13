@@ -415,7 +415,7 @@ as its first session. Named streams and extended attributes are not exposed.
 
 ---
 
-### 1.6 Archives and packages
+### 1.6 Archives, packages and databases
 
 Archives are browsed exactly like a filesystem: open a `.zip`, `.7z`,
 `.tar.gz`, `.rpm`, … from any volume with **Mount as disk**, or pass it on the
@@ -591,6 +591,23 @@ ZIP and ZIP64, through miniz.
 
 **Not supported:** Deflate64, bzip2, LZMA, XZ, Zstandard, PPMd, and **encrypted
 entries**. Such entries still appear in the listing but fail on open.
+
+#### SQLite database — `sqlitefs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: none · Symlinks: none
+
+SQLite 3 database files are presented as a read-only virtual tree. The root
+contains `tables`, `indexes`, `views` and `triggers`, plus the combined
+`schema.sql` and database-header metadata in `database.json`. Each table has
+its own `schema.sql` and a `rows` directory. Rowid-table records use
+`ROWID.json`; WITHOUT ROWID records use a stable page-and-cell filename.
+
+Record contents are JSON arrays in SQLite's on-disk column order. NULL,
+integers, real numbers and text are emitted as JSON values; BLOBs are hex in a
+`{"blob":"..."}` object. UTF-8, UTF-16le and UTF-16be databases, b-tree
+interior pages and overflow payload chains are supported. The driver reads the
+main database file only; uncheckpointed changes that exist solely in a
+separate WAL file are not visible.
 
 ---
 

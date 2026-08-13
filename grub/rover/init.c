@@ -136,6 +136,7 @@
 	mod (rpm)	\
 	mod (sevenzip)	\
 	mod (sfs)	\
+	mod (sqlitefs)	\
 	mod (squash4)	\
 	mod (tar)	\
 	mod (tibfs)	\
