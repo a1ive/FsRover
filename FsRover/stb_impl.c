@@ -17,13 +17,26 @@
  */
 
 /* Third-party image decoder implementation unit, kept out of the C++
-   viewer so the large single headers are compiled once as plain C.
-   Both decoders are used from memory only.  */
+   viewer so the large single headers are compiled once as plain C.  */
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO
 
 #include "stb_image.h"
+
+#pragma warning(push)
+#pragma warning(disable: 4244)
+
+#define NANOSVG_ALL_COLOR_KEYWORDS
+#define NANOSVG_IMPLEMENTATION
+
+#include "nanosvg/nanosvg.h"
+
+#define NANOSVGRAST_IMPLEMENTATION
+
+#include "nanosvg/nanosvgrast.h"
+
+#pragma warning(pop)
 
 #define twp_IMPLEMENTATION
 #define twp_NO_SIMD

@@ -20,6 +20,9 @@
     <Filter Include="SRC\libcdi">
       <UniqueIdentifier>{0f5b6a02-3c47-4a58-9f1d-2b6c8e4a71d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SRC\nanosvg">
+      <UniqueIdentifier>{c28f3654-9734-46ed-8b90-0c7020cc9b3f}</UniqueIdentifier>
+    </Filter>
     <Filter Include="SRC\tiny-webp">
       <UniqueIdentifier>{b628376c-2bbd-4dc0-8501-46099130b2ce}</UniqueIdentifier>
     </Filter>
@@ -101,6 +104,12 @@
     </ClInclude>
     <ClInclude Include="mdrtf.h">
       <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="nanosvg\nanosvg.h">
+      <Filter>SRC\nanosvg</Filter>
+    </ClInclude>
+    <ClInclude Include="nanosvg\nanosvgrast.h">
+      <Filter>SRC\nanosvg</Filter>
     </ClInclude>
     <ClInclude Include="md4c\entity.h">
       <Filter>SRC\md4c</Filter>

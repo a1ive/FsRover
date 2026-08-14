@@ -189,6 +189,8 @@
     <ClInclude Include="md4c\entity.h" />
     <ClInclude Include="md4c\md4c.h" />
     <ClInclude Include="mdrtf.h" />
+    <ClInclude Include="nanosvg\nanosvg.h" />
+    <ClInclude Include="nanosvg\nanosvgrast.h" />
     <ClInclude Include="optparse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />

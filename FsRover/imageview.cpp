@@ -19,7 +19,8 @@
 /* Image viewer: one read_chunk task loads the whole file (a small probe
  * read first, so oversized files are refused before the big transfer),
  * stb_image decodes it to RGBA which is premultiplied/swapped to the
- * BGRA Direct2D wants (formats stb lacks fall back to WIC).  ICNS
+ * BGRA Direct2D wants (SVG and WebP use built-in decoders; formats
+ * those and stb lack fall back to WIC).  ICNS
  * selects its largest decodable embedded image, with a legacy RGB/RLE
  * decoder for classic icon resources.  The
  * dialog's client area is rendered with an ID2D1HwndRenderTarget --
@@ -36,6 +37,7 @@
 #include <wincodec.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -46,6 +48,8 @@
 /* Declarations only; the implementation is compiled in stb_impl.c.  */
 #define STBI_NO_STDIO
 #include "stb_image.h"
+#include "nanosvg/nanosvg.h"
+#include "nanosvg/nanosvgrast.h"
 #include "tiny-webp/tiny_webp.h"
 
 namespace
@@ -438,6 +442,74 @@ img_premultiply_rgba (stbi_uc *pixels, size_t count)
 }
 
 bool
+img_is_svg (const stbi_uc *data, size_t len)
+{
+	size_t limit = len < IMG_PROBE ? len : IMG_PROBE;
+
+	for (size_t i = 0; i + 4 < limit; i++)
+	{
+		stbi_uc end = data[i + 4];
+		if (data[i] == '<' && memcmp (data + i + 1, "svg", 3) == 0
+			&& (end == '>' || end == '/' || end == ' ' || end == '\t'
+				|| end == '\r' || end == '\n'))
+			return true;
+	}
+	return false;
+}
+
+/* NanoSVG parses a mutable, NUL-terminated document and rasterizes to
+   straight-alpha RGBA.  Keep the native SVG pixel size at 96 DPI, then
+   convert to the viewer's premultiplied BGRA contract.  */
+bool
+img_decode_svg (const stbi_uc *data, size_t len)
+{
+	if (!img_is_svg (data, len) || len == (size_t) -1)
+		return false;
+	char *input = (char *) malloc (len + 1);
+	if (!input)
+		return false;
+	memcpy (input, data, len);
+	input[len] = '\0';
+	NSVGimage *svg = nsvgParse (input, "px", 96.0f);
+	free (input);
+	if (!svg)
+		return false;
+	if (!std::isfinite (svg->width) || !std::isfinite (svg->height)
+		|| svg->width <= 0.0f || svg->height <= 0.0f
+		|| (double) svg->width > INT_MAX / 4
+		|| (double) svg->height > INT_MAX)
+	{
+		nsvgDelete (svg);
+		return false;
+	}
+	int w = (int) std::ceil (svg->width);
+	int h = (int) std::ceil (svg->height);
+	if (w > INT_MAX / 4 / h)
+	{
+		nsvgDelete (svg);
+		return false;
+	}
+	NSVGrasterizer *rast = nsvgCreateRasterizer ();
+	stbi_uc *pixels = (stbi_uc *) calloc ((size_t) w * h, 4);
+	if (!rast || !pixels)
+	{
+		nsvgDeleteRasterizer (rast);
+		nsvgDelete (svg);
+		free (pixels);
+		return false;
+	}
+	nsvgRasterize (rast, svg, 0.0f, 0.0f, 1.0f, pixels, w, h, w * 4);
+	nsvgDeleteRasterizer (rast);
+	nsvgDelete (svg);
+	g_img_pixels = pixels;
+	g_img_w = w;
+	g_img_h = h;
+	g_img_frames = 1;
+	img_premultiply_rgba (g_img_pixels, (size_t) w * h);
+	return true;
+}
+
+bool
 img_is_webp (const stbi_uc *data, size_t len)
 {
 	return len >= 12 && memcmp (data, "RIFF", 4) == 0
@@ -479,6 +551,8 @@ img_decode_still (const stbi_uc *data, size_t len)
 {
 	int comp = 0;
 
+	if (img_decode_svg (data, len))
+		return true;
 	if (img_decode_webp (data, len))
 		return true;
 	if (len <= INT_MAX)
@@ -891,9 +965,9 @@ img_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 
 } // namespace
 
-/* Extensions the viewer can decode: stb_image's set plus the WIC
-   fallback formats (WebP needs the system codec, in-box on newer
-   Windows).  The menu item is only offered for these.  */
+/* Extensions the viewer can decode: the built-in SVG/WebP/ICNS paths,
+   stb_image's set and the WIC fallback formats.  The menu item is only
+   offered for these.  */
 bool
 is_image_name (const std::string &name)
 {
@@ -901,7 +975,7 @@ is_image_name (const std::string &name)
 	{
 		"jpg", "jpeg", "png", "bmp", "gif", "tga", "psd",
 		"hdr", "pic", "pnm", "pgm", "ppm", "tif", "tiff",
-		"ico", "icns", "webp",
+		"ico", "icns", "svg", "webp",
 	};
 	size_t dot = name.find_last_of ('.');
 
