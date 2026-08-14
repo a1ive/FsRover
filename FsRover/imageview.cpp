@@ -19,7 +19,9 @@
 /* Image viewer: one read_chunk task loads the whole file (a small probe
  * read first, so oversized files are refused before the big transfer),
  * stb_image decodes it to RGBA which is premultiplied/swapped to the
- * BGRA Direct2D wants (formats stb lacks fall back to WIC), and the
+ * BGRA Direct2D wants (formats stb lacks fall back to WIC).  ICNS
+ * selects its largest decodable embedded image, with a legacy RGB/RLE
+ * decoder for classic icon resources.  The
  * dialog's client area is rendered with an ID2D1HwndRenderTarget --
  * fit-to-window by default, mouse wheel zooms at the cursor, dragging
  * pans, double click toggles fit/100%.  GIF animations decode all
@@ -33,6 +35,7 @@
 #include <initguid.h>	/* define the WIC GUIDs here instead of linking */
 #include <wincodec.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -345,7 +348,7 @@ img_next_frame (HWND dlg)
    on every supported Windows.  32bppPBGRA output is already what D2D
    wants, no conversion pass needed.  */
 bool
-img_decode_wic (const std::vector<char> &raw)
+img_decode_wic (const stbi_uc *data, size_t len)
 {
 	IWICImagingFactory *factory = nullptr;
 	IWICStream *stream = nullptr;
@@ -360,10 +363,11 @@ img_decode_wic (const std::vector<char> &raw)
 	UINT h = 0;
 	bool ok = false;
 
-	if (FAILED (CoCreateInstance (CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&factory))))
+	if (len > 0xffffffffu
+		|| FAILED (CoCreateInstance (CLSID_WICImagingFactory1, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&factory))))
 		return false;
 	if (FAILED (factory->CreateStream (&stream))
-		|| FAILED (stream->InitializeFromMemory ((BYTE *) raw.data (), (DWORD) raw.size ()))
+		|| FAILED (stream->InitializeFromMemory ((BYTE *) data, (DWORD) len))
 		|| FAILED (factory->CreateDecoderFromStream (stream, nullptr, WICDecodeMetadataCacheOnDemand, &decoder))
 		|| FAILED (decoder->GetFrameCount (&count)))
 		goto fail;
@@ -418,6 +422,289 @@ fail:
 	return ok;
 }
 
+void
+img_premultiply_rgba (stbi_uc *pixels, size_t count)
+{
+	for (size_t i = 0; i < count; i++, pixels += 4)
+	{
+		stbi_uc r = pixels[0];
+		stbi_uc a = pixels[3];
+		pixels[0] = (stbi_uc) (pixels[2] * a / 255);
+		pixels[1] = (stbi_uc) (pixels[1] * a / 255);
+		pixels[2] = (stbi_uc) (r * a / 255);
+	}
+}
+
+/* Decode a standalone still image into premultiplied BGRA.  This is
+   also used for PNG/JPEG 2000 payloads embedded in modern ICNS files.  */
+bool
+img_decode_still (const stbi_uc *data, size_t len)
+{
+	int comp = 0;
+
+	if (len <= INT_MAX)
+		g_img_pixels = stbi_load_from_memory (data, (int) len, &g_img_w, &g_img_h, &comp, 4);
+	if (!g_img_pixels)
+		return img_decode_wic (data, len);
+	g_img_frames = 1;
+	img_premultiply_rgba (g_img_pixels, (size_t) g_img_w * g_img_h);
+	return true;
+}
+
+UINT32
+img_be32 (const stbi_uc *p)
+{
+	return ((UINT32) p[0] << 24) | ((UINT32) p[1] << 16)
+		| ((UINT32) p[2] << 8) | p[3];
+}
+
+int
+img_icns_modern_size (UINT32 type)
+{
+	switch (type)
+	{
+	case 0x69633130: /* ic10 */
+	case 0x69633134: /* ic14 */
+		return 1024;
+	case 0x69633039: /* ic09 */
+	case 0x69633133: /* ic13 */
+		return 512;
+	case 0x69633038: /* ic08 */
+		return 256;
+	case 0x69633037: /* ic07 */
+	case 0x69633132: /* ic12 */
+		return 128;
+	case 0x69637036: /* icp6 */
+	case 0x69633131: /* ic11 */
+		return 64;
+	case 0x69637035: /* icp5 */
+		return 32;
+	case 0x69637034: /* icp4 */
+		return 16;
+	default:
+		return 0;
+	}
+}
+
+int
+img_icns_argb_size (UINT32 type)
+{
+	switch (type)
+	{
+	case 0x69633036: /* ic06 */
+		return 64;
+	case 0x69633035: /* ic05 */
+		return 32;
+	case 0x69633034: /* ic04 */
+		return 16;
+	default:
+		return 0;
+	}
+}
+
+bool
+img_icns_rle_plane (const stbi_uc *&data, size_t &len, stbi_uc *plane,
+			 size_t pixels)
+{
+	size_t done = 0;
+
+	while (done < pixels)
+	{
+		if (!len)
+			return false;
+		unsigned int code = *data++;
+		len--;
+		size_t run = (code & 0x80) ? code - 125 : code + 1;
+		if (run > pixels - done)
+			return false;
+		if (code & 0x80)
+		{
+			if (!len)
+				return false;
+			stbi_uc value = *data++;
+			len--;
+			for (size_t i = 0; i < run; i++, plane += 4)
+				*plane = value;
+		}
+		else
+		{
+			if (len < run)
+				return false;
+			for (size_t i = 0; i < run; i++, plane += 4)
+				*plane = *data++;
+			len -= run;
+		}
+		done += run;
+	}
+	return true;
+}
+
+struct img_icns_modern
+{
+	const stbi_uc *data;
+	size_t len;
+	int size;
+};
+
+struct img_icns_legacy
+{
+	const stbi_uc *rgb;
+	size_t rgb_len;
+	const stbi_uc *mask;
+	size_t mask_len;
+	int size;
+};
+
+/* ICNS is a tagged big-endian container.  New icon families carry PNG
+   or JPEG 2000 payloads; classic families use RGB planes compressed by
+   Apple's PackBits variant plus a separate 8-bit alpha mask.  */
+bool
+img_decode_icns (const stbi_uc *data, size_t len)
+{
+	img_icns_legacy legacy[] =
+	{
+		{ nullptr, 0, nullptr, 0, 128 },
+		{ nullptr, 0, nullptr, 0, 48 },
+		{ nullptr, 0, nullptr, 0, 32 },
+		{ nullptr, 0, nullptr, 0, 16 },
+	};
+	std::vector<img_icns_modern> modern;
+	std::vector<img_icns_modern> argb;
+
+	if (len < 8 || memcmp (data, "icns", 4) != 0)
+		return false;
+	size_t container_len = img_be32 (data + 4);
+	if (container_len < 8 || container_len > len)
+		return false;
+
+	for (size_t pos = 8; pos < container_len; )
+	{
+		if (container_len - pos < 8)
+			return false;
+		UINT32 type = img_be32 (data + pos);
+		size_t block_len = img_be32 (data + pos + 4);
+		if (block_len < 8 || block_len > container_len - pos)
+			return false;
+		const stbi_uc *payload = data + pos + 8;
+		size_t payload_len = block_len - 8;
+		int modern_size = img_icns_modern_size (type);
+		if (modern_size)
+			modern.push_back ({ payload, payload_len, modern_size });
+		int argb_size = img_icns_argb_size (type);
+		if (argb_size && payload_len >= 4 && memcmp (payload, "ARGB", 4) == 0)
+			argb.push_back ({ payload + 4, payload_len - 4, argb_size });
+
+		for (img_icns_legacy &item : legacy)
+		{
+			UINT32 rgb_type = item.size == 128 ? 0x69743332 :
+				item.size == 48 ? 0x69683332 : item.size == 32 ? 0x696c3332 : 0x69733332;
+			UINT32 mask_type = item.size == 128 ? 0x74386d6b :
+				item.size == 48 ? 0x68386d6b : item.size == 32 ? 0x6c386d6b : 0x73386d6b;
+			if (type == rgb_type)
+			{
+				/* it32 has a four-byte zero prefix outside the RGB stream.  */
+				if (item.size != 128 || (payload_len >= 4 && img_be32 (payload) == 0))
+				{
+					item.rgb = payload + (item.size == 128 ? 4 : 0);
+					item.rgb_len = payload_len - (item.size == 128 ? 4 : 0);
+				}
+			}
+			else if (type == mask_type)
+			{
+				item.mask = payload;
+				item.mask_len = payload_len;
+			}
+		}
+		pos += block_len;
+	}
+
+	std::stable_sort (modern.begin (), modern.end (),
+		[] (const img_icns_modern &a, const img_icns_modern &b) { return a.size > b.size; });
+	for (const img_icns_modern &item : modern)
+		if (img_decode_still (item.data, item.len))
+			return true;
+
+	std::stable_sort (argb.begin (), argb.end (),
+		[] (const img_icns_modern &a, const img_icns_modern &b) { return a.size > b.size; });
+	for (const img_icns_modern &item : argb)
+	{
+		size_t pixels = (size_t) item.size * item.size;
+		stbi_uc *decoded = (stbi_uc *) malloc (pixels * 4);
+		if (!decoded)
+			return false;
+		const stbi_uc *src = item.data;
+		size_t left = item.len;
+		bool ok = img_icns_rle_plane (src, left, decoded + 3, pixels)
+			&& img_icns_rle_plane (src, left, decoded + 2, pixels)
+			&& img_icns_rle_plane (src, left, decoded + 1, pixels)
+			&& img_icns_rle_plane (src, left, decoded, pixels);
+		if (!ok)
+		{
+			free (decoded);
+			continue;
+		}
+		for (size_t i = 0; i < pixels; i++)
+		{
+			stbi_uc a = decoded[i * 4 + 3];
+			decoded[i * 4] = (stbi_uc) (decoded[i * 4] * a / 255);
+			decoded[i * 4 + 1] = (stbi_uc) (decoded[i * 4 + 1] * a / 255);
+			decoded[i * 4 + 2] = (stbi_uc) (decoded[i * 4 + 2] * a / 255);
+		}
+		g_img_pixels = decoded;
+		g_img_w = item.size;
+		g_img_h = item.size;
+		g_img_frames = 1;
+		return true;
+	}
+
+	for (const img_icns_legacy &item : legacy)
+	{
+		if (!item.rgb)
+			continue;
+		size_t pixels = (size_t) item.size * item.size;
+		stbi_uc *decoded = (stbi_uc *) malloc (pixels * 4);
+		if (!decoded)
+			return false;
+		bool ok = true;
+		if (item.rgb_len < pixels * 3)
+		{
+			const stbi_uc *src = item.rgb;
+			size_t left = item.rgb_len;
+			ok = img_icns_rle_plane (src, left, decoded + 2, pixels)
+				&& img_icns_rle_plane (src, left, decoded + 1, pixels)
+				&& img_icns_rle_plane (src, left, decoded, pixels);
+		}
+		else
+		{
+			for (size_t i = 0; i < pixels; i++)
+			{
+				decoded[i * 4] = item.rgb[i * 3 + 2];
+				decoded[i * 4 + 1] = item.rgb[i * 3 + 1];
+				decoded[i * 4 + 2] = item.rgb[i * 3];
+			}
+		}
+		if (!ok)
+		{
+			free (decoded);
+			continue;
+		}
+		for (size_t i = 0; i < pixels; i++)
+		{
+			stbi_uc a = item.mask && item.mask_len >= pixels ? item.mask[i] : 255;
+			decoded[i * 4] = (stbi_uc) (decoded[i * 4] * a / 255);
+			decoded[i * 4 + 1] = (stbi_uc) (decoded[i * 4 + 1] * a / 255);
+			decoded[i * 4 + 2] = (stbi_uc) (decoded[i * 4 + 2] * a / 255);
+			decoded[i * 4 + 3] = a;
+		}
+		g_img_pixels = decoded;
+		g_img_w = item.size;
+		g_img_h = item.size;
+		g_img_frames = 1;
+		return true;
+	}
+	return false;
+}
+
 /* Decode into premultiplied BGRA frames; false = not a decodable image.  */
 bool
 img_decode (const std::vector<char> &raw)
@@ -426,27 +713,18 @@ img_decode (const std::vector<char> &raw)
 	int len = (int) raw.size ();
 	int comp = 0;
 
+	if (len >= 4 && memcmp (buf, "icns", 4) == 0)
+		return img_decode_icns (buf, raw.size ());
 	if (len >= 4 && memcmp (buf, "GIF8", 4) == 0)
 		g_img_pixels = stbi_load_gif_from_memory (buf, len, &g_img_delays, &g_img_w, &g_img_h, &g_img_frames, &comp, 4);
 	else
-	{
-		g_img_pixels = stbi_load_from_memory (buf, len, &g_img_w, &g_img_h, &comp, 4);
-		g_img_frames = 1;
-	}
+		return img_decode_still (buf, raw.size ());
 	if (!g_img_pixels)
-		return img_decode_wic (raw);
+		return img_decode_wic (buf, raw.size ());
 
 	/* stb emits straight RGBA; D2D wants premultiplied BGRA.  */
-	stbi_uc *p = g_img_pixels;
 	size_t n = (size_t) g_img_w * (size_t) g_img_h * (size_t) g_img_frames;
-	for (size_t i = 0; i < n; i++, p += 4)
-	{
-		stbi_uc r = p[0];
-		stbi_uc a = p[3];
-		p[0] = (stbi_uc) (p[2] * a / 255);
-		p[1] = (stbi_uc) (p[1] * a / 255);
-		p[2] = (stbi_uc) (r * a / 255);
-	}
+	img_premultiply_rgba (g_img_pixels, n);
 	return true;
 }
 
@@ -584,7 +862,7 @@ is_image_name (const std::string &name)
 	{
 		"jpg", "jpeg", "png", "bmp", "gif", "tga", "psd",
 		"hdr", "pic", "pnm", "pgm", "ppm", "tif", "tiff",
-		"ico", "webp",
+		"ico", "icns", "webp",
 	};
 	size_t dot = name.find_last_of ('.');
 
