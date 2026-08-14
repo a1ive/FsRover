@@ -16,11 +16,16 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* stb_image implementation unit (third-party, public domain), kept out
-   of main.cpp so the large header is compiled once as plain C.  The
-   viewer decodes from memory only.  */
+/* Third-party image decoder implementation unit, kept out of the C++
+   viewer so the large single headers are compiled once as plain C.
+   Both decoders are used from memory only.  */
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO
 
 #include "stb_image.h"
+
+#define twp_IMPLEMENTATION
+#define twp_NO_SIMD
+
+#include "tiny-webp/tiny_webp.h"

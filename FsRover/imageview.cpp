@@ -46,6 +46,7 @@
 /* Declarations only; the implementation is compiled in stb_impl.c.  */
 #define STBI_NO_STDIO
 #include "stb_image.h"
+#include "tiny-webp/tiny_webp.h"
 
 namespace
 {
@@ -341,8 +342,9 @@ img_next_frame (HWND dlg)
 	InvalidateRect (dlg, nullptr, FALSE);
 }
 
-/* WIC fallback for the formats stb_image lacks (TIFF/ICO/WebP...; WebP
-   additionally needs the system codec).  The factory comes from COM,
+/* WIC fallback for the formats handled by neither stb_image nor the
+   built-in WebP decoder (TIFF/ICO and unsupported WebP variants).  The
+   factory comes from COM,
    so windowscodecs.dll loads at runtime and the import table stays
    unchanged.  CLSID_WICImagingFactory1 is the Vista-era class, present
    on every supported Windows.  32bppPBGRA output is already what D2D
@@ -435,6 +437,41 @@ img_premultiply_rgba (stbi_uc *pixels, size_t count)
 	}
 }
 
+bool
+img_is_webp (const stbi_uc *data, size_t len)
+{
+	return len >= 12 && memcmp (data, "RIFF", 4) == 0
+		&& memcmp (data + 8, "WEBP", 4) == 0;
+}
+
+/* tiny-webp covers lossy, lossless and alpha WebP without depending on
+   an installed WIC codec.  Animated WebP is unsupported there and is
+   deliberately allowed to fall through to WIC.  */
+bool
+img_decode_webp (const stbi_uc *data, size_t len)
+{
+	if (!img_is_webp (data, len) || len > INT_MAX)
+		return false;
+	int w = 0;
+	int h = 0;
+	if (!twp_get_info_from_memory ((void *) data, (int) len, &w, &h,
+		nullptr, nullptr) || w < 1 || h < 1 || w > INT_MAX / 4 / h)
+		return false;
+	stbi_uc *pixels = twp_read_from_memory ((void *) data, (int) len,
+		&w, &h, twp_FORMAT_RGBA, 0);
+	if (!pixels || w < 1 || h < 1)
+	{
+		free (pixels);
+		return false;
+	}
+	g_img_pixels = pixels;
+	g_img_w = w;
+	g_img_h = h;
+	g_img_frames = 1;
+	img_premultiply_rgba (g_img_pixels, (size_t) w * h);
+	return true;
+}
+
 /* Decode a standalone still image into premultiplied BGRA.  This is
    also used for PNG/JPEG 2000 payloads embedded in modern ICNS files.  */
 bool
@@ -442,6 +479,8 @@ img_decode_still (const stbi_uc *data, size_t len)
 {
 	int comp = 0;
 
+	if (img_decode_webp (data, len))
+		return true;
 	if (len <= INT_MAX)
 		g_img_pixels = stbi_load_from_memory (data, (int) len, &g_img_w, &g_img_h, &comp, 4);
 	if (!g_img_pixels)

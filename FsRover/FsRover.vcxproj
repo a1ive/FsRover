@@ -193,6 +193,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="strconv.h" />
+    <ClInclude Include="tiny-webp\tiny_webp.h" />
     <ClInclude Include="version.h" />
   </ItemGroup>
   <ItemGroup>

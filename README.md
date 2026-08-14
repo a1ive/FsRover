@@ -51,6 +51,7 @@ File-level or filesystem-native encryption is not supported.
 - [wimboot](https://ipxe.org/wimboot)
 - [file](https://www.darwinsys.com/file/)
 - [stb_image](https://github.com/nothings/stb)
+- [tiny-webp](https://github.com/justus2510/tiny-webp)
 - [MD4C](https://github.com/mity/md4c)
 - [7-Zip](https://www.7-zip.org/)
 - [VC-LTL and YY-Thunks](https://github.com/Chuyu-Team)
