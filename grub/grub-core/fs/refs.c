@@ -744,8 +744,17 @@ grub_refs_mount(grub_disk_t disk)
 
 	/* level 2 tree root references */
 	ref_count = refs_get32(node + (data->v1 ? 0x58 : 0x90));
-	ref_base = (data->v1 ? 0x5C : 0x94) + (v314 ? 5 * 4 : 0);
-	if (ref_count > 64 || ref_base + ref_count * 4 > data->block_size)
+	ref_base = data->v1 ? 0x5C : 0x94;
+	if (v314)
+	{
+		grub_uint32_t ref_start = refs_get32(node + ref_base);
+
+		/* ReFS 3.14 stores the absolute list offset in its first slot. */
+		if (ref_start)
+			ref_base = ref_start;
+	}
+	if (ref_count > 64 || ref_base > data->block_size
+		|| ref_count > (data->block_size - ref_base) / 4)
 	{
 		grub_error(GRUB_ERR_BAD_FS, "refs: corrupt checkpoint");
 		goto fail;
