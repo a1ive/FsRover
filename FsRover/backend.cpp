@@ -334,11 +334,14 @@ struct extract_ctx
 	UINT seq;
 	UINT64 files_total = 0;
 	UINT64 files_done = 0;
+	UINT64 files_processed = 0;
 	UINT64 bytes_done = 0;
 	UINT64 links_skipped = 0;
+	UINT64 errors = 0;
 	ULONGLONG last_tick = 0;
 	bool preserve_times = true;
 	std::string cur;	/* source path of the file being copied */
+	std::string first_error;
 };
 
 /* Unix seconds -> FILETIME (100 ns ticks since 1601, UTC like the
@@ -377,7 +380,7 @@ post_progress (extract_ctx &ctx, int percent)
 
 	p->seq = ctx.seq;
 	p->percent = percent;
-	p->file_index = ctx.files_done;
+	p->file_index = ctx.files_processed;
 	p->file_total = ctx.files_total;
 	p->name = ctx.cur;
 	if (!PostMessageW (g_notify, WM_APP_TASK_PROGRESS, ctx.seq, (LPARAM) p))
@@ -529,6 +532,7 @@ walk_dir (const std::string &src, const std::wstring &rel, walk_chain &chain, st
 bool
 extract_file (const std::string &src, const std::wstring &dst, INT64 mtime, extract_ctx &ctx, std::vector<char> &buf, std::string &error)
 {
+	UINT64 bytes_before = ctx.bytes_done;
 	rover_file *f;
 	HANDLE h;
 	bool ok = false;
@@ -583,7 +587,10 @@ extract_file (const std::string &src, const std::wstring &dst, INT64 mtime, extr
 	CloseHandle (h);
 	rover_file_close (f);
 	if (!ok)
+	{
+		ctx.bytes_done = bytes_before;
 		DeleteFileW (dst.c_str ());
+	}
 	return ok;
 }
 
@@ -658,12 +665,21 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 			}
 			continue;
 		}
-		ctx.files_done++;
+		ctx.files_processed++;
 		ctx.cur = item.src;
 		ctx.last_tick = GetTickCount64 ();
 		post_progress (ctx, 0);
-		if (!extract_file (item.src, dst, item.mtime, ctx, buf, res->error))
-			break;
+		std::string item_error;
+		if (!extract_file (item.src, dst, item.mtime, ctx, buf, item_error))
+		{
+			if (g_cancel.load (std::memory_order_relaxed))
+				break;
+			ctx.errors++;
+			if (ctx.first_error.empty ())
+				ctx.first_error = std::move (item_error);
+			continue;
+		}
+		ctx.files_done++;
 	}
 	rover_set_progress (nullptr, nullptr);
 
@@ -689,6 +705,8 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
 	res->stat_files = ctx.files_done;
 	res->stat_bytes = ctx.bytes_done;
 	res->stat_links = ctx.links_skipped;
+	res->stat_errors = ctx.errors;
+	res->extract_error = std::move (ctx.first_error);
 	if (res->error.empty () && g_cancel.load (std::memory_order_relaxed))
 		res->error = "extraction cancelled";
 	return;

@@ -23,6 +23,7 @@
 #include <climits>
 #include <cwchar>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <rover.h>
@@ -359,6 +360,7 @@ bool
 extract_file (const walk_item &item, const std::wstring &destination,
 	extract_context &context, std::vector<char> &buffer, std::string &error)
 {
+	unsigned long long bytes_before = context.bytes_done;
 	rover_file *source = rover_file_open (item.src.c_str ());
 	if (!source)
 	{
@@ -408,7 +410,10 @@ extract_file (const walk_item &item, const std::wstring &destination,
 	CloseHandle (output);
 	rover_file_close (source);
 	if (!ok)
+	{
+		context.bytes_done = bytes_before;
 		DeleteFileW (destination.c_str ());
+	}
 	return ok;
 }
 
@@ -506,18 +511,26 @@ extract_paths (const std::vector<std::string> &sources,
 			}
 			continue;
 		}
-		context.file_index = context.files_done + 1;
+		context.file_index++;
 		context.current = item.src;
 		context.last_tick = 0;
 		show_progress (context, 0, true);
-		if (!extract_file (item, target, context, buffer, *error))
-			goto out;
+		std::string item_error;
+		if (!extract_file (item, target, context, buffer, item_error))
+		{
+			if (context.console_progress)
+				write_stderr ("\r\n");
+			if (g_cancel.load (std::memory_order_relaxed))
+				goto out;
+			result->errors.push_back (std::move (item_error));
+			continue;
+		}
 		context.files_done++;
 		show_progress (context, 100, true);
 		if (context.console_progress)
 			write_stderr ("\r\n");
 		else
-			write_stderr ("Extracted [" + std::to_string (context.files_done)
+			write_stderr ("Extracted [" + std::to_string (context.file_index)
 				+ '/' + std::to_string (context.files_total) + "] "
 				+ display_path (item.src) + "\r\n");
 	}
@@ -535,5 +548,5 @@ out:
 	if (!ok && error->empty ())
 		*error = g_cancel.load (std::memory_order_relaxed)
 			? "extraction cancelled" : "extraction failed";
-	return ok;
+	return ok && result->errors.empty ();
 }

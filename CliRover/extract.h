@@ -9,6 +9,7 @@ struct extract_result
 	unsigned long long files = 0;
 	unsigned long long bytes = 0;
 	unsigned long long links = 0;
+	std::vector<std::string> errors;
 };
 
 bool extract_paths (const std::vector<std::string> &sources,

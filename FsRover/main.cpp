@@ -1468,14 +1468,22 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::extract:
 	{
-		wchar_t text[192];
-		int n = swprintf (text, 192, res_str (IDS_FMT_EXTRACT_DONE).c_str (),
+		wchar_t text[512];
+		int n = swprintf (text, 512, res_str (IDS_FMT_EXTRACT_DONE).c_str (),
 			res->stat_files, format_size (res->stat_bytes).c_str ());
 		/* Symlinks are never extracted; say so instead of letting
 		   the file count silently come up short.  */
-		if (res->stat_links && n > 0 && n < 192)
-			swprintf (text + n, (size_t) (192 - n),
+		if (res->stat_links && n > 0 && n < 512)
+		{
+			int added = swprintf (text + n, (size_t) (512 - n),
 				res_str (IDS_FMT_EXTRACT_LINKS).c_str (), res->stat_links);
+			if (added > 0)
+				n += added;
+		}
+		if (res->stat_errors && n > 0 && n < 512)
+			swprintf (text + n, (size_t) (512 - n),
+				res_str (IDS_FMT_EXTRACT_ERRORS).c_str (), res->stat_errors,
+				widen (res->extract_error).c_str ());
 		set_status (text);
 		break;
 	}

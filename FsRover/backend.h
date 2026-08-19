@@ -182,6 +182,8 @@ struct backend_result
 	UINT64 stat_files = 0;	/* extract: files written */
 	UINT64 stat_bytes = 0;	/* extract, export_image: bytes written */
 	UINT64 stat_links = 0;	/* extract: symlinks skipped */
+	UINT64 stat_errors = 0;	/* extract: files that could not be written */
+	std::string extract_error;	/* extract: first per-file error */
 	std::string text;	/* file_props: libmagic description */
 	bool inode_set = false;	/* file_props: the driver reported an inode */
 	UINT64 inode = 0;

@@ -658,14 +658,19 @@ wmain (int argc, wchar_t **argv)
 		for (const std::wstring &source : options.extracts)
 			sources.push_back (narrow (source));
 		extract_result stats;
-		if (!extract_paths (sources, options.output, &stats, &error))
+		bool extracted = extract_paths (sources, options.output, &stats, &error);
+		for (const std::string &item_error : stats.errors)
+			result = report_error (item_error);
+		if (!extracted && !error.empty ())
 			result = report_error (error);
-		else
+		if (extracted || stats.files || stats.links || !stats.errors.empty ())
 		{
 			std::string summary = "Extracted " + std::to_string (stats.files)
 				+ " file(s), " + std::to_string (stats.bytes) + " bytes";
 			if (stats.links)
 				summary += "; skipped " + std::to_string (stats.links) + " symlink(s)";
+			if (!stats.errors.empty ())
+				summary += "; failed " + std::to_string (stats.errors.size ()) + " file(s)";
 			write_stream (STD_ERROR_HANDLE, summary + ".\r\n");
 		}
 	}

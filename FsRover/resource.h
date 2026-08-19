@@ -340,5 +340,6 @@
 #define IDS_SM_ATTR		182
 #define IDS_SM_NO_DATA		183
 #define IDS_SM_HEX		184
+#define IDS_FMT_EXTRACT_ERRORS	185
 
 #endif /* ! FSROVER_RESOURCE_H */
