@@ -104,6 +104,7 @@
 	mod (f2fs)	\
 	mod (fat)	\
 	mod (fbfs)	\
+	mod (ghofs)	\
 	mod (hfs)	\
 	mod (hfsplus)	\
 	mod (hfspluscomp)	\
@@ -180,7 +181,8 @@
 	mod (pmfx)	\
 	mod (ntfsclone)	\
 	mod (sna)	\
-	mod (cdimage)
+	mod (cdimage)	\
+	mod (gho)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\

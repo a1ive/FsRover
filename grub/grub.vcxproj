@@ -234,6 +234,7 @@
     </ClCompile>
     <ClCompile Include="grub-core\fs\fat.c" />
     <ClCompile Include="grub-core\fs\fbfs.c" />
+    <ClCompile Include="grub-core\fs\gho.c" />
     <ClCompile Include="grub-core\fs\fshelp.c" />
     <ClCompile Include="grub-core\fs\hfs.c" />
     <ClCompile Include="grub-core\fs\hfsplus.c" />
@@ -349,6 +350,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\wimboot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\io\gzio.c" />
+    <ClCompile Include="grub-core\io\gho.c" />
     <ClCompile Include="grub-core\io\ntfsclone.c" />
     <ClCompile Include="grub-core\io\offset.c" />
     <ClCompile Include="grub-core\io\isz.c">
@@ -481,6 +483,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\ghost.c" />
     <ClCompile Include="grub-core\lib\libzbitmap\libzbitmap.c" />
     <ClCompile Include="grub-core\lib\lz4\lz4.c" />
     <ClCompile Include="grub-core\lib\lzfse\lzfse_decode.c" />

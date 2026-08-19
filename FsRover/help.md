@@ -1012,6 +1012,29 @@ the MBR/GPT it carries, are skipped: what you browse is the one volume the image
 holds, not the disk it came from, so a backup set covering several partitions
 shows up as one image per partition.
 
+#### Norton Ghost — `gho`
+
+> Origin: FsRover
+
+Open the first `.gho` file of a backup set. Split images named
+`name00001.ghs`, `name00002.ghs`, … are found beside it and joined
+automatically; the `.ghs` files should not be opened individually.
+
+Ghost writes several different payload shapes, all of which are recognised:
+
+- **Sector images** are decoded into the raw partition they contain. Stored,
+  Fast LZ and zlib-compressed block streams are supported.
+- **FAT file backups** are presented as a directory tree, with one top-level
+  directory per saved partition. Both the current catalogue records and the
+  older Ghost layout with `0x19` directory records are accepted.
+- **Filesystem-aware NTFS backups** (GHPR / compression type 10) are rebuilt as
+  a sparse NTFS volume from their MFT records, non-resident attribute runlists
+  and stored run data. Unstored clusters read as zeros; the regular `ntfs`
+  driver then provides directory and file access.
+
+Track-zero data saved outside a partition is exposed as `track0.bin` when it is
+present. Password-protected images are not decoded.
+
 ---
 
 ## 3. Disk filters (RAID / LVM)
