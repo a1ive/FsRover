@@ -111,6 +111,7 @@ struct grub_diskfilter_segment {
       GRUB_DISKFILTER_RAID5 = 5,
       GRUB_DISKFILTER_RAID6 = 6,
       GRUB_DISKFILTER_RAID10 = 10,
+      GRUB_DISKFILTER_ZERO = 100,
   } type;
   int layout;
   /* valid only for raid10.  */

@@ -180,6 +180,9 @@
     <ClCompile Include="grub-core\disk\loopdisk.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\disk\lp.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\disk\lvm.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>

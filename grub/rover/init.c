@@ -55,6 +55,7 @@
 	mod (diskfilter)	\
 	mod (ldm)	\
 	mod (lvm)	\
+	mod (lp)	\
 	mod (dm_nv)	\
 	mod (mdraid09)	\
 	mod (mdraid09_be)	\

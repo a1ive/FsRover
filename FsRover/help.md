@@ -1022,6 +1022,7 @@ devices listed in its properties.
 
 | Driver | Format |
 | --- | --- |
+| `lp` | Android 10+ dynamic partitions (`super.img`) |
 | `lvm` | Linux LVM2 logical volumes |
 | `ldm` | Windows Logical Disk Manager (dynamic disks) |
 | `mdraid09`, `mdraid09_be` | Linux md RAID, superblock format 0.90 (little- and big-endian) |
@@ -1037,6 +1038,12 @@ as long as enough members are visible.
 
 **LVM segment types:** linear, striped, mirror, and `raid1` / `raid4` / `raid5` /
 `raid6`. Thin provisioning, cache volumes and snapshots are not assembled.
+
+**Android LP:** the primary and backup geometry/metadata copies are checked with
+SHA-256, then each enabled logical partition is exposed as an `lp/...` device.
+Multi-extent partitions and both LINEAR and ZERO targets are supported. LP layouts
+whose extents refer to an external block device are not assembled; all extents in
+a standalone `super.img` must use its first block-device entry.
 
 All members must be visible to FsRover at the same time. Physical disks are only
 enumerated when the program runs elevated, so assembling an array that spans

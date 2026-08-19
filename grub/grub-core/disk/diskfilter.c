@@ -86,6 +86,10 @@ is_lv_readable (struct grub_diskfilter_lv *lv, int easily)
 	  need = 1;
 	  break;
 
+	case GRUB_DISKFILTER_ZERO:
+	  need = 0;
+	  break;
+
 	case GRUB_DISKFILTER_RAID10:
 	  {
 	    unsigned int n;
@@ -122,6 +126,7 @@ is_valid_diskfilter_name (const char *name)
   return (grub_memcmp (name, "md", sizeof ("md") - 1) == 0
 	  || grub_memcmp (name, "lvm/", sizeof ("lvm/") - 1) == 0
 	  || grub_memcmp (name, "lvmid/", sizeof ("lvmid/") - 1) == 0
+	  || grub_memcmp (name, "lp/", sizeof ("lp/") - 1) == 0
 	  || grub_memcmp (name, "ldm/", sizeof ("ldm/") - 1) == 0);
 }
 
@@ -569,6 +574,13 @@ validate_segment (struct grub_diskfilter_segment *seg)
 {
   grub_err_t err;
 
+  if (seg->type == GRUB_DISKFILTER_ZERO)
+    {
+      if (seg->node_count != 0)
+	return grub_error (GRUB_ERR_BAD_FS, "invalid zero segment");
+      return GRUB_ERR_NONE;
+    }
+
   if (seg->stripe_size == 0 || seg->node_count == 0)
     return grub_error(GRUB_ERR_BAD_FS, "invalid segment");
 
@@ -624,6 +636,10 @@ read_segment (struct grub_diskfilter_segment *seg, grub_disk_addr_t sector,
   grub_err_t err;
   switch (seg->type)
     {
+    case GRUB_DISKFILTER_ZERO:
+      grub_memset (buf, 0, size << GRUB_DISK_SECTOR_BITS);
+      return GRUB_ERR_NONE;
+
     case GRUB_DISKFILTER_STRIPED:
       if (seg->node_count == 1)
 	return grub_diskfilter_read_node (&seg->nodes[0],

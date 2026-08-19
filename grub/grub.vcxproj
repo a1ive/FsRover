@@ -180,6 +180,7 @@
     <ClCompile Include="grub-core\disk\dmraid_nvidia.c" />
     <ClCompile Include="grub-core\disk\ldm.c" />
     <ClCompile Include="grub-core\disk\loopdisk.c" />
+    <ClCompile Include="grub-core\disk\lp.c" />
     <ClCompile Include="grub-core\disk\lvm.c" />
     <ClCompile Include="grub-core\disk\mdraid_linux.c" />
     <ClCompile Include="grub-core\disk\mdraid_linux_be.c" />
