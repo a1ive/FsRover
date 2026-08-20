@@ -182,7 +182,8 @@
 	mod (ntfsclone)	\
 	mod (sna)	\
 	mod (cdimage)	\
-	mod (gho)
+	mod (gho)	\
+	mod (ifw)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\

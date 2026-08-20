@@ -492,6 +492,9 @@
     <ClCompile Include="grub-core\io\sna.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\ifw.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\sparse.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
