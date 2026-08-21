@@ -183,9 +183,10 @@ HWND g_list;
 HWND g_status;
 HWND g_progress;
 HMENU g_menu_file;	/* File popup: Refresh grays while extracting */
+HMENU g_menu_settings;	/* Settings popup: toggles refreshed on open */
 HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
 
-/* File menu toggle, copied into each extract task when it starts.  */
+/* Settings toggle, copied into each extract task when it starts.  */
 bool g_preserve_times = true;
 
 /* Splitter state.  The width is kept in 96-DPI units like every other
@@ -1695,9 +1696,6 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
-	/* Check mark set by on_menu_popup from g_preserve_times.  */
-	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
-	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	/* Elevation cannot change while the process runs, so the re-launch
 	   is either offered for good or never.  Under --file it is never:
 	   the new instance would start on an empty command line, dropping
@@ -1711,6 +1709,10 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (sel, MF_STRING, IDM_SEL_ALL, res_str (IDS_MENU_SEL_ALL).c_str ());
 	AppendMenuW (sel, MF_STRING, IDM_SEL_INVERT, res_str (IDS_MENU_SEL_INVERT).c_str ());
 
+	g_menu_settings = CreatePopupMenu ();
+	/* Check mark set by on_menu_popup from g_preserve_times.  */
+	AppendMenuW (g_menu_settings, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
+
 	g_menu_dokan = CreatePopupMenu ();
 
 	HMENU help = CreatePopupMenu ();
@@ -1723,6 +1725,7 @@ create_menu_bar (HWND wnd)
 
 	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_file, res_str (IDS_MENU_FILE).c_str ());
 	AppendMenuW (bar, MF_POPUP, (UINT_PTR) sel, res_str (IDS_MENU_SELECTION).c_str ());
+	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_settings, res_str (IDS_MENU_SETTINGS).c_str ());
 	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_dokan, res_str (IDS_MENU_DOKAN).c_str ());
 	AppendMenuW (bar, MF_POPUP, (UINT_PTR) help, res_str (IDS_MENU_HELP).c_str ());
 	SetMenu (wnd, bar);
@@ -1740,6 +1743,10 @@ on_menu_popup (HMENU menu)
 		EnableMenuItem (menu, IDM_FILE_REFRESH, g_extracting ? MF_GRAYED : MF_ENABLED);
 		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE, g_extracting ? MF_GRAYED : MF_ENABLED);
 		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE_DECOMP, g_extracting ? MF_GRAYED : MF_ENABLED);
+		return;
+	}
+	if (menu == g_menu_settings)
+	{
 		CheckMenuItem (menu, IDM_FILE_TIMESTAMPS, g_preserve_times ? MF_CHECKED : MF_UNCHECKED);
 		return;
 	}
