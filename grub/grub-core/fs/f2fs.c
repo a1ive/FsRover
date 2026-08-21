@@ -40,8 +40,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
 /* F2FS Magic Number. */
 #define F2FS_SUPER_MAGIC          0xf2f52010
 
-#define CHECKSUM_OFFSET           4092  /* Must be aligned 4 bytes. */
-#define U32_CHECKSUM_OFFSET       (CHECKSUM_OFFSET >> 2)
+#define CP_CHKSUM_OFFSET          (F2FS_BLKSIZE - sizeof (grub_uint32_t))
+#define CP_MIN_CHKSUM_OFFSET      offsetof (struct grub_f2fs_checkpoint, sit_nat_version_bitmap)
 #define CRCPOLY_LE                0xedb88320
 
 /* Byte-size offset. */
@@ -66,20 +66,15 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define F2FS_MAX_COMPRESS_LOG_SIZE 8
 #define F2FS_MAX_COMPRESS_CLUSTER_BLOCKS (1U << F2FS_MAX_COMPRESS_LOG_SIZE)
 
-/*
- * F2FS conventionally uses 512 (1 << 9) blocks per 2 MiB segment.  Rather than
- * hard-requiring that exact value, only reject a log_blocks_per_seg large
- * enough to break the "1 << log_blocks_per_seg" computation in
- * grub_f2fs_mount(): the unsigned shift stays a well-defined, non-zero
- * grub_uint32_t for any exponent up to 31.
- */
-#define F2FS_MAX_LOG_BLKS_PER_SEG 31
+#define F2FS_LOG_BLKS_PER_SEG     9
+#define F2FS_CP_PACKS             2
 
 #define VERSION_LEN               256
 #define F2FS_MAX_EXTENSION        64
 
 #define CP_COMPACT_SUM_FLAG       0x00000004
 #define CP_UMOUNT_FLAG            0x00000001
+#define CP_LARGE_NAT_BITMAP_FLAG  0x00000400
 
 #define MAX_ACTIVE_LOGS           16
 #define MAX_ACTIVE_NODE_LOGS      8
@@ -167,7 +162,15 @@ struct grub_f2fs_superblock
   grub_uint32_t                   segs_per_sec;
   grub_uint32_t                   secs_per_zone;
   grub_uint32_t                   checksum_offset;
-  grub_uint8_t                    dummy2[40];
+  grub_uint64_t                   block_count;
+  grub_uint32_t                   section_count;
+  grub_uint32_t                   segment_count;
+  grub_uint32_t                   segment_count_ckpt;
+  grub_uint32_t                   segment_count_sit;
+  grub_uint32_t                   segment_count_nat;
+  grub_uint32_t                   segment_count_ssa;
+  grub_uint32_t                   segment_count_main;
+  grub_uint32_t                   segment0_blkaddr;
   grub_uint32_t                   cp_blkaddr;
   grub_uint32_t                   sit_blkaddr;
   grub_uint32_t                   nat_blkaddr;
@@ -340,6 +343,9 @@ struct grub_f2fs_data
   grub_uint32_t                   blocks_per_seg;
   grub_uint32_t                   cp_blkaddr;
   grub_uint32_t                   nat_blkaddr;
+  grub_uint32_t                   ssa_blkaddr;
+  grub_uint32_t                   main_blkaddr;
+  grub_uint64_t                   main_end_blkaddr;
 
   struct grub_f2fs_nat_journal    nat_j;
   char                            *nat_bitmap;
@@ -497,19 +503,56 @@ static void *
 nat_bitmap_ptr (struct grub_f2fs_data *data, grub_uint32_t *nat_bitmap_size)
 {
   struct grub_f2fs_checkpoint *ckpt = &data->ckpt;
+  grub_uint32_t crc_offset = grub_le_to_cpu32 (ckpt->checksum_offset);
+  grub_uint32_t nat_size = grub_le_to_cpu32 (ckpt->nat_ver_bitmap_bytesize);
+  grub_uint32_t sit_size = grub_le_to_cpu32 (ckpt->sit_ver_bitmap_bytesize);
+  grub_uint64_t expected_nat_size;
+  grub_uint64_t expected_sit_size;
   grub_uint32_t offset;
-  *nat_bitmap_size = MAX_NAT_BITMAP_SIZE;
+  grub_uint8_t *bitmap = ckpt->sit_nat_version_bitmap;
+
+  expected_nat_size = ((grub_uint64_t)
+    grub_le_to_cpu32 (data->sblock.segment_count_nat) / 2 *
+    data->blocks_per_seg) / BITS_PER_BYTE;
+  expected_sit_size = ((grub_uint64_t)
+    grub_le_to_cpu32 (data->sblock.segment_count_sit) / 2 *
+    data->blocks_per_seg) / BITS_PER_BYTE;
+  if (nat_size != expected_nat_size || sit_size != expected_sit_size)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid F2FS checkpoint bitmap size");
+      return NULL;
+    }
+
+  if (CKPT_FLAG_SET (ckpt, CP_LARGE_NAT_BITMAP_FLAG))
+    {
+      if (crc_offset != CP_MIN_CHKSUM_OFFSET ||
+          (grub_uint64_t) sizeof (grub_uint32_t) + nat_size + sit_size >
+          F2FS_BLKSIZE - CP_MIN_CHKSUM_OFFSET)
+        {
+          grub_error (GRUB_ERR_BAD_FS,
+                      "invalid F2FS large NAT bitmap layout");
+          return NULL;
+        }
+
+      *nat_bitmap_size = nat_size;
+      return bitmap + sizeof (grub_uint32_t);
+    }
 
   if (grub_le_to_cpu32 (data->sblock.cp_payload) > 0)
-    return ckpt->sit_nat_version_bitmap;
+    offset = 0;
+  else
+    offset = sit_size;
 
-  offset = grub_le_to_cpu32 (ckpt->sit_ver_bitmap_bytesize);
-  if (offset >= MAX_NAT_BITMAP_SIZE)
-     return NULL;
+  if ((grub_uint64_t) offset + nat_size > MAX_NAT_BITMAP_SIZE ||
+      (crc_offset >= CP_MIN_CHKSUM_OFFSET + offset &&
+       crc_offset < CP_MIN_CHKSUM_OFFSET + offset + nat_size))
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid F2FS NAT bitmap layout");
+      return NULL;
+    }
 
-  *nat_bitmap_size = *nat_bitmap_size - offset;
-
-  return ckpt->sit_nat_version_bitmap + offset;
+  *nat_bitmap_size = nat_size;
+  return bitmap + offset;
 }
 
 static grub_uint32_t
@@ -530,16 +573,22 @@ grub_f2fs_block_read (struct grub_f2fs_data *data, grub_uint32_t blkaddr,
                          0, F2FS_BLKSIZE, buf);
 }
 
-/* CRC32 */
-static grub_uint32_t
-grub_f2fs_cal_crc32 (const void *buf, const grub_uint32_t len)
+static int
+grub_f2fs_is_valid_main_blkaddr (struct grub_f2fs_data *data,
+                                  grub_uint32_t blkaddr)
 {
-  grub_uint32_t crc = F2FS_SUPER_MAGIC;
-  unsigned char *p = (unsigned char *)buf;
-  grub_uint32_t tmp = len;
+  return blkaddr >= data->main_blkaddr &&
+         (grub_uint64_t) blkaddr < data->main_end_blkaddr;
+}
+
+static grub_uint32_t
+grub_f2fs_crc32_update (grub_uint32_t crc, const void *buf,
+                        grub_uint32_t len)
+{
+  const grub_uint8_t *p = buf;
   int i;
 
-  while (tmp--)
+  while (len--)
     {
       crc ^= *p++;
       for (i = 0; i < 8; i++)
@@ -547,6 +596,13 @@ grub_f2fs_cal_crc32 (const void *buf, const grub_uint32_t len)
     }
 
   return crc;
+}
+
+/* CRC32 */
+static grub_uint32_t
+grub_f2fs_cal_crc32 (const void *buf, const grub_uint32_t len)
+{
+  return grub_f2fs_crc32_update (F2FS_SUPER_MAGIC, buf, len);
 }
 
 static int
@@ -557,6 +613,31 @@ grub_f2fs_crc_valid (grub_uint32_t blk_crc, void *buf, const grub_uint32_t len)
   cal_crc = grub_f2fs_cal_crc32 (buf, len);
 
   return (cal_crc == blk_crc) ? 1 : 0;
+}
+
+static int
+grub_f2fs_checkpoint_crc_valid (struct grub_f2fs_checkpoint *ckpt)
+{
+  grub_uint32_t crc_offset = grub_le_to_cpu32 (ckpt->checksum_offset);
+  grub_uint32_t stored_crc;
+  grub_uint32_t crc;
+
+  if (crc_offset < CP_MIN_CHKSUM_OFFSET || crc_offset > CP_CHKSUM_OFFSET)
+    return 0;
+
+  grub_memcpy (&stored_crc, (grub_uint8_t *) ckpt + crc_offset,
+               sizeof (stored_crc));
+  stored_crc = grub_le_to_cpu32 (stored_crc);
+
+  crc = grub_f2fs_cal_crc32 (ckpt, crc_offset);
+  if (crc_offset < CP_CHKSUM_OFFSET)
+    crc = grub_f2fs_crc32_update (crc,
+                                  (grub_uint8_t *) ckpt + crc_offset +
+                                  sizeof (stored_crc),
+                                  F2FS_BLKSIZE - crc_offset -
+                                  sizeof (stored_crc));
+
+  return crc == stored_crc;
 }
 
 static int
@@ -578,6 +659,26 @@ static int
 grub_f2fs_sanity_check_sb (struct grub_f2fs_superblock *sb)
 {
   grub_uint32_t log_sectorsize, log_sectors_per_block;
+  grub_uint32_t blocks_per_seg = 1U << F2FS_LOG_BLKS_PER_SEG;
+  grub_uint32_t segment_count = grub_le_to_cpu32 (sb->segment_count);
+  grub_uint32_t segment_count_ckpt =
+    grub_le_to_cpu32 (sb->segment_count_ckpt);
+  grub_uint32_t segment_count_sit =
+    grub_le_to_cpu32 (sb->segment_count_sit);
+  grub_uint32_t segment_count_nat =
+    grub_le_to_cpu32 (sb->segment_count_nat);
+  grub_uint32_t segment_count_ssa =
+    grub_le_to_cpu32 (sb->segment_count_ssa);
+  grub_uint32_t segment_count_main =
+    grub_le_to_cpu32 (sb->segment_count_main);
+  grub_uint64_t segment0 = grub_le_to_cpu32 (sb->segment0_blkaddr);
+  grub_uint64_t cp = grub_le_to_cpu32 (sb->cp_blkaddr);
+  grub_uint64_t sit = grub_le_to_cpu32 (sb->sit_blkaddr);
+  grub_uint64_t nat = grub_le_to_cpu32 (sb->nat_blkaddr);
+  grub_uint64_t ssa = grub_le_to_cpu32 (sb->ssa_blkaddr);
+  grub_uint64_t main = grub_le_to_cpu32 (sb->main_blkaddr);
+  grub_uint64_t main_end;
+  grub_uint64_t segment_end;
 
   if (sb->magic != grub_cpu_to_le32_compile_time (F2FS_SUPER_MAGIC))
     return -1;
@@ -585,12 +686,7 @@ grub_f2fs_sanity_check_sb (struct grub_f2fs_superblock *sb)
   if (sb->log_blocksize != grub_cpu_to_le32_compile_time (F2FS_BLK_BITS))
     return -1;
 
-  /*
-   * Bound log_blocks_per_seg so the "1 << log_blocks_per_seg" shift in
-   * grub_f2fs_mount() cannot invoke undefined behaviour or yield a zero
-   * segment size; the value is otherwise trusted.
-   */
-  if (grub_le_to_cpu32 (sb->log_blocks_per_seg) > F2FS_MAX_LOG_BLKS_PER_SEG)
+  if (grub_le_to_cpu32 (sb->log_blocks_per_seg) != F2FS_LOG_BLKS_PER_SEG)
     return -1;
 
   log_sectorsize = grub_le_to_cpu32 (sb->log_sectorsize);
@@ -603,6 +699,22 @@ grub_f2fs_sanity_check_sb (struct grub_f2fs_superblock *sb)
     return -1;
 
   if (log_sectors_per_block + log_sectorsize != F2FS_BLK_BITS)
+    return -1;
+
+  if (segment_count_ckpt < F2FS_CP_PACKS || segment_count_sit == 0 ||
+      segment_count_nat == 0 || segment_count_ssa == 0 ||
+      segment_count_main == 0 || (segment_count_sit & 1) ||
+      (segment_count_nat & 1))
+    return -1;
+
+  main_end = main + (grub_uint64_t) segment_count_main * blocks_per_seg;
+  segment_end = segment0 + (grub_uint64_t) segment_count * blocks_per_seg;
+  if (segment0 != cp ||
+      cp + (grub_uint64_t) segment_count_ckpt * blocks_per_seg != sit ||
+      sit + (grub_uint64_t) segment_count_sit * blocks_per_seg != nat ||
+      nat + (grub_uint64_t) segment_count_nat * blocks_per_seg != ssa ||
+      ssa + (grub_uint64_t) segment_count_ssa * blocks_per_seg != main ||
+      main_end > segment_end || main_end > (1ULL << 32))
     return -1;
 
   return 0;
@@ -622,6 +734,37 @@ grub_f2fs_read_sb (struct grub_f2fs_data *data, grub_disk_addr_t offset)
   return grub_f2fs_sanity_check_sb (&data->sblock);
 }
 
+static int
+grub_f2fs_checkpoint_sane (struct grub_f2fs_data *data,
+                            struct grub_f2fs_checkpoint *ckpt)
+{
+  grub_uint32_t cp_blocks =
+    grub_le_to_cpu32 (ckpt->cp_pack_total_block_count);
+  grub_uint32_t start_sum = grub_le_to_cpu32 (ckpt->cp_pack_start_sum);
+  grub_uint32_t cp_payload = grub_le_to_cpu32 (data->sblock.cp_payload);
+
+  if (!grub_f2fs_checkpoint_crc_valid (ckpt) ||
+      cp_blocks <= F2FS_CP_PACKS || cp_blocks > data->blocks_per_seg ||
+      (grub_uint64_t) start_sum < (grub_uint64_t) cp_payload + 1 ||
+      start_sum >= cp_blocks)
+    return 0;
+
+  if (CKPT_FLAG_SET (ckpt, CP_LARGE_NAT_BITMAP_FLAG) &&
+      grub_le_to_cpu32 (ckpt->checksum_offset) != CP_MIN_CHKSUM_OFFSET)
+    return 0;
+
+  if (!CKPT_FLAG_SET (ckpt, CP_COMPACT_SUM_FLAG))
+    {
+      grub_uint32_t summaries = CKPT_FLAG_SET (ckpt, CP_UMOUNT_FLAG) ?
+        NR_CURSEG_TYPE : NR_CURSEG_DATA_TYPE;
+
+      if (cp_blocks <= summaries)
+        return 0;
+    }
+
+  return 1;
+}
+
 static void *
 validate_checkpoint (struct grub_f2fs_data *data, grub_uint32_t cp_addr,
                      grub_uint64_t *version)
@@ -629,8 +772,7 @@ validate_checkpoint (struct grub_f2fs_data *data, grub_uint32_t cp_addr,
   grub_uint32_t *cp_page_1, *cp_page_2;
   struct grub_f2fs_checkpoint *cp_block;
   grub_uint64_t cur_version = 0, pre_version = 0;
-  grub_uint32_t crc = 0;
-  grub_uint32_t crc_offset;
+  grub_uint32_t cp_blocks;
   grub_err_t err;
 
   /* Read the 1st cp block in this CP pack. */
@@ -643,34 +785,26 @@ validate_checkpoint (struct grub_f2fs_data *data, grub_uint32_t cp_addr,
     goto invalid_cp1;
 
   cp_block = (struct grub_f2fs_checkpoint *)cp_page_1;
-  crc_offset = grub_le_to_cpu32 (cp_block->checksum_offset);
-  if (crc_offset != CHECKSUM_OFFSET)
-    goto invalid_cp1;
-
-  crc = grub_le_to_cpu32 (*(cp_page_1 + U32_CHECKSUM_OFFSET));
-  if (!grub_f2fs_crc_valid (crc, cp_block, crc_offset))
+  if (!grub_f2fs_checkpoint_sane (data, cp_block))
     goto invalid_cp1;
 
   pre_version = grub_le_to_cpu64 (cp_block->checkpoint_ver);
+  cp_blocks = grub_le_to_cpu32 (cp_block->cp_pack_total_block_count);
 
   /* Read the 2nd cp block in this CP pack. */
   cp_page_2 = grub_malloc (F2FS_BLKSIZE);
   if (!cp_page_2)
     goto invalid_cp1;
 
-  cp_addr += grub_le_to_cpu32 (cp_block->cp_pack_total_block_count) - 1;
+  cp_addr += cp_blocks - 1;
 
   err = grub_f2fs_block_read (data, cp_addr, cp_page_2);
   if (err)
     goto invalid_cp2;
 
   cp_block = (struct grub_f2fs_checkpoint *)cp_page_2;
-  crc_offset = grub_le_to_cpu32 (cp_block->checksum_offset);
-  if (crc_offset != CHECKSUM_OFFSET)
-    goto invalid_cp2;
-
-  crc = grub_le_to_cpu32 (*(cp_page_2 + U32_CHECKSUM_OFFSET));
-  if (!grub_f2fs_crc_valid (crc, cp_block, crc_offset))
+  if (!grub_f2fs_checkpoint_sane (data, cp_block) ||
+      grub_le_to_cpu32 (cp_block->cp_pack_total_block_count) != cp_blocks)
     goto invalid_cp2;
 
   cur_version = grub_le_to_cpu64 (cp_block->checkpoint_ver);
@@ -768,7 +902,7 @@ get_nat_journal (struct grub_f2fs_data *data)
 
 static grub_err_t
 get_blkaddr_from_nat_journal (struct grub_f2fs_data *data, grub_uint32_t nid,
-                              grub_uint32_t *blkaddr)
+                               grub_uint32_t *blkaddr, int *found)
 {
   grub_uint16_t n = grub_le_to_cpu16 (data->nat_j.n_nats);
   grub_uint16_t i;
@@ -777,11 +911,14 @@ get_blkaddr_from_nat_journal (struct grub_f2fs_data *data, grub_uint32_t nid,
     return grub_error (GRUB_ERR_BAD_FS,
                        "invalid number of nat journal entries");
 
+  *found = 0;
+
   for (i = 0; i < n; i++)
     {
       if (grub_le_to_cpu32 (data->nat_j.entries[i].nid) == nid)
         {
           *blkaddr = grub_le_to_cpu32 (data->nat_j.entries[i].ne.block_addr);
+          *found = 1;
           break;
         }
     }
@@ -794,15 +931,17 @@ get_node_blkaddr (struct grub_f2fs_data *data, grub_uint32_t nid)
 {
   struct grub_f2fs_nat_block *nat_block;
   grub_uint32_t seg_off, block_off, entry_off, block_addr;
+  grub_uint64_t block_addr64;
   grub_uint32_t blkaddr = 0;
   grub_err_t err;
+  int found;
   int result_bit;
 
-  err = get_blkaddr_from_nat_journal (data, nid, &blkaddr);
+  err = get_blkaddr_from_nat_journal (data, nid, &blkaddr, &found);
   if (err != GRUB_ERR_NONE)
     return 0;
 
-  if (blkaddr)
+  if (found)
     return blkaddr;
 
   nat_block = grub_malloc (F2FS_BLKSIZE);
@@ -813,19 +952,28 @@ get_node_blkaddr (struct grub_f2fs_data *data, grub_uint32_t nid)
   entry_off = nid % NAT_ENTRY_PER_BLOCK;
 
   seg_off = block_off / data->blocks_per_seg;
-  block_addr = data->nat_blkaddr +
-        ((seg_off * data->blocks_per_seg) << 1) +
+  block_addr64 = (grub_uint64_t) data->nat_blkaddr +
+        ((grub_uint64_t) seg_off * data->blocks_per_seg << 1) +
         (block_off & (data->blocks_per_seg - 1));
 
   result_bit = grub_f2fs_test_bit (block_off, data->nat_bitmap,
                                    data->nat_bitmap_size);
   if (result_bit > 0)
-    block_addr += data->blocks_per_seg;
+    block_addr64 += data->blocks_per_seg;
   else if (result_bit == -1)
     {
+      grub_error (GRUB_ERR_BAD_FS, "F2FS node id is out of range");
       grub_free (nat_block);
       return 0;
     }
+
+  if (block_addr64 < data->nat_blkaddr || block_addr64 >= data->ssa_blkaddr)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid F2FS NAT block address");
+      grub_free (nat_block);
+      return 0;
+    }
+  block_addr = (grub_uint32_t) block_addr64;
 
   err = grub_f2fs_block_read (data, block_addr, nat_block);
   if (err)
@@ -995,7 +1143,9 @@ grub_f2fs_read_node (struct grub_f2fs_data *data,
   grub_uint32_t blkaddr;
 
   blkaddr = get_node_blkaddr (data, nid);
-  if (!blkaddr)
+  if (!blkaddr || blkaddr == F2FS_NEW_ADDR ||
+      blkaddr == F2FS_COMPRESS_ADDR ||
+      !grub_f2fs_is_valid_main_blkaddr (data, blkaddr))
     {
       /*
        * A node id that resolves to block address 0 (NULL_ADDR) has no node
@@ -1036,8 +1186,13 @@ grub_f2fs_mount (grub_disk_t disk)
   data->root_ino = grub_le_to_cpu32 (data->sblock.root_ino);
   data->cp_blkaddr = grub_le_to_cpu32 (data->sblock.cp_blkaddr);
   data->nat_blkaddr = grub_le_to_cpu32 (data->sblock.nat_blkaddr);
+  data->ssa_blkaddr = grub_le_to_cpu32 (data->sblock.ssa_blkaddr);
+  data->main_blkaddr = grub_le_to_cpu32 (data->sblock.main_blkaddr);
   data->blocks_per_seg = 1U <<
     grub_le_to_cpu32 (data->sblock.log_blocks_per_seg);
+  data->main_end_blkaddr = data->main_blkaddr +
+    (grub_uint64_t) grub_le_to_cpu32 (data->sblock.segment_count_main) *
+    data->blocks_per_seg;
 
   err = grub_f2fs_read_cp (data);
   if (err)
@@ -1141,6 +1296,15 @@ grub_f2fs_get_block (grub_fshelp_node_t node, grub_disk_addr_t block_ofs)
   if (grub_f2fs_get_block_addr (node, block_ofs, &block_addr))
     return -1;
 
+  if (block_addr == F2FS_NULL_ADDR || block_addr == F2FS_NEW_ADDR)
+    return 0;
+  if (block_addr == F2FS_COMPRESS_ADDR ||
+      !grub_f2fs_is_valid_main_blkaddr (node->data, block_addr))
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid F2FS data block address");
+      return -1;
+    }
+
   return block_addr;
 }
 
@@ -1152,6 +1316,9 @@ grub_f2fs_read_data_block (struct grub_f2fs_data *data,
                            void *read_hook_data)
 {
   grub_err_t err;
+
+  if (!grub_f2fs_is_valid_main_blkaddr (data, block_addr))
+    return grub_error (GRUB_ERR_BAD_FS, "invalid F2FS data block address");
 
   data->disk->read_hook = read_hook;
   data->disk->read_hook_data = read_hook_data;
@@ -1324,10 +1491,8 @@ grub_f2fs_read_compressed_cluster (grub_fshelp_node_t node,
 
   cluster_size = info->cluster_size * F2FS_BLKSIZE;
   if (nr_cpages == 0)
-    {
-      grub_memset (dest, 0, cluster_size);
-      return GRUB_ERR_NONE;
-    }
+    return grub_error (GRUB_ERR_BAD_FS,
+                       "invalid empty F2FS compressed cluster");
 
   compressed_size = nr_cpages * F2FS_BLKSIZE;
   compressed = grub_malloc (compressed_size);
@@ -1610,6 +1775,7 @@ grub_f2fs_check_dentries (struct grub_f2fs_dir_iter_ctx *ctx)
       int name_len;
       int ret;
       int sz;
+      unsigned int slots;
 
       if (grub_f2fs_test_bit_le (i, ctx->bitmap) == 0)
         {
@@ -1620,13 +1786,14 @@ grub_f2fs_check_dentries (struct grub_f2fs_dir_iter_ctx *ctx)
       ftype = ctx->dentry[i].file_type;
       name_len = grub_le_to_cpu16 (ctx->dentry[i].name_len);
 
-      /*
-       * A zero name_len would leave "i" unchanged below ((0 + F2FS_SLOT_LEN
-       * - 1) / F2FS_SLOT_LEN == 0), spinning forever on the same bitmap slot
-       * for a crafted image that has the bit set but no real name stored.
-       */
-      if (name_len == 0 || name_len >= F2FS_NAME_LEN)
-        return 0;
+      slots = ((unsigned int) name_len + F2FS_SLOT_LEN - 1) /
+              F2FS_SLOT_LEN;
+      if (name_len == 0 || name_len > F2FS_NAME_LEN ||
+          slots > (unsigned int) (ctx->max - i))
+        {
+          grub_error (GRUB_ERR_BAD_FS, "invalid F2FS directory entry");
+          return 0;
+        }
 
       if (grub_add (name_len, 1, &sz))
 	{
@@ -1663,7 +1830,7 @@ grub_f2fs_check_dentries (struct grub_f2fs_dir_iter_ctx *ctx)
       if (ret)
         return 1;
 
-      i += (name_len + F2FS_SLOT_LEN - 1) / F2FS_SLOT_LEN;
+      i += slots;
     }
 
     return 0;
@@ -1773,8 +1940,8 @@ grub_f2fs_iterate_dir (grub_fshelp_node_t dir,
 
       ret = grub_f2fs_check_dentries (&ctx);
       grub_free (buf);
-      if (ret)
-        return 1;
+      if (ret || grub_errno)
+        return ret;
 
       fpos += F2FS_BLKSIZE;
     }
@@ -1942,10 +2109,11 @@ grub_f2fs_utf16_to_utf8 (grub_uint16_t *in_buf_le)
   if (!out_buf)
     return NULL;
 
-  while (*in_buf_le != 0 && len < MAX_VOLUME_NAME) {
-    in_buf[len] = grub_le_to_cpu16 (in_buf_le[len]);
-    len++;
-  }
+  while (len < MAX_VOLUME_NAME && in_buf_le[len] != 0)
+    {
+      in_buf[len] = grub_le_to_cpu16 (in_buf_le[len]);
+      len++;
+    }
 
   *grub_utf16_to_utf8 (out_buf, in_buf, len) = '\0';
 
