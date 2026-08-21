@@ -79,6 +79,13 @@ constexpr UINT BACKEND_VC_TRUECRYPT = 0x1;
 constexpr UINT BACKEND_VC_HIDDEN = 0x2;
 constexpr UINT BACKEND_VC_BACKUP = 0x4;
 
+/* Filesystem name encodings, matching ROVER_FS_ENCODING_*. */
+constexpr UINT BACKEND_FS_ENCODING_UTF8 = 65001;
+constexpr UINT BACKEND_FS_ENCODING_GBK = 936;
+constexpr UINT BACKEND_FS_ENCODING_BIG5 = 950;
+constexpr UINT BACKEND_FS_ENCODING_SHIFT_JIS = 932;
+constexpr UINT BACKEND_FS_ENCODING_EUC_KR = 51949;
+
 /* hash_file algorithms; result.hash[] is indexed by the bit number.  */
 constexpr UINT BACKEND_HASH_MD5 = 1u << 0;
 constexpr UINT BACKEND_HASH_SHA1 = 1u << 1;
@@ -207,6 +214,9 @@ struct backend_support
 };
 
 backend_support backend_get_support (void);
+
+/* Change byte-oriented filesystem name decoding on the backend thread. */
+void backend_set_fs_char_encoding (UINT encoding);
 
 /* Start the backend thread; results are posted to NOTIFY.  With
    NO_WINDISK the physical drives are left unregistered, so nothing in

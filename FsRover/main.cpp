@@ -90,7 +90,23 @@ constexpr int IDM_HELP_ABOUT = 221;
 constexpr int IDM_DOKAN_INSTALL = 222;
 constexpr int IDM_HELP_SHORTCUTS = 223;
 constexpr int IDM_HELP_DOC = 224;
+constexpr int IDM_FS_ENCODING_BASE = 230;
 constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
+
+struct fs_encoding
+{
+	const wchar_t *name;
+	UINT code_page;
+};
+
+constexpr fs_encoding FS_ENCODINGS[] =
+{
+	{ L"UTF-8", BACKEND_FS_ENCODING_UTF8 },
+	{ L"GBK", BACKEND_FS_ENCODING_GBK },
+	{ L"Big5", BACKEND_FS_ENCODING_BIG5 },
+	{ L"Shift-JIS", BACKEND_FS_ENCODING_SHIFT_JIS },
+	{ L"EUC-KR", BACKEND_FS_ENCODING_EUC_KR },
+};
 
 constexpr int IDM_EXTRACT = 1;
 constexpr int IDM_MOUNT = 2;
@@ -184,10 +200,12 @@ HWND g_status;
 HWND g_progress;
 HMENU g_menu_file;	/* File popup: Refresh grays while extracting */
 HMENU g_menu_settings;	/* Settings popup: toggles refreshed on open */
+HMENU g_menu_encoding;	/* File name encoding radio submenu */
 HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
 
 /* Settings toggle, copied into each extract task when it starts.  */
 bool g_preserve_times = true;
+UINT g_fs_encoding = BACKEND_FS_ENCODING_UTF8;
 
 /* Splitter state.  The width is kept in 96-DPI units like every other
    layout metric, so a move to another monitor rescales it for free.  */
@@ -439,6 +457,36 @@ refresh (void)
 	set_status (IDS_STATUS_ENUM);
 	if (!g_path.empty ())
 		navigate (g_path);
+}
+
+void
+set_fs_encoding (UINT encoding)
+{
+	std::string root;
+
+	if (g_extracting || encoding == g_fs_encoding)
+		return;
+	backend_set_fs_char_encoding (encoding);
+	g_fs_encoding = encoding;
+
+	/* Paths below the device root may themselves have been decoded with the
+	   old setting.  Restart at the stable device root and discard history
+	   entries that can no longer be resolved. */
+	if (!g_path.empty ())
+	{
+		size_t close = g_path.find (')');
+		if (close != std::string::npos)
+			root = g_path.substr (0, close + 1);
+	}
+	g_hist.clear ();
+	g_hist_pos = -1;
+	g_hist_seq = 0;
+	g_path = std::move (root);
+	g_entries.clear ();
+	g_rows.clear ();
+	ListView_SetItemCountEx (g_list, 0, 0);
+	SetWindowTextW (g_address, widen (g_path).c_str ());
+	refresh ();
 }
 
 namespace
@@ -1710,6 +1758,13 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (sel, MF_STRING, IDM_SEL_INVERT, res_str (IDS_MENU_SEL_INVERT).c_str ());
 
 	g_menu_settings = CreatePopupMenu ();
+	g_menu_encoding = CreatePopupMenu ();
+	for (int i = 0; i < (int) ARRAYSIZE (FS_ENCODINGS); i++)
+		AppendMenuW (g_menu_encoding, MF_STRING, IDM_FS_ENCODING_BASE + i,
+			FS_ENCODINGS[i].name);
+	AppendMenuW (g_menu_settings, MF_POPUP, (UINT_PTR) g_menu_encoding,
+		res_str (IDS_MENU_FS_ENCODING).c_str ());
+	AppendMenuW (g_menu_settings, MF_SEPARATOR, 0, nullptr);
 	/* Check mark set by on_menu_popup from g_preserve_times.  */
 	AppendMenuW (g_menu_settings, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
 
@@ -1748,6 +1803,18 @@ on_menu_popup (HMENU menu)
 	if (menu == g_menu_settings)
 	{
 		CheckMenuItem (menu, IDM_FILE_TIMESTAMPS, g_preserve_times ? MF_CHECKED : MF_UNCHECKED);
+		EnableMenuItem (menu, 0, MF_BYPOSITION | (g_extracting ? MF_GRAYED : MF_ENABLED));
+		return;
+	}
+	if (menu == g_menu_encoding)
+	{
+		int selected = IDM_FS_ENCODING_BASE;
+		for (int i = 0; i < (int) ARRAYSIZE (FS_ENCODINGS); i++)
+			if (FS_ENCODINGS[i].code_page == g_fs_encoding)
+				selected += i;
+		CheckMenuRadioItem (menu, IDM_FS_ENCODING_BASE,
+			IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (FS_ENCODINGS) - 1,
+			selected, MF_BYCOMMAND);
 		return;
 	}
 	if (menu != g_menu_dokan)
@@ -1875,6 +1942,13 @@ layout (HWND wnd)
 void
 on_command (int id)
 {
+	if (id >= IDM_FS_ENCODING_BASE
+		&& id < IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (FS_ENCODINGS))
+	{
+		if (!g_extracting)
+			set_fs_encoding (FS_ENCODINGS[id - IDM_FS_ENCODING_BASE].code_page);
+		return;
+	}
 	if (id >= IDM_DOKAN_UNMOUNT_BASE)
 	{
 		dokan_mount *m = dokanfs_get (

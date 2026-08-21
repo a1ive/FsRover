@@ -41,6 +41,8 @@
 #include <grub/types.h>
 #include <grub/fshelp.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE("GPLv3+");
 
 #define HPFS_SECTOR_SIZE	512U
@@ -844,7 +846,7 @@ grub_hpfs_iterate_dnode(struct grub_hpfs_dir_iter *it, grub_uint32_t dno,
 		const grub_uint8_t *de = dnode + p;
 		struct grub_fshelp_node *node;
 		enum grub_fshelp_filetype type;
-		char name[256];
+		char *name;
 		grub_uint32_t namelen, down = 0, fnode_sec, size;
 		grub_uint8_t flags, attrs;
 
@@ -877,8 +879,13 @@ grub_hpfs_iterate_dnode(struct grub_hpfs_dir_iter *it, grub_uint32_t dno,
 		if (flags & (HPFS_DE_FLAG_FIRST | HPFS_DE_FLAG_LAST))
 			continue;
 
-		grub_memcpy(name, de + HPFS_DE_NAME, namelen);
-		name[namelen] = '\0';
+		name = grub_fs_bytes_to_utf8 ((const char *) de + HPFS_DE_NAME,
+			namelen, grub_fs_char_encoding);
+		if (!name)
+		{
+			ret = 1;
+			goto out;
+		}
 		fnode_sec = hpfs_get32(de + HPFS_DE_FNODE);
 		size = hpfs_get32(de + HPFS_DE_FILE_SIZE);
 
@@ -893,6 +900,7 @@ grub_hpfs_iterate_dnode(struct grub_hpfs_dir_iter *it, grub_uint32_t dno,
 		node = grub_zalloc(sizeof(*node));
 		if (!node)
 		{
+			grub_free(name);
 			ret = 1;
 			goto out;
 		}
@@ -903,6 +911,7 @@ grub_hpfs_iterate_dnode(struct grub_hpfs_dir_iter *it, grub_uint32_t dno,
 
 		ret = it->hook(name, type | GRUB_FSHELP_CASE_INSENSITIVE, node,
 			it->hook_data);
+		grub_free(name);
 		if (ret)
 			goto out;
 	}
@@ -991,6 +1000,13 @@ grub_hpfs_read_symlink(grub_fshelp_node_t node)
 	target = grub_hpfs_get_ea(node->data, fnode, "SYMLINK", &len);
 	if (!target && grub_errno == GRUB_ERR_NONE)
 		grub_error(GRUB_ERR_BAD_FS, "hpfs: symlink target not found");
+	if (target)
+	{
+		char *decoded = grub_fs_bytes_to_utf8 (target, len,
+			grub_fs_char_encoding);
+		grub_free(target);
+		target = decoded;
+	}
 
 out:
 	grub_free(fnode);
@@ -1105,7 +1121,8 @@ grub_hpfs_label(grub_device_t device, char **label)
 	if (!data)
 		return grub_errno;
 
-	*label = grub_strdup(data->label);
+	*label = grub_fs_bytes_to_utf8(data->label, grub_strlen(data->label),
+		grub_fs_char_encoding);
 	grub_hpfs_unmount(data);
 	return grub_errno;
 }

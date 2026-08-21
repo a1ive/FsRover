@@ -29,6 +29,8 @@
 
 #include <mscab.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 /* CFHEADER flags */
@@ -273,6 +275,8 @@ grub_cab_mount (grub_disk_t disk)
 		struct cab_item *item = &data->items[i];
 		grub_uint8_t fh[16];
 		grub_size_t got, j, k;
+		grub_uint16_t attrs;
+		char *decoded;
 
 		if (grub_disk_read (disk, 0, pos, sizeof (fh), fh))
 			goto fail_data;
@@ -282,8 +286,8 @@ grub_cab_mount (grub_disk_t disk)
 		item->mtime = cab_dos_time (((grub_uint32_t)
 					     cab_get16 (fh + 10) << 16)
 					    | cab_get16 (fh + 12));
-		item->is_dir = (cab_get16 (fh + 14) & CAB_ATTR_DIRECTORY)
-			       != 0;
+		attrs = cab_get16 (fh + 14);
+		item->is_dir = (attrs & CAB_ATTR_DIRECTORY) != 0;
 		data->num_items = i + 1;
 		pos += 16;
 
@@ -299,12 +303,13 @@ grub_cab_mount (grub_disk_t disk)
 			goto fail_data_bad;
 		pos += j + 1;
 
-		item->name = grub_malloc (j + 1);
-		if (!item->name)
+		decoded = grub_fs_bytes_to_utf8 ((const char *) name_buf, j,
+			(attrs & CAB_ATTR_NAME_IS_UTF) ? GRUB_FS_CHAR_ENCODING_UTF8
+						      : grub_fs_char_encoding);
+		if (!decoded)
 			goto fail_data;
-		grub_memcpy (item->name, name_buf, j);
-		item->name[j] = '\0';
-		for (k = 0; k < j; k++)
+		item->name = decoded;
+		for (k = 0; item->name[k]; k++)
 			if (item->name[k] == '\\')
 				item->name[k] = '/';
 

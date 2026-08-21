@@ -27,7 +27,8 @@
  *  (ARJ's own coder); both decoders live in grub-core\lib\7z\LzhDecoder.c.
  *  Methods 8 and 9 carry no data.  Garbled (password protected) entries,
  *  and entries continued in another volume, are rejected at open time.
- *  Names are stored in an OEM code page which is not translated here.
+ *  Names are stored in an OEM code page and decoded with the selected
+ *  filesystem source encoding.
  */
 
 #include <grub/types.h>
@@ -41,6 +42,8 @@
 
 #include <7zCrc.h>
 #include <LzhDecoder.h>
+
+#include "fscharset.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -379,9 +382,17 @@ grub_arj_mount (grub_disk_t disk)
 					    | ARJ_F_EXTFILE)) != 0;
 
 		pos = p[0];
-		item.name = arj_read_string (p, r.block_size, &pos);
+		{
+			char *raw_name = arj_read_string (p, r.block_size, &pos);
+
+			if (!raw_name)
+				break;
+			item.name = grub_fs_bytes_to_utf8 (raw_name,
+				grub_strlen (raw_name), grub_fs_char_encoding);
+			grub_free (raw_name);
+		}
 		if (!item.name)
-			break;
+			goto fail_data;
 		comment = arj_read_string (p, r.block_size, &pos);
 		grub_free (comment);
 

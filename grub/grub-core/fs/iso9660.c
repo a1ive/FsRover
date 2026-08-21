@@ -30,6 +30,8 @@
 #include <grub/datetime.h>
 #include <grub/safemath.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define GRUB_ISO9660_FSTYPE_DIR		0040000
@@ -810,6 +812,7 @@ grub_iso9660_iterate_dir (grub_fshelp_node_t dir,
 	char name[MAX_NAMELEN + 1];
 	int nameoffset = offset + sizeof (dirent);
 	struct grub_fshelp_node *node;
+	int standard_name = 0;
 	int sua_off = (sizeof (dirent) + dirent.namelen + 1
 		       - (dirent.namelen % 2));
 	int sua_size = dirent.len - sua_off;
@@ -861,18 +864,41 @@ grub_iso9660_iterate_dir (grub_fshelp_node_t dir,
 	   from the iso9660 filesystem.  */
 	if (!dir->data->joliet && !ctx.filename)
 	  {
-	    char *ptr;
 	    name[dirent.namelen] = '\0';
 	    ctx.filename = grub_strrchr (name, ';');
 	    if (ctx.filename)
 	      *ctx.filename = '\0';
 	    /* ISO9660 names are not case-preserving.  */
 	    ctx.type |= GRUB_FSHELP_CASE_INSENSITIVE;
-	    for (ptr = name; *ptr; ptr++)
-	      *ptr = grub_tolower (*ptr);
-	    if (ptr != name && *(ptr - 1) == '.')
-	      *(ptr - 1) = 0;
+	    if (name[0] && name[grub_strlen (name) - 1] == '.')
+	      name[grub_strlen (name) - 1] = 0;
 	    ctx.filename = name;
+	    standard_name = 1;
+	  }
+
+	/* Plain ISO9660 identifiers and Rock Ridge NM entries are byte strings.
+	   Decode them only after removing the ASCII version suffix: lowercasing
+	   the raw bytes first can corrupt a DBCS trail byte.  */
+	if (!dir->data->joliet && ctx.filename)
+	  {
+	    char *decoded = grub_fs_bytes_to_utf8 (ctx.filename,
+		grub_strlen (ctx.filename), grub_fs_char_encoding);
+	    char *ptr;
+	    if (!decoded)
+	      {
+		if (ctx.filename_alloc)
+		  grub_free (ctx.filename);
+		grub_free (ctx.symlink);
+		grub_free (node);
+		return 0;
+	      }
+	    if (ctx.filename_alloc)
+	      grub_free (ctx.filename);
+	    ctx.filename = decoded;
+	    ctx.filename_alloc = 1;
+	    if (standard_name)
+	      for (ptr = ctx.filename; *ptr; ptr++)
+		*ptr = grub_tolower (*ptr);
 	  }
 
         if (dir->data->joliet && !ctx.filename)
@@ -1162,14 +1188,18 @@ grub_iso9660_label (grub_device_t device, char **label)
       if (data->joliet)
         *label = grub_iso9660_convert_string (data->voldesc.volname, 16);
       else
-        *label = grub_strndup ((char *) data->voldesc.volname, 32);
+	{
+	  grub_size_t len = sizeof (data->voldesc.volname);
+	  while (len && data->voldesc.volname[len - 1] == ' ')
+	    len--;
+	  *label = grub_fs_bytes_to_utf8 ((char *) data->voldesc.volname,
+		len, grub_fs_char_encoding);
+	}
       if (*label)
 	{
-	  char *ptr;
-	  for (ptr = *label; *ptr;ptr++);
-	  ptr--;
-	  while (ptr >= *label && *ptr == ' ')
-	    *ptr-- = 0;
+	  grub_size_t len = grub_strlen (*label);
+	  while (len && (*label)[len - 1] == ' ')
+	    (*label)[--len] = 0;
 	}
 
       grub_free (data);

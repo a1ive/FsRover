@@ -27,7 +27,7 @@
  *  (LZH, 4 KiB .. 64 KiB dictionary).  The older -lh1- / -lh2- / -lh3- and
  *  -lzs- / -lz5- streams use different coders and are rejected at open
  *  time, as they are in the 7-Zip handler.  Names are stored in an OEM
- *  code page which is not translated here.
+ *  code page and decoded with the selected filesystem source encoding.
  */
 
 #include <grub/types.h>
@@ -40,6 +40,8 @@
 #include <grub/dl.h>
 
 #include <LzhDecoder.h>
+
+#include "fscharset.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -438,16 +440,42 @@ lzh_build_name (const struct lzh_header *h)
 				       : (h->base_name ? h->base_name : "");
 	const grub_size_t dl = grub_strlen (dir);
 	const grub_size_t fl = grub_strlen (file);
-	char *s = grub_malloc (dl + fl + 2);
+	char *raw_dir = 0;
+	char *dir_u8 = 0;
+	char *file_u8 = 0;
+	char *s = 0;
+	char *p;
 
+	raw_dir = grub_strndup (dir, dl);
+	if (!raw_dir)
+		goto fail;
+	/* LHA uses 0xFF as the directory separator.  Replace it before
+	   decoding, but leave 0x5C alone because it can be a DBCS trail byte. */
+	for (p = raw_dir; *p; p++)
+		if ((grub_uint8_t) *p == 0xFF)
+			*p = '/';
+	dir_u8 = grub_fs_bytes_to_utf8 (raw_dir, dl, grub_fs_char_encoding);
+	file_u8 = grub_fs_bytes_to_utf8 (file, fl, grub_fs_char_encoding);
+	if (!dir_u8 || !file_u8)
+		goto fail;
+	s = grub_malloc (grub_strlen (dir_u8) + grub_strlen (file_u8) + 2);
 	if (!s)
-		return 0;
-	grub_memcpy (s, dir, dl);
-	s[dl] = '/';
-	grub_memcpy (s + dl + 1, file, fl);
-	s[dl + 1 + fl] = '\0';
+		goto fail;
+	p = grub_stpcpy (s, dir_u8);
+	*p++ = '/';
+	grub_strcpy (p, file_u8);
 	lzh_normalize_name (s);
+	grub_free (raw_dir);
+	grub_free (dir_u8);
+	grub_free (file_u8);
 	return s;
+
+fail:
+	grub_free (raw_dir);
+	grub_free (dir_u8);
+	grub_free (file_u8);
+	grub_free (s);
+	return 0;
 }
 
 static void

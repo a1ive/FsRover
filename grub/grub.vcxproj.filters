@@ -129,6 +129,9 @@
     <ClCompile Include="rover\init.c">
       <Filter>rover</Filter>
     </ClCompile>
+    <ClCompile Include="rover\fscharset.c">
+      <Filter>rover</Filter>
+    </ClCompile>
     <ClCompile Include="rover\misc.c">
       <Filter>rover</Filter>
     </ClCompile>
@@ -712,6 +715,9 @@
       <Filter>grub-core\lib\wimboot</Filter>
     </ClCompile>
     <ClInclude Include="rover\config.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\fscharset.h">
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="rover\rover.h">

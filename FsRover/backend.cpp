@@ -1351,6 +1351,15 @@ backend_get_support (void)
 }
 
 void
+backend_set_fs_char_encoding (UINT encoding)
+{
+	backend_call ([encoding] ()
+	{
+		rover_set_fs_char_encoding (encoding);
+	});
+}
+
+void
 backend_start (HWND notify, bool no_windisk)
 {
 	g_notify = notify;

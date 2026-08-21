@@ -288,7 +288,11 @@ OS/2 High Performance File System.
 Symbolic links are the `SYMLINK` extended attribute written by the Linux driver.
 Bad-sector hotfix remapping is applied on every read.
 
-**Not interpreted:** ACLs, HPFS386 extended permissions, the code page tables.
+Directory names, symbolic-link targets and the boot-sector volume label use the
+selected filename encoding.
+
+**Not interpreted:** ACLs, HPFS386 extended permissions, the on-disk code page
+tables used for native non-ASCII case folding.
 
 #### LynxFS — `lynxfs`
 
@@ -388,6 +392,10 @@ maximum 'bootability' on all systems.
 SUSP / Rock Ridge extensions give long names, POSIX attributes and symbolic
 links; Joliet gives Unicode names.
 
+The filename encoding setting applies to plain ISO 9660 identifiers, Rock Ridge
+names and the primary volume label. Joliet names and labels are always decoded
+from the Unicode representation defined by that extension.
+
 The primary volume descriptor is read from the standard offset, so the later
 sessions of a multi-session disc are not picked up.
 
@@ -447,7 +455,7 @@ limited to the three fixed topologies of the reference decoder.
 **Methods:** 0 (stored), 1–3 (LZH with a 26 624-byte dictionary), 4 (ARJ's own
 coder). Methods 8 and 9 carry no data.
 
-Names are stored in an OEM code page and are not transcoded.
+Names are stored in an OEM code page and use the selected filename encoding.
 
 **Not supported:** garbled (password-protected) entries and entries continued in
 another volume.
@@ -462,6 +470,9 @@ dictionaries up to 21 bits.
 Reading tracks the folder's output position and skips forward; a backwards seek
 re-decodes the folder from its start. Opening an entry builds the decoder but
 decodes nothing, so listing an archive never triggers decompression.
+
+Names carrying the CAB UTF-8 attribute are always decoded as UTF-8; other names
+use the selected filename encoding.
 
 **Not supported:** entries that span cabinets, and folders continued from a
 previous cabinet. Listing a spanned cabinet still works.
@@ -505,7 +516,7 @@ detect by magic — gzip, xz, Zstandard, LZO, LZ4, bzip2 — or none.
 **Methods:** `-lhd-` (directory), `-lh0-` and `-lz4-` (stored), `-lh4-` through
 `-lh7-` (4 KiB – 64 KiB dictionaries).
 
-Names are stored in an OEM code page and are not transcoded.
+Names are stored in an OEM code page and use the selected filename encoding.
 
 **Not supported:** `-lh1-`, `-lh2-`, `-lh3-`, `-lzs-`, `-lz5-`.
 
@@ -527,8 +538,9 @@ For RAR3, the six **standard** VM filters are implemented — E8, E8E9, Itanium,
 RGB, Audio, Delta — identified by code CRC. The general VM interpreter is not
 implemented.
 
-RAR4 names in the compressed UTF-16 encoding are decoded, and `\` is normalised
-to `/`.
+RAR4 names in the compressed UTF-16 encoding, and UTF-8 names marked as Unicode,
+keep their format-defined decoding. Legacy OEM fallback names use the selected
+filename encoding. `\` is normalised to `/` after decoding.
 
 **Not supported:** encrypted archives, multi-volume sets,
 entries of unknown size or unknown method.
@@ -586,6 +598,9 @@ The root mirrors 7-Zip's presentation of a WIM archive: one directory per image
 > Origin: FsRover · Label: first entry name · UUID: no · Timestamps: per-file + volume · Symlinks: none
 
 ZIP and ZIP64, through miniz.
+
+Names carrying ZIP's UTF-8 flag are always decoded as UTF-8. Other names use
+the source encoding selected under **Settings → File name encoding**.
 
 **Methods that can be read:** stored, Deflate.
 
@@ -1026,7 +1041,9 @@ Ghost writes several different payload shapes, all of which are recognised:
   Fast LZ and zlib-compressed block streams are supported.
 - **FAT file backups** are presented as a directory tree, with one top-level
   directory per saved partition. Both the current catalogue records and the
-  older Ghost layout with `0x19` directory records are accepted.
+  older Ghost layout with `0x19` directory records are accepted. FAT long names
+  remain UTF-16; 8.3 fallback names and FAT volume labels use the selected
+  filename encoding.
 - **Filesystem-aware NTFS backups** (GHPR / compression type 10) are rebuilt as
   a sparse NTFS volume from their MFT records, non-resident attribute runlists
   and stored run data. Unstored clusters read as zeros; the regular `ntfs`

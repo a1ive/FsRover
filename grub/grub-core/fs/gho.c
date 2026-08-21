@@ -54,6 +54,8 @@
 #include <grub/ghost.h>
 #include <grub/safemath.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define GHO_SCAN_BUF		(256u << 10)
@@ -124,6 +126,7 @@ struct gho_data
 	grub_uint64_t size;
 	grub_uint8_t comp;
 	grub_uint32_t id;
+	grub_uint32_t encoding;
 	char *label;
 	struct gho_node *root;
 	grub_uint32_t nnodes;
@@ -377,26 +380,37 @@ gho_lfn_name (struct gho_lfn *l)
 
 /* Render the 8.3 name, honouring the two lower-case hint bits Windows
    sets when a name needs no long entry.  */
-static void
-gho_short_name (const grub_uint8_t *e, char *out)
+static char *
+gho_short_name (const grub_uint8_t *e)
 {
+	char raw[13];
+	char *out;
+	char *p;
 	int i;
 	int n = 0;
-	int lower;
+	int lower_base = (e[12] & GHO_NT_LOWER_BASE) != 0;
+	int lower_ext = (e[12] & GHO_NT_LOWER_EXT) != 0;
 
-	lower = (e[12] & GHO_NT_LOWER_BASE) != 0;
 	for (i = 0; i < 8 && e[i] != ' '; i++)
-		out[n++] = (lower && e[i] >= 'A' && e[i] <= 'Z')
-			   ? (char) (e[i] - 'A' + 'a') : (char) e[i];
+		raw[n++] = (char) e[i];
 	if (e[8] != ' ')
 	{
-		lower = (e[12] & GHO_NT_LOWER_EXT) != 0;
-		out[n++] = '.';
+		raw[n++] = '.';
 		for (i = 8; i < 11 && e[i] != ' '; i++)
-			out[n++] = (lower && e[i] >= 'A' && e[i] <= 'Z')
-				   ? (char) (e[i] - 'A' + 'a') : (char) e[i];
+			raw[n++] = (char) e[i];
 	}
-	out[n] = '\0';
+	raw[n] = '\0';
+	out = grub_fs_bytes_to_utf8 (raw, n, grub_fs_char_encoding);
+	if (!out)
+		return NULL;
+	for (p = out; *p && *p != '.'; p++)
+		if (lower_base)
+			*p = grub_tolower (*p);
+	if (*p == '.')
+		for (p++; *p; p++)
+			if (lower_ext)
+				*p = grub_tolower (*p);
+	return out;
 }
 
 /* A volume label is eleven contiguous bytes, not an 8.3 pair.  */
@@ -649,7 +663,6 @@ gho_scan (struct gho_data *data, struct gho_cur *cur)
 		case GRUB_GHOST_REC_DIRENT_OLD:
 		{
 			const grub_uint8_t *e;
-			char shortname[13];
 			char *name;
 			struct gho_node *n;
 			grub_uint8_t attr;
@@ -688,24 +701,32 @@ gho_scan (struct gho_data *data, struct gho_cur *cur)
 					char lbl[12];
 
 					gho_volume_label (e, lbl);
-					data->label = grub_strdup (lbl);
+					data->label = grub_fs_bytes_to_utf8 (lbl,
+						grub_strlen (lbl), grub_fs_char_encoding);
+					if (!data->label)
+						return grub_errno;
 				}
-				gho_lfn_reset (&lfn);
-				break;
-			}
-
-			gho_short_name (e, shortname);
-			if (grub_strcmp (shortname, ".") == 0
-			    || grub_strcmp (shortname, "..") == 0)
-			{
-				file = NULL;
 				gho_lfn_reset (&lfn);
 				break;
 			}
 
 			name = gho_lfn_name (&lfn);
 			gho_lfn_reset (&lfn);
-			n = gho_new_node (data, stack[depth], name ? name : shortname,
+			if (!name)
+			{
+				name = gho_short_name (e);
+				if (!name)
+					return grub_errno;
+				if (grub_strcmp (name, ".") == 0
+				    || grub_strcmp (name, "..") == 0)
+				{
+					grub_free (name);
+					file = NULL;
+					break;
+				}
+			}
+
+			n = gho_new_node (data, stack[depth], name,
 					  (attr & GHO_ATTR_DIR) ? GHO_NODE_DIR : GHO_NODE_FILE);
 			grub_free (name);
 			if (!n)
@@ -770,7 +791,8 @@ gho_mount (grub_disk_t disk)
 	grub_uint64_t sectors;
 
 	if (gho_cached && gho_cached->devid == disk->dev->id
-	    && gho_cached->diskid == disk->id)
+	    && gho_cached->diskid == disk->id
+	    && gho_cached->encoding == grub_fs_char_encoding)
 		return gho_cached;
 
 	sectors = grub_disk_native_sectors (disk);
@@ -798,6 +820,7 @@ gho_mount (grub_disk_t disk)
 	data->size = sectors << disk->log_sector_size;
 	data->comp = hdr[3];
 	data->id = grub_ghost_get32 (hdr + 4);
+	data->encoding = grub_fs_char_encoding;
 	data->root = grub_zalloc (sizeof (*data->root));
 	if (!data->root)
 		goto fail;

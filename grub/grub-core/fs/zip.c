@@ -26,7 +26,11 @@
 
 #include <miniz.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE("GPLv3+");
+
+#define GRUB_ZIP_FLAG_UTF8	(1U << 11)
 
 PRAGMA_BEGIN_PACKED
 struct grub_zip_header
@@ -85,6 +89,41 @@ static char* path_convert(const char* path)
 	return path_copy;
 }
 
+static char*
+zip_decode_name(const char* name, grub_size_t size, grub_uint16_t flag)
+{
+	grub_uint32_t encoding = (flag & GRUB_ZIP_FLAG_UTF8)
+		? GRUB_FS_CHAR_ENCODING_UTF8 : grub_fs_char_encoding;
+	return grub_fs_bytes_to_utf8(name, size, encoding);
+}
+
+static mz_bool
+zip_find_name(struct grub_zip_data* data, const char* name)
+{
+	mz_uint i;
+	mz_uint count = mz_zip_reader_get_num_files(&data->zip);
+
+	for (i = 0; i < count; i++)
+	{
+		char* decoded;
+
+		if (!mz_zip_reader_file_stat(&data->zip, i, &data->stat))
+			continue;
+		decoded = zip_decode_name(data->stat.m_filename,
+			grub_strlen(data->stat.m_filename), data->stat.m_bit_flag);
+		if (!decoded)
+			return MZ_FALSE;
+		if (grub_strcasecmp(decoded, name) == 0)
+		{
+			grub_free(decoded);
+			data->index = i;
+			return MZ_TRUE;
+		}
+		grub_free(decoded);
+	}
+	return MZ_FALSE;
+}
+
 static struct grub_zip_data*
 grub_zip_mount(grub_disk_t disk)
 {
@@ -138,16 +177,11 @@ grub_zip_open(struct grub_file* file, const char* name)
 		goto fail;
 	}
 
-	bret = mz_zip_reader_locate_file_v2(&data->zip, new_path, NULL, 0, &data->index);
+	bret = zip_find_name(data, new_path);
 	if (bret == MZ_FALSE)
 	{
-		grub_error(GRUB_ERR_FILE_NOT_FOUND, "file not found");
-		goto fail;
-	}
-	bret = mz_zip_reader_file_stat(&data->zip, data->index, &data->stat);
-	if (bret == MZ_FALSE)
-	{
-		grub_error(GRUB_ERR_FILE_NOT_FOUND, "file not found");
+		if (!grub_errno)
+			grub_error(GRUB_ERR_FILE_NOT_FOUND, "file not found");
 		goto fail;
 	}
 	if (data->stat.m_is_directory == MZ_TRUE)
@@ -266,9 +300,10 @@ grub_zip_dir(grub_device_t device, const char* path,
 	grub_errno = GRUB_ERR_NONE;
 	if (new_path_len > 0 && new_path[new_path_len - 1] != '/')
 	{
-		int id = mz_zip_reader_locate_file(&data->zip, new_path, NULL, 0);
-		if (id < 0)
+		if (!zip_find_name(data, new_path))
 		{
+			if (grub_errno)
+				goto fail;
 			new_path[new_path_len] = '/';
 			new_path_len++;
 			new_path[new_path_len] = '\0';
@@ -280,8 +315,10 @@ grub_zip_dir(grub_device_t device, const char* path,
 				p++;
 			else
 				p = new_path;
-			info.dir = 0;
-			info.inode = id;
+			info.dir = data->stat.m_is_directory ? 1 : 0;
+			info.mtimeset = 1;
+			info.mtime = data->stat.m_time;
+			info.inode = data->index;
 			hook(p, &info, hook_data);
 			goto fail;
 		}
@@ -293,34 +330,53 @@ grub_zip_dir(grub_device_t device, const char* path,
 		bret = mz_zip_reader_file_stat(&data->zip, data->index, &data->stat);
 		if (bret == MZ_FALSE)
 			continue;
-		if (grub_strncasecmp(new_path, data->stat.m_filename, new_path_len) == 0)
 		{
-			grub_size_t p_len;
-			char* p = &data->stat.m_filename[new_path_len];
-			char* q;
-			info.dir = data->stat.m_is_directory ? 1 : 0;
-			info.mtimeset = 1;
-			info.mtime = data->stat.m_time;
-			info.inode = data->index;
-			if (*p == '/')
-				p++;
-			if (*p == '\0')
-				continue;
-			q = grub_strchr(p, '/');
-			if (q && q[1] != '\0')
-				continue;
-			p_len = grub_strlen(p);
-			if (p_len == 0)
-				continue;
-			if (p[p_len - 1] == '/')
-				p[p_len - 1] = '\0';
-			if (hook(p, &info, hook_data) == 1)
+			char* decoded = zip_decode_name(data->stat.m_filename,
+				grub_strlen(data->stat.m_filename), data->stat.m_bit_flag);
+			if (!decoded)
 				goto fail;
+			if (grub_strncasecmp(new_path, decoded, new_path_len) == 0)
+			{
+				grub_size_t p_len;
+				char* p = &decoded[new_path_len];
+				char* q;
+				info.dir = data->stat.m_is_directory ? 1 : 0;
+				info.mtimeset = 1;
+				info.mtime = data->stat.m_time;
+				info.inode = data->index;
+				if (*p == '/')
+					p++;
+				if (*p == '\0')
+				{
+					grub_free(decoded);
+					continue;
+				}
+				q = grub_strchr(p, '/');
+				if (q && q[1] != '\0')
+				{
+					grub_free(decoded);
+					continue;
+				}
+				p_len = grub_strlen(p);
+				if (p_len == 0)
+				{
+					grub_free(decoded);
+					continue;
+				}
+				if (p[p_len - 1] == '/')
+					p[p_len - 1] = '\0';
+				if (hook(p, &info, hook_data) == 1)
+				{
+					grub_free(decoded);
+					goto fail;
+				}
+			}
+			grub_free(decoded);
 		}
 	}
 
 fail:
-	if (info.inode == (mz_uint)-1)
+	if (info.inode == (mz_uint)-1 && !grub_errno)
 		grub_error(GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found", path);
 	if (new_path)
 		grub_free(new_path);
@@ -332,15 +388,24 @@ fail:
 static grub_err_t grub_zip_label(grub_device_t device, char** label)
 {
 	struct grub_zip_header header;
+	char* raw = NULL;
+	grub_size_t name_len;
 
 	*label = 0;
 	if (grub_disk_read(device->disk, 0, 0, sizeof(header), &header))
 		return grub_errno;
-	*label = grub_zalloc(header.name_len + 1);
-	if (!*label)
+	name_len = grub_le_to_cpu16(header.name_len);
+	raw = grub_malloc(name_len ? name_len : 1);
+	if (!raw)
 		return grub_errno;
-	grub_disk_read(device->disk, 0, sizeof(header), header.name_len, *label);
-	return GRUB_ERR_NONE;
+	if (name_len && grub_disk_read(device->disk, 0, sizeof(header), name_len, raw))
+	{
+		grub_free(raw);
+		return grub_errno;
+	}
+	*label = zip_decode_name(raw, name_len, grub_le_to_cpu16(header.flag));
+	grub_free(raw);
+	return grub_errno;
 }
 
 static grub_err_t

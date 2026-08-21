@@ -36,7 +36,27 @@
 #include <grub/veracrypt.h>
 #include <grub/plainmount.h>
 
+#include "fscharset.h"
 #include "rover.h"
+
+int
+rover_set_fs_char_encoding (unsigned int encoding)
+{
+	grub_errno = GRUB_ERR_NONE;
+	switch (encoding)
+	{
+	case ROVER_FS_ENCODING_UTF8:
+	case ROVER_FS_ENCODING_GBK:
+	case ROVER_FS_ENCODING_BIG5:
+	case ROVER_FS_ENCODING_SHIFT_JIS:
+	case ROVER_FS_ENCODING_EUC_KR:
+		grub_fs_char_encoding = encoding;
+		return GRUB_ERR_NONE;
+	default:
+		return grub_error (GRUB_ERR_BAD_ARGUMENT,
+			"unsupported filesystem name encoding");
+	}
+}
 
 /*
  * Detect a locked LUKS1/LUKS2 container by its on-disk magic, without

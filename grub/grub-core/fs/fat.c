@@ -35,6 +35,8 @@
 #include <grub/fshelp.h>
 #include <grub/i18n.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 enum
@@ -775,6 +777,7 @@ static grub_err_t
 grub_fat_iterate_dir_next (grub_fshelp_node_t node,
 			   struct grub_fat_iterate_context *ctxt)
 {
+  char raw_name[13];
   char *filep = 0;
   int checksum = -1;
   int slot = -1, slots = -1;
@@ -854,8 +857,8 @@ grub_fat_iterate_dir_next (grub_fshelp_node_t node,
 
       /* Convert the 8.3 file name.  */
       /* Ensure checks for dot later do not read uninitialized memory. */
-      grub_memset(ctxt->filename, 0, sizeof(ctxt->dir.name));
-      filep = ctxt->filename;
+      grub_memset (raw_name, 0, sizeof (raw_name));
+      filep = raw_name;
       if (ctxt->dir.attr & GRUB_FAT_ATTR_VOLUME_ID)
 	{
 	  for (i = 0; i < sizeof (ctxt->dir.name) && ctxt->dir.name[i]; i++)
@@ -892,6 +895,14 @@ grub_fat_iterate_dir_next (grub_fshelp_node_t node,
 	    filep--;
 	}
       *filep = '\0';
+      {
+	char *decoded = grub_fs_bytes_to_utf8 (raw_name,
+		(grub_size_t) (filep - raw_name), grub_fs_char_encoding);
+	if (!decoded)
+	  return grub_errno;
+	grub_strcpy (ctxt->filename, decoded);
+	grub_free (decoded);
+      }
       return GRUB_ERR_NONE;
     }
 

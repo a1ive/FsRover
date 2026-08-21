@@ -34,6 +34,8 @@
 
 #include <unrar.h>
 
+#include "fscharset.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define RAR_MAX_ITEMS		(1u << 20)
@@ -382,17 +384,10 @@ rar4_read_name (const grub_uint8_t *p, unsigned name_size, int unicode)
 		return name;
 	}
 
-	/*
-	 * Plain name: either pure ASCII, or UTF-8 when the unicode flag is
-	 * set without a NUL separator.  Non-ASCII OEM names are kept
-	 * verbatim; there is no code page table here to convert them.
-	 */
-	name = grub_malloc (i + 1);
-	if (!name)
-		return 0;
-	grub_memcpy (name, p, i);
-	name[i] = '\0';
-	return name;
+	/* A Unicode name without the compressed UTF-16 suffix is already
+	   UTF-8.  The legacy fallback is an OEM byte string. */
+	return grub_fs_bytes_to_utf8 ((const char *) p, i,
+		unicode ? GRUB_FS_CHAR_ENCODING_UTF8 : grub_fs_char_encoding);
 }
 
 /* ---------------- RAR4 container parsing ---------------- */
@@ -512,7 +507,7 @@ rar4_parse (struct grub_rar_data *data)
 			(flags & RAR4_FILE_UNICODE_NAME) != 0);
 		if (!item->name)
 		{
-			err = GRUB_ERR_OUT_OF_MEMORY;
+			err = grub_errno ? grub_errno : GRUB_ERR_OUT_OF_MEMORY;
 			goto out;
 		}
 		rar_fix_name (item->name);

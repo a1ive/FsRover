@@ -163,6 +163,7 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_des.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\hash-common.c" />
     <ClCompile Include="rover\init.c" />
+    <ClCompile Include="rover\fscharset.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
     <ClCompile Include="rover\rover.c" />
@@ -596,6 +597,7 @@
     <ClInclude Include="grub-core\lib\libgcrypt\const-time.h" />
     <ClInclude Include="grub-core\lib\libgcrypt\hash-common.h" />
     <ClInclude Include="rover\config.h" />
+    <ClInclude Include="rover\fscharset.h" />
     <ClInclude Include="rover\rover.h" />
     <ClInclude Include="include\grub\cryptodisk.h" />
     <ClInclude Include="include\grub\veracrypt.h" />

@@ -46,12 +46,24 @@ extern "C" {
    touch a device it has no business opening.  */
 #define ROVER_INIT_NO_WINDISK	0x1
 
+/* Byte-oriented filesystem name encodings.  Unicode-native names are not
+   affected.  Values are Windows code-page identifiers. */
+#define ROVER_FS_ENCODING_UTF8	65001U
+#define ROVER_FS_ENCODING_GBK	936U
+#define ROVER_FS_ENCODING_BIG5	950U
+#define ROVER_FS_ENCODING_SHIFT_JIS	932U
+#define ROVER_FS_ENCODING_EUC_KR	51949U
+
 /* Register all built-in grub modules.  Call once before anything else.
    FLAGS is a combination of the ROVER_INIT_* bits above, or 0.  */
 void rover_init (int flags);
 
 /* Unregister all modules and release grub state.  */
 void rover_fini (void);
+
+/* Set the source encoding used for byte-oriented filesystem names.  Call on
+   the same thread as every other rover function. */
+int rover_set_fs_char_encoding (unsigned int encoding);
 
 /* Message for the most recent failure, or NULL if the last call
    succeeded.  Valid until the next rover/grub call.  */
