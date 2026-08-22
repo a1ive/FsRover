@@ -4,14 +4,11 @@
     <Filter Include="SRC">
       <UniqueIdentifier>{F30EE09F-89BD-4E88-B8FC-C9A6D38E4D77}</UniqueIdentifier>
     </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{3b9e99bf-8cb7-4dac-91fa-0b1dc7db008f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\extract.cpp">
-      <Filter>SRC</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common\natural_sort.cpp">
-      <Filter>SRC</Filter>
-    </ClCompile>
     <ClCompile Include="extract.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -21,19 +18,25 @@
     <ClCompile Include="..\FsRover\optparse.c">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\natural_sort.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extract_core.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\extract.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\natural_sort.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
     <ClInclude Include="extract.h">
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="..\FsRover\optparse.h">
       <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\natural_sort.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extract_core.h">
+      <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

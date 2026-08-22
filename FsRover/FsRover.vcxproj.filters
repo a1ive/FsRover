@@ -26,14 +26,11 @@
     <Filter Include="SRC\tiny-webp">
       <UniqueIdentifier>{b628376c-2bbd-4dc0-8501-46099130b2ce}</UniqueIdentifier>
     </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{679c75d6-2807-4033-8af8-c477c5baab13}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\extract.cpp">
-      <Filter>SRC</Filter>
-    </ClCompile>
-    <ClCompile Include="..\common\natural_sort.cpp">
-      <Filter>SRC</Filter>
-    </ClCompile>
     <ClCompile Include="backend.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -94,14 +91,14 @@
     <ClCompile Include="optparse.c">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\extract_core.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\natural_sort.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\extract.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\natural_sort.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
     <ClInclude Include="backend.h">
       <Filter>SRC</Filter>
     </ClInclude>
@@ -155,6 +152,12 @@
     </ClInclude>
     <ClInclude Include="tiny-webp\tiny_webp.h">
       <Filter>SRC\tiny-webp</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extract_core.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\natural_sort.h">
+      <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

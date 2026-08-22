@@ -24,7 +24,7 @@
 #include <string>
 #include <utility>
 
-#include "../common/extract.h"
+#include "../common/extract_core.h"
 #include "extract.h"
 
 namespace

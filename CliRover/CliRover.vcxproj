@@ -139,9 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\common\extract.cpp">
-      <ObjectFileName>$(IntDir)extract_core.obj</ObjectFileName>
-    </ClCompile>
+    <ClCompile Include="..\common\extract_core.cpp" />
     <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="extract.cpp" />
     <ClCompile Include="main.cpp" />
@@ -150,7 +148,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\extract.h" />
+    <ClInclude Include="..\common\extract_core.h" />
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="extract.h" />
     <ClInclude Include="..\FsRover\optparse.h">

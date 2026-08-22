@@ -38,7 +38,7 @@
 
 #include <filetype.h>
 
-#include "../common/extract.h"
+#include "../common/extract_core.h"
 #include "../common/natural_sort.h"
 #include "dokanfs.h"
 #include "strconv.h"
