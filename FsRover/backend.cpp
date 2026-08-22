@@ -39,6 +39,7 @@
 #include <filetype.h>
 
 #include "../common/extract.h"
+#include "dokanfs.h"
 #include "strconv.h"
 
 #pragma comment (lib, "bcrypt.lib")
@@ -902,9 +903,13 @@ run_task (queued_task &item)
 	{
 		/* The image lives on the Windows filesystem, which has no
 		   grub device: the path crosses as UTF-8 and winfile.c
-		   opens it with the Win32 API.  */
+		   opens it with the Win32 API.  Do not enter one of our own
+		   Dokan mounts here: its worker waits for this backend thread,
+		   so the resulting Windows read would deadlock both sides.  */
 		std::string dev = "img" + std::to_string (g_img_seq);
-		if (rover_winfile_add (dev.c_str (), narrow (item.task.dest).c_str (),
+		if (dokanfs_owns_path (item.task.dest))
+			set_error (res, "cannot mount an image through FsRover's own Dokan drive; use Mount as disk instead");
+		else if (rover_winfile_add (dev.c_str (), narrow (item.task.dest).c_str (),
 			item.task.decompress ? 1 : 0))
 			set_error (res, "cannot mount image");
 		else

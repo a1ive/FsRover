@@ -85,6 +85,10 @@ dokan_mount *dokanfs_get (size_t i);
 dokan_mount *dokanfs_find_device (const std::string &device);
 dokan_mount *dokanfs_find_ptr (void *raw);
 
+/* True when PATH resolves syntactically to one of our Dokan drive letters.
+   Thread-safe: the backend uses this before starting Windows file I/O.  */
+bool dokanfs_owns_path (const std::wstring &path);
+
 const std::string &dokanfs_device (const dokan_mount *m);
 /* Drive letter for display, e.g. L"Z:".  */
 std::wstring dokanfs_letter (const dokan_mount *m);

@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <wchar.h>
 
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -66,6 +67,7 @@ fn_DokanDriverVersion p_DokanDriverVersion;
 bool g_ok;
 HWND g_notify;
 std::vector<dokan_mount *> g_table;	/* GUI thread only */
+std::atomic<DWORD> g_mount_mask { 0 };	/* drive letters, read by backend */
 
 } // namespace
 
@@ -382,6 +384,15 @@ device_serial (const std::string &device)
 	return h ? h : 1;
 }
 
+DWORD
+drive_mask (wchar_t letter)
+{
+	if (letter >= L'a' && letter <= L'z')
+		letter -= L'a' - L'A';
+	return letter >= L'A' && letter <= L'Z'
+		? 1u << (letter - L'A') : 0;
+}
+
 /* Load dokan2.dll, resolve the entry points and confirm the driver is
    live; on any failure the library is unloaded again.  Shared by
    dokanfs_init() (startup probe) and dokanfs_install() (re-probe once
@@ -608,6 +619,7 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 		delete m;
 		return nullptr;
 	}
+	g_mount_mask.fetch_or (drive_mask (letter), std::memory_order_relaxed);
 	g_table.push_back (m);
 	return m;
 }
@@ -616,6 +628,8 @@ void
 dokanfs_unmount (dokan_mount *m)
 {
 	p_DokanCloseHandle (m->handle);
+	g_mount_mask.fetch_and (~drive_mask (m->mountpoint[0]),
+		std::memory_order_relaxed);
 	for (size_t i = 0; i < g_table.size (); i++)
 		if (g_table[i] == m)
 		{
@@ -660,6 +674,33 @@ dokanfs_find_ptr (void *raw)
 		if (m == raw)
 			return m;
 	return nullptr;
+}
+
+bool
+dokanfs_owns_path (const std::wstring &path)
+{
+	/* GetFullPathName does no filesystem I/O; besides ordinary relative
+	   paths, keep the explicit Win32 device spellings recognizable.  */
+	DWORD len = GetFullPathNameW (path.c_str (), 0, nullptr, nullptr);
+	std::wstring full = path;
+	if (len)
+	{
+		full.resize (len);
+		DWORD got = GetFullPathNameW (path.c_str (), len, full.data (), nullptr);
+		if (got && got < len)
+			full.resize (got);
+		else
+			full = path;
+	}
+
+	size_t pos = 0;
+	if (full.size () >= 4 && full[0] == L'\\' && full[1] == L'\\'
+		&& (full[2] == L'?' || full[2] == L'.') && full[3] == L'\\')
+		pos = 4;
+	if (full.size () < pos + 2 || full[pos + 1] != L':')
+		return false;
+	DWORD mask = drive_mask (full[pos]);
+	return mask && (g_mount_mask.load (std::memory_order_relaxed) & mask);
 }
 
 const std::string &
