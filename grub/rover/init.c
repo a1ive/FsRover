@@ -169,6 +169,7 @@
 	mod (vhdx)	\
 	mod (vdi)	\
 	mod (qcow)	\
+	mod (qed)	\
 	mod (vmdk)	\
 	mod (dmg)	\
 	mod (isz)	\

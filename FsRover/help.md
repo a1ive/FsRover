@@ -800,6 +800,19 @@ refcounts — as is `COMPRESSION_TYPE` (type 0 deflate, type 1 Zstandard).
 **Not supported:** cluster encryption (QCOW1 encryption is likewise refused),
 `EXTERNAL_DATA`, `CORRUPT`, and images carrying snapshots.
 
+#### QEMU enhanced disk — `qed`
+
+> Origin: VirtualBox
+
+**Supported:** sparse QED images and backing-file chains whose parent format can
+be detected normally. Unallocated clusters read from the parent, or as zero
+when there is no parent.
+
+**Not supported:** images marked `NEED_CHECK`, unknown incompatible features,
+and `BACKING_FILE_NO_PROBE` images whose parent must be forced to raw rather
+than format-probed; L1/L2 tables larger than 32 MiB are also refused to keep
+metadata allocations bounded.
+
 #### VMware VMDK — `vmdk`
 
 > Origin: FsRover

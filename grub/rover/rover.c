@@ -800,7 +800,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 		static const char *const names[] =
 		{
 			"gzio", "xzio", "lzopio", "lz4io", "zstdio", "bz2io", "brio", "lzmaio",
-			"vhd", "vhdx", "vdi", "qcow", "vmdk", "dmg", "isz",
+			"vhd", "vhdx", "vdi", "qcow", "qed", "vmdk", "dmg", "isz",
 			"sparse", "parallels", "ffu", "tib", "tibx", "pmf", "pmfx",
 			"ntfsclone", "sna", "cdimage", "gho", "ifw",
 		};
