@@ -51,7 +51,9 @@ struct dir_entry
 struct walk_item
 {
 	std::string src;
-	std::wstring rel;
+	std::wstring component;
+	size_t parent;
+	std::wstring target;
 	bool is_dir;
 	long long mtime;
 };
@@ -76,6 +78,8 @@ struct extract_context
 };
 
 constexpr size_t WALK_MAX_DEPTH = 64;
+constexpr size_t MAX_COMPONENT_LENGTH = 255;
+constexpr size_t NO_PARENT = static_cast<size_t> (-1);
 
 bool
 cancelled (const options &opts)
@@ -131,11 +135,47 @@ sanitize_component (const std::string &name)
 	for (wchar_t &c : out)
 		if (c < 32 || wcschr (L"<>:\"/\\|?*", c))
 			c = L'_';
+	if (out.empty ())
+		out = L"_";
+	while (out.back () == L'.' || out.back () == L' ')
+		out.back () = L'_';
+
+	size_t dot = out.find (L'.');
+	std::wstring stem = out.substr (0, dot);
+	while (!stem.empty () && (stem.back () == L'.' || stem.back () == L' '))
+		stem.pop_back ();
+	auto reserved = [&stem] (const wchar_t *word)
+	{
+		return CompareStringOrdinal (stem.c_str (), static_cast<int> (stem.size ()),
+			word, -1, TRUE) == CSTR_EQUAL;
+	};
+	bool device = reserved (L"CON") || reserved (L"PRN")
+		|| reserved (L"AUX") || reserved (L"NUL");
+	if (!device && stem.size () == 4)
+	{
+		wchar_t digit = stem[3];
+		bool numbered = (digit >= L'1' && digit <= L'9')
+			|| digit == 0x00b9 || digit == 0x00b2 || digit == 0x00b3;
+		std::wstring prefix = stem.substr (0, 3);
+		device = numbered
+			&& (CompareStringOrdinal (prefix.c_str (), 3, L"COM", 3, TRUE)
+				== CSTR_EQUAL
+				|| CompareStringOrdinal (prefix.c_str (), 3, L"LPT", 3, TRUE)
+				== CSTR_EQUAL);
+	}
+	if (device)
+		out.insert (dot == std::wstring::npos ? out.size () : dot, 1, L'_');
+	if (out.size () > MAX_COMPONENT_LENGTH)
+	{
+		out.resize (MAX_COMPONENT_LENGTH);
+		if (out.back () >= 0xd800 && out.back () <= 0xdbff)
+			out.pop_back ();
+	}
 	return out;
 }
 
 std::wstring
-top_rel_name (const std::string &src)
+top_component (const std::string &src)
 {
 	std::string path = src;
 
@@ -152,6 +192,93 @@ top_rel_name (const std::string &src)
 	return sanitize_component (base);
 }
 
+std::wstring
+numbered_component (const std::wstring &base, unsigned long long number,
+	bool is_dir)
+{
+	std::wstring suffix = L" (" + std::to_wstring (number) + L')';
+	size_t insert = base.size ();
+	if (!is_dir)
+	{
+		size_t dot = base.find_last_of (L'.');
+		if (dot != std::wstring::npos && dot != 0)
+			insert = dot;
+	}
+
+	std::wstring out = base;
+	if (out.size () + suffix.size () > MAX_COMPONENT_LENGTH)
+	{
+		size_t overflow = out.size () + suffix.size () - MAX_COMPONENT_LENGTH;
+		if (insert > overflow)
+		{
+			out.erase (insert - overflow, overflow);
+			insert -= overflow;
+		}
+		else
+		{
+			out.resize (MAX_COMPONENT_LENGTH - suffix.size ());
+			if (insert > out.size ())
+				insert = out.size ();
+		}
+		if (insert && out[insert - 1] >= 0xd800 && out[insert - 1] <= 0xdbff)
+			out[insert - 1] = L'_';
+	}
+	out.insert (insert, suffix);
+	return out;
+}
+
+std::wstring
+candidate_path (const std::wstring &parent, const std::wstring &base,
+	unsigned long long number, bool is_dir)
+{
+	return parent + L'\\' + (number ? numbered_component (base, number, is_dir)
+		: base);
+}
+
+/* Reserve each destination name with the creating Win32 call itself.  This
+   follows the target filesystem's case and Unicode rules without a racy
+   exists-then-create window, and keeps files and directories in one namespace.  */
+bool
+create_unique_directory (const std::wstring &parent, const std::wstring &base,
+	std::wstring &target)
+{
+	for (unsigned long long number = 0;; number++)
+	{
+		target = candidate_path (parent, base, number, true);
+		if (CreateDirectoryW (target.c_str (), nullptr))
+			return true;
+		DWORD winerr = GetLastError ();
+		if (winerr != ERROR_ALREADY_EXISTS && winerr != ERROR_FILE_EXISTS)
+			return false;
+		if (number == ULLONG_MAX)
+			return false;
+	}
+}
+
+HANDLE
+create_unique_file (const std::wstring &parent, const std::wstring &base,
+	std::wstring &target)
+{
+	for (unsigned long long number = 0;; number++)
+	{
+		target = candidate_path (parent, base, number, false);
+		HANDLE output = CreateFileW (target.c_str (), GENERIC_WRITE, 0,
+			nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (output != INVALID_HANDLE_VALUE)
+			return output;
+		DWORD winerr = GetLastError ();
+		bool collision = winerr == ERROR_ALREADY_EXISTS
+			|| winerr == ERROR_FILE_EXISTS;
+		if (!collision && winerr == ERROR_ACCESS_DENIED)
+			collision = GetFileAttributesW (target.c_str ())
+				!= INVALID_FILE_ATTRIBUTES;
+		if (!collision)
+			return INVALID_HANDLE_VALUE;
+		if (number == ULLONG_MAX)
+			return INVALID_HANDLE_VALUE;
+	}
+}
+
 bool
 chain_has (const walk_chain &chain, unsigned long long inode)
 {
@@ -163,7 +290,7 @@ chain_has (const walk_chain &chain, unsigned long long inode)
 }
 
 bool
-walk_dir (const std::string &src, const std::wstring &rel,
+walk_dir (const std::string &src, size_t parent,
 	walk_chain &chain, std::vector<walk_item> &out,
 	unsigned long long &links, const options &opts, std::string &error)
 {
@@ -191,7 +318,8 @@ walk_dir (const std::string &src, const std::wstring &rel,
 		}
 		walk_item item;
 		item.src = join_path (src, entry.name);
-		item.rel = rel + L'\\' + sanitize_component (entry.name);
+		item.component = sanitize_component (entry.name);
+		item.parent = parent;
 		item.is_dir = entry.is_dir;
 		item.mtime = entry.mtime;
 		if (entry.is_dir && entry.inode_set && chain_has (chain, entry.inode))
@@ -199,11 +327,13 @@ walk_dir (const std::string &src, const std::wstring &rel,
 			error = item.src + ": directory loops back on itself";
 			return false;
 		}
-		out.push_back (item);
+		std::string child_src = item.src;
+		size_t index = out.size ();
+		out.push_back (std::move (item));
 		if (!entry.is_dir)
 			continue;
 		chain.push_back ({ entry.inode_set, entry.inode });
-		bool ok = walk_dir (item.src, item.rel, chain, out, links, opts, error);
+		bool ok = walk_dir (child_src, index, chain, out, links, opts, error);
 		chain.pop_back ();
 		if (!ok)
 			return false;
@@ -301,7 +431,7 @@ progress_hook (unsigned long long done, unsigned long long total, void *data)
 }
 
 bool
-extract_file (const walk_item &item, const std::wstring &destination,
+extract_file (const walk_item &item, const std::wstring &parent,
 	extract_context &context, std::vector<char> &buffer, std::string &error)
 {
 	unsigned long long bytes_before = context.bytes_done;
@@ -312,8 +442,8 @@ extract_file (const walk_item &item, const std::wstring &destination,
 		error = item.src + ": " + (message ? message : "cannot open");
 		return false;
 	}
-	HANDLE output = CreateFileW (destination.c_str (), GENERIC_WRITE, 0,
-		nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	std::wstring destination;
+	HANDLE output = create_unique_file (parent, item.component, destination);
 	if (output == INVALID_HANDLE_VALUE)
 	{
 		rover_file_close (source);
@@ -363,16 +493,14 @@ extract_file (const walk_item &item, const std::wstring &destination,
 }
 
 void
-stamp_directories (const std::vector<walk_item> &work,
-	const std::wstring &root)
+stamp_directories (const std::vector<walk_item> &work)
 {
 	for (size_t index = work.size (); index-- > 0;)
 	{
 		const walk_item &item = work[index];
 		if (!item.is_dir || !item.mtime)
 			continue;
-		std::wstring destination = root + L'\\' + item.rel;
-		HANDLE handle = CreateFileW (destination.c_str (), FILE_WRITE_ATTRIBUTES,
+		HANDLE handle = CreateFileW (item.target.c_str (), FILE_WRITE_ATTRIBUTES,
 			FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
 			OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
 		if (handle == INVALID_HANDLE_VALUE)
@@ -425,11 +553,11 @@ extract (const std::vector<std::string> &sources,
 			context.links_skipped++;
 			continue;
 		}
-		walk_item item = { source, top_rel_name (source), stat.is_dir != 0,
-			stat.mtime_set ? stat.mtime : 0 };
+		walk_item item = { source, top_component (source), NO_PARENT, {},
+			stat.is_dir != 0, stat.mtime_set ? stat.mtime : 0 };
 		work.push_back (item);
 		walk_chain chain = { { stat.inode_set != 0, stat.inode } };
-		if (item.is_dir && !walk_dir (item.src, item.rel, chain, work,
+		if (item.is_dir && !walk_dir (item.src, work.size () - 1, chain, work,
 			context.links_skipped, opts, *error))
 			goto out;
 	}
@@ -439,14 +567,15 @@ extract (const std::vector<std::string> &sources,
 
 	rover_set_progress (progress_hook, &context);
 	progress_set = true;
-	for (const walk_item &item : work)
+	for (walk_item &item : work)
 	{
 		if (cancelled (opts))
 			goto out;
-		std::wstring target = root + L'\\' + item.rel;
+		const std::wstring &parent = item.parent == NO_PARENT ? root
+			: work[item.parent].target;
 		if (item.is_dir)
 		{
-			if (!create_one_directory (target))
+			if (!create_unique_directory (parent, item.component, item.target))
 			{
 				*error = item.src + ": cannot create destination directory";
 				goto out;
@@ -457,7 +586,7 @@ extract (const std::vector<std::string> &sources,
 		context.current = item.src;
 		report_progress (context, progress_kind::started, 0);
 		std::string item_error;
-		if (!extract_file (item, target, context, buffer, item_error))
+		if (!extract_file (item, parent, context, buffer, item_error))
 		{
 			report_progress (context, progress_kind::failed, 0);
 			if (cancelled (opts))
@@ -474,7 +603,7 @@ out:
 	if (progress_set)
 		rover_set_progress (nullptr, nullptr);
 	if (opts.preserve_times)
-		stamp_directories (work, root);
+		stamp_directories (work);
 	stats->files = context.files_done;
 	stats->bytes = context.bytes_done;
 	stats->links = context.links_skipped;
