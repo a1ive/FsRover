@@ -9,6 +9,9 @@
     <ClCompile Include="..\common\extract.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\natural_sort.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="extract.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -21,6 +24,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\natural_sort.h">
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="extract.h">

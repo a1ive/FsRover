@@ -142,6 +142,7 @@
     <ClCompile Include="..\common\extract.cpp">
       <ObjectFileName>$(IntDir)extract_core.obj</ObjectFileName>
     </ClCompile>
+    <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="extract.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="..\FsRover\optparse.c">
@@ -150,6 +151,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract.h" />
+    <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="extract.h" />
     <ClInclude Include="..\FsRover\optparse.h">
       <Link>optparse.h</Link>

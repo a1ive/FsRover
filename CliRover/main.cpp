@@ -28,6 +28,7 @@
 
 #include <rover.h>
 
+#include "../common/natural_sort.h"
 #include "../FsRover/optparse.h"
 #include "extract.h"
 
@@ -287,74 +288,6 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 	return true;
 }
 
-size_t
-digit_run (const char *text)
-{
-	size_t len = 0;
-
-	while (text[len] >= '0' && text[len] <= '9')
-		len++;
-	return len;
-}
-
-int
-name_compare (const char *left, const char *right)
-{
-	int tie = 0;
-
-	while (*left && *right)
-	{
-		size_t left_digits = digit_run (left);
-		size_t right_digits = digit_run (right);
-
-		if (left_digits && right_digits)
-		{
-			size_t left_zeroes = 0;
-			size_t right_zeroes = 0;
-			while (left_zeroes < left_digits - 1 && left[left_zeroes] == '0')
-				left_zeroes++;
-			while (right_zeroes < right_digits - 1 && right[right_zeroes] == '0')
-				right_zeroes++;
-			if (left_digits - left_zeroes != right_digits - right_zeroes)
-				return left_digits - left_zeroes < right_digits - right_zeroes ? -1 : 1;
-			int result = std::memcmp (left + left_zeroes, right + right_zeroes,
-				left_digits - left_zeroes);
-			if (result)
-				return result < 0 ? -1 : 1;
-			if (!tie && left_zeroes != right_zeroes)
-				tie = left_zeroes < right_zeroes ? -1 : 1;
-			left += left_digits;
-			right += right_digits;
-			continue;
-		}
-		if (left_digits != right_digits)
-			return left_digits ? -1 : 1;
-
-		unsigned char left_char = static_cast<unsigned char> (*left);
-		unsigned char right_char = static_cast<unsigned char> (*right);
-		if (left_char >= 'A' && left_char <= 'Z')
-			left_char += 'a' - 'A';
-		if (right_char >= 'A' && right_char <= 'Z')
-			right_char += 'a' - 'A';
-		if (left_char != right_char)
-			return left_char < right_char ? -1 : 1;
-		if (!tie && *left != *right)
-			tie = static_cast<unsigned char> (*left) < static_cast<unsigned char> (*right)
-				? -1 : 1;
-		left++;
-		right++;
-	}
-	if (*left || *right)
-		return *left ? 1 : -1;
-	return tie;
-}
-
-bool
-natural_less (const std::string &left, const std::string &right)
-{
-	return name_compare (left.c_str (), right.c_str ()) < 0;
-}
-
 int
 collect_device (const struct rover_disk_info *info, void *data)
 {
@@ -370,7 +303,7 @@ enumerate_devices ()
 	std::vector<std::string> devices;
 
 	rover_enum_disks (collect_device, &devices);
-	std::sort (devices.begin (), devices.end (), natural_less);
+	std::sort (devices.begin (), devices.end (), rover_sort::natural_less);
 	return devices;
 }
 
@@ -399,7 +332,7 @@ list_directory (const std::string &path, std::vector<dir_entry> *entries,
 		{
 			if (left.is_dir != right.is_dir)
 				return left.is_dir;
-			return natural_less (left.name, right.name);
+			return rover_sort::natural_less (left.name, right.name);
 		});
 	return true;
 }
@@ -534,7 +467,7 @@ expand_wildcard (const std::string &pattern, std::vector<std::string> *matches,
 		}
 		valid.push_back (std::move (path));
 	}
-	std::sort (valid.begin (), valid.end (), natural_less);
+	std::sort (valid.begin (), valid.end (), rover_sort::natural_less);
 	valid.erase (std::unique (valid.begin (), valid.end ()), valid.end ());
 	*matches = std::move (valid);
 	if (matches->empty ())

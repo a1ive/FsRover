@@ -160,6 +160,7 @@
     <ClCompile Include="..\common\extract.cpp">
       <ObjectFileName>$(IntDir)extract_core.obj</ObjectFileName>
     </ClCompile>
+    <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="cryptodlg.cpp" />
@@ -183,6 +184,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract.h" />
+    <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="dokan\dokan.h" />
     <ClInclude Include="dokan\fileinfo.h" />
