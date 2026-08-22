@@ -38,6 +38,7 @@
 
 #include <filetype.h>
 
+#include "../common/extract.h"
 #include "strconv.h"
 
 #pragma comment (lib, "bcrypt.lib")
@@ -303,88 +304,32 @@ run_list_dir (const std::string &path, backend_result *res)
 }
 
 /*
- * Extraction.  Phase 1 resolves every source into a flat work list
- * (directories are walked by collecting each level first and only
- * then recursing -- never from inside the dir callback, which would
- * re-enter the filesystem driver).  Phase 2 creates directories and
- * copies files in list order, so parents always precede children.
- *
- * Symlinks are never extracted, only counted.  grub resolves a link
- * when the file is opened, so a dangling or absolute-to-the-host link
- * would fail the copy and abort the whole run, and a link pointing at
- * one of its own parents would make the walk recurse forever.
- *
- * A directory entry can point at one of its own ancestors all the same
- * on a corrupt image -- grub caps symlink nesting but has no cycle
- * detection, and no filesystem driver is safe from it -- so the walk
- * checks each directory against the inodes of its own ancestors, and
- * falls back on a depth cap for the drivers that report no inode.
+ * Extraction is implemented once in common/extract.cpp.  The GUI
+ * adapter below only supplies backend cancellation, request servicing,
+ * and progress-message delivery.
  */
 
-struct walk_item
-{
-	std::string src;	/* grub path */
-	std::wstring rel;	/* Win32 path relative to the destination */
-	bool is_dir;
-	INT64 mtime;	/* seconds since Unix epoch, 0 = unknown */
-};
-
-struct extract_ctx
-{
-	UINT seq;
-	UINT64 files_total = 0;
-	UINT64 files_done = 0;
-	UINT64 files_processed = 0;
-	UINT64 bytes_done = 0;
-	UINT64 links_skipped = 0;
-	UINT64 errors = 0;
-	ULONGLONG last_tick = 0;
-	bool preserve_times = true;
-	std::string cur;	/* source path of the file being copied */
-	std::string first_error;
-};
-
-/* Unix seconds -> FILETIME (100 ns ticks since 1601, UTC like the
-   list view's mtime).  False for values outside the FILETIME range,
-   which a corrupt or exotic timestamp can produce.  */
-bool
-unix_to_filetime (INT64 sec, FILETIME *ft)
-{
-	ULONGLONG t;
-
-	if (sec < -11644473600LL || sec > 1833029933770LL)
-		return false;
-	t = (ULONGLONG) ((sec + 11644473600LL) * 10000000LL);
-	ft->dwLowDateTime = (DWORD) t;
-	ft->dwHighDateTime = (DWORD) (t >> 32);
-	return true;
-}
-
-/* Best effort: a destination that refuses timestamps (some network
-   shares, a read-only attribute set by the copy) must not fail the
-   extraction, so the result is ignored.  */
 void
-set_mtime (HANDLE h, INT64 mtime)
+post_extract_progress (UINT seq, ULONGLONG &last_tick,
+	const rover_extract::progress &progress)
 {
-	FILETIME ft;
-
-	if (!mtime || !unix_to_filetime (mtime, &ft))
+	if (progress.kind == rover_extract::progress_kind::failed)
 		return;
-	SetFileTime (h, nullptr, nullptr, &ft);
-}
 
-void
-post_progress (extract_ctx &ctx, int percent)
-{
-	backend_progress *p = new backend_progress;
+	ULONGLONG now = GetTickCount64 ();
+	if (progress.kind == rover_extract::progress_kind::advanced
+	    && now - last_tick < 100)
+		return;
+	last_tick = now;
 
-	p->seq = ctx.seq;
-	p->percent = percent;
-	p->file_index = ctx.files_processed;
-	p->file_total = ctx.files_total;
-	p->name = ctx.cur;
-	if (!PostMessageW (g_notify, WM_APP_TASK_PROGRESS, ctx.seq, (LPARAM) p))
-		delete p;
+	backend_progress *posted = new backend_progress;
+	posted->seq = seq;
+	posted->percent = progress.percent;
+	posted->file_index = progress.file_index;
+	posted->file_total = progress.file_total;
+	posted->name = progress.source;
+	if (!PostMessageW (g_notify, WM_APP_TASK_PROGRESS, seq, (LPARAM) posted))
+		delete posted;
 }
 
 /* Progress for the tasks that work on a single item (image export,
@@ -404,316 +349,36 @@ post_item_progress (UINT seq, const std::string &name, int percent)
 }
 
 void
-extract_progress_hook (unsigned long long done, unsigned long long total, void *data)
-{
-	extract_ctx *ctx = static_cast<extract_ctx *> (data);
-	ULONGLONG now = GetTickCount64 ();
-
-	if (now - ctx->last_tick < 100)
-		return;
-	ctx->last_tick = now;
-	post_progress (*ctx, total ? (int) (done * 100 / total) : 0);
-}
-
-std::wstring
-sanitize_component (const std::string &name)
-{
-	std::wstring out = widen (name);
-
-	for (wchar_t &c : out)
-		if (c < 32 || wcschr (L"<>:\"/\\|?*", c))
-			c = L'_';
-	return out;
-}
-
-/* Destination name for a top-level source: last path component, or
-   the device name for a device root ("(hd0,gpt2)/" -> "hd0,gpt2").  */
-std::wstring
-top_rel_name (const std::string &src)
-{
-	std::string s = src;
-
-	while (!s.empty () && s.back () == '/')
-		s.pop_back ();
-	size_t close = s.find (')');
-	std::string base;
-	if (close == std::string::npos)
-		base = s;
-	else if (close + 1 >= s.size ())
-		base = s.substr (1, close - 1);
-	else
-		base = s.substr (s.find_last_of ('/') + 1);
-	return sanitize_component (base);
-}
-
-/* Directory levels walked below a source.  The inode chain below is
-   the real cycle guard; this is what is left for the drivers that
-   report no inode -- past any real tree (grub's own path handling
-   gives out well before this), short enough that the recursion cannot
-   run the stack out on a cyclic one.  */
-constexpr size_t WALK_MAX_DEPTH = 64;
-
-/* The directories currently being walked, innermost last: the chain
-   from the source down to the directory being listed, one entry per
-   level.  An entry whose inode matches one already on the chain is the
-   same directory reached again -- a cycle; a level the driver did not
-   identify simply has nothing to match against, and still counts
-   towards WALK_MAX_DEPTH.  */
-struct walk_level
-{
-	bool inode_set;
-	UINT64 inode;
-};
-using walk_chain = std::vector<walk_level>;
-
-bool
-chain_has (const walk_chain &chain, UINT64 inode)
-{
-	return std::find_if (chain.begin (), chain.end (),
-		[inode] (const walk_level &l)
-		{
-			return l.inode_set && l.inode == inode;
-		}) != chain.end ();
-}
-
-/* Returns false on error (error set) or cancellation (error empty);
-   LINKS counts the symlinks left out of the work list.  CHAIN holds
-   SRC and its ancestors, SRC last (see walk_chain).  */
-bool
-walk_dir (const std::string &src, const std::wstring &rel, walk_chain &chain, std::vector<walk_item> &out, UINT64 &links, std::string &error)
-{
-	std::vector<backend_dirent> children;
-
-	if (chain.size () >= WALK_MAX_DEPTH)
-	{
-		error = src + ": directory nesting too deep";
-		return false;
-	}
-	if (rover_dir_list (src.c_str (), list_dir_hook, &children))
-	{
-		const char *msg = rover_last_error ();
-		error = src + ": " + (msg ? msg : "cannot list directory");
-		return false;
-	}
-	for (const backend_dirent &e : children)
-	{
-		if (g_cancel.load (std::memory_order_relaxed))
-			return false;
-		/* Before is_dir: a link to a directory is still a link.  */
-		if (e.is_symlink)
-		{
-			links++;
-			continue;
-		}
-		walk_item item;
-		item.src = join_path (src, e.name);
-		item.rel = rel + L'\\' + sanitize_component (e.name);
-		item.is_dir = e.is_dir;
-		item.mtime = e.mtime;
-		if (e.is_dir && e.inode_set && chain_has (chain, e.inode))
-		{
-			error = item.src + ": directory loops back on itself";
-			return false;
-		}
-		out.push_back (item);
-		if (!e.is_dir)
-			continue;
-		chain.push_back ({ e.inode_set, e.inode });
-		bool ok = walk_dir (item.src, item.rel, chain, out, links, error);
-		chain.pop_back ();
-		if (!ok)
-			return false;
-	}
-	return true;
-}
-
-/* Returns false on error (error set) or cancellation (error empty);
-   the partial destination file is deleted either way.  */
-bool
-extract_file (const std::string &src, const std::wstring &dst, INT64 mtime, extract_ctx &ctx, std::vector<char> &buf, std::string &error)
-{
-	UINT64 bytes_before = ctx.bytes_done;
-	rover_file *f;
-	HANDLE h;
-	bool ok = false;
-
-	f = rover_file_open (src.c_str ());
-	if (!f)
-	{
-		const char *msg = rover_last_error ();
-		error = src + ": " + (msg ? msg : "cannot open");
-		return false;
-	}
-	h = CreateFileW (dst.c_str (), GENERIC_WRITE, 0, nullptr,
-			 CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-	if (h == INVALID_HANDLE_VALUE)
-	{
-		rover_file_close (f);
-		error = src + ": cannot create destination file";
-		return false;
-	}
-
-	for (;;)
-	{
-		if (g_cancel.load (std::memory_order_relaxed))
-			break;
-		service_requests ();
-		long long r = rover_file_read (f, buf.data (), buf.size ());
-		if (r < 0)
-		{
-			const char *msg = rover_last_error ();
-			error = src + ": " + (msg ? msg : "read error");
-			break;
-		}
-		if (r == 0)
-		{
-			ok = true;
-			break;
-		}
-		DWORD w = 0;
-		if (!WriteFile (h, buf.data (), (DWORD) r, &w, nullptr)
-		    || w != (DWORD) r)
-		{
-			error = src + ": write failed";
-			break;
-		}
-		ctx.bytes_done += (UINT64) r;
-	}
-
-	/* Last write, before the handle goes away: the copy loop is what
-	   set the destination mtime to "now" in the first place.  */
-	if (ok && ctx.preserve_times)
-		set_mtime (h, mtime);
-	CloseHandle (h);
-	rover_file_close (f);
-	if (!ok)
-	{
-		ctx.bytes_done = bytes_before;
-		DeleteFileW (dst.c_str ());
-	}
-	return ok;
-}
-
-void
 run_extract (const backend_task &task, UINT seq, backend_result *res)
 {
-	extract_ctx ctx;
-	std::vector<walk_item> work;
-	std::vector<char> buf ((size_t) 1 << 20);
-	std::wstring root;
+	rover_extract::options options;
+	rover_extract::result stats;
+	std::string error;
+	ULONGLONG last_tick = 0;
 
-	ctx.seq = seq;
-	ctx.preserve_times = task.preserve_times;
-	if (task.paths.empty () || task.dest.empty ())
+	options.preserve_times = task.preserve_times;
+	options.cancelled = [] ()
 	{
-		res->error = "nothing to extract";
-		return;
-	}
-
-	root = task.dest;
-	while (!root.empty () && root.back () == L'\\')
-		root.pop_back ();
-	/* Long-path prefix so deep trees do not hit MAX_PATH.  */
-	if (root.rfind (L"\\\\", 0) != 0)
-		root = L"\\\\?\\" + root;
-
-	for (const std::string &src : task.paths)
+		return g_cancel.load (std::memory_order_relaxed);
+	};
+	options.service = [] ()
 	{
-		rover_stat_t st;
-		if (rover_stat (src.c_str (), &st))
-		{
-			set_error (res, "cannot stat source");
-			return;
-		}
-		if (st.is_symlink)
-		{
-			ctx.links_skipped++;
-			continue;
-		}
-		walk_item item;
-		item.src = src;
-		item.rel = top_rel_name (src);
-		item.is_dir = st.is_dir != 0;
-		item.mtime = st.mtime_set ? st.mtime : 0;
-		work.push_back (item);
-		/* A device root has no directory entry to be identified by
-		   (rover_stat says so), which costs one wasted level: an
-		   entry looping back to the root is caught one deeper, at
-		   the first level that does have an inode.  */
-		walk_chain chain = { { st.inode_set != 0, st.inode } };
-		if (item.is_dir
-		    && !walk_dir (item.src, item.rel, chain, work, ctx.links_skipped, res->error))
-			goto fail;
-	}
-	for (const walk_item &item : work)
-		if (!item.is_dir)
-			ctx.files_total++;
-
-	rover_set_progress (extract_progress_hook, &ctx);
-	for (const walk_item &item : work)
+		service_requests ();
+	};
+	options.report_progress = [seq, &last_tick] (
+		const rover_extract::progress &progress)
 	{
-		if (g_cancel.load (std::memory_order_relaxed))
-			break;
-		std::wstring dst = root + L'\\' + item.rel;
-		if (item.is_dir)
-		{
-			if (!CreateDirectoryW (dst.c_str (), nullptr)
-			    && GetLastError () != ERROR_ALREADY_EXISTS)
-			{
-				res->error = "cannot create directory";
-				break;
-			}
-			continue;
-		}
-		ctx.files_processed++;
-		ctx.cur = item.src;
-		ctx.last_tick = GetTickCount64 ();
-		post_progress (ctx, 0);
-		std::string item_error;
-		if (!extract_file (item.src, dst, item.mtime, ctx, buf, item_error))
-		{
-			if (g_cancel.load (std::memory_order_relaxed))
-				break;
-			ctx.errors++;
-			if (ctx.first_error.empty ())
-				ctx.first_error = std::move (item_error);
-			continue;
-		}
-		ctx.files_done++;
-	}
-	rover_set_progress (nullptr, nullptr);
+		post_extract_progress (seq, last_tick, progress);
+	};
 
-	/* Directories come last, deepest first: writing a child bumps its
-	   parent's mtime again, so a directory can only be stamped once
-	   nothing more will be created inside it.  Directories missing
-	   from a cancelled or failed run just fail to open.  */
-	if (ctx.preserve_times)
-		for (size_t i = work.size (); i-- > 0;)
-		{
-			if (!work[i].is_dir || !work[i].mtime)
-				continue;
-			std::wstring dst = root + L'\\' + work[i].rel;
-			HANDLE h = CreateFileW (dst.c_str (), FILE_WRITE_ATTRIBUTES,
-						FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-						nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-			if (h == INVALID_HANDLE_VALUE)
-				continue;
-			set_mtime (h, work[i].mtime);
-			CloseHandle (h);
-		}
-
-	res->stat_files = ctx.files_done;
-	res->stat_bytes = ctx.bytes_done;
-	res->stat_links = ctx.links_skipped;
-	res->stat_errors = ctx.errors;
-	res->extract_error = std::move (ctx.first_error);
-	if (res->error.empty () && g_cancel.load (std::memory_order_relaxed))
-		res->error = "extraction cancelled";
-	return;
-
-fail:
-	if (res->error.empty ())
-		res->error = "extraction cancelled";
+	rover_extract::extract (task.paths, task.dest, options, &stats, &error);
+	res->stat_files = stats.files;
+	res->stat_bytes = stats.bytes;
+	res->stat_links = stats.links;
+	res->stat_errors = stats.errors.size ();
+	if (!stats.errors.empty ())
+		res->extract_error = std::move (stats.errors.front ());
+	res->error = std::move (error);
 }
 
 /*

@@ -6,6 +6,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\common\extract.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="extract.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -17,6 +20,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\extract.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
     <ClInclude Include="extract.h">
       <Filter>SRC</Filter>
     </ClInclude>
