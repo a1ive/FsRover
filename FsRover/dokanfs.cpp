@@ -393,7 +393,14 @@ dokan_load (void)
 	if (!is_elevated ())
 		return false;
 
-	g_dll = LoadLibraryW (L"dokan2.dll");
+	wchar_t sysdir[MAX_PATH];
+	UINT n = GetSystemDirectoryW (sysdir, ARRAYSIZE (sysdir));
+	if (n == 0 || n >= ARRAYSIZE (sysdir))
+		return false;
+	std::wstring dll_path = sysdir;
+	dll_path += L"\\dokan2.dll";
+
+	g_dll = LoadLibraryW (dll_path.c_str ());
 	if (!g_dll)
 		return false;
 
