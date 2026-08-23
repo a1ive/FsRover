@@ -17,15 +17,9 @@
  */
 
 /*
- * Dokan drive-letter mounts of grub devices.  dokan2.dll is loaded
- * dynamically: when the library or its driver is absent -- or when the
- * process is not elevated, which the driver requires -- everything
- * degrades to dokanfs_available() == false and the GUI offers Install
- * Dokan (elevated) or says what is missing.  The runtime (dll + driver)
- * is embedded in our resources for the build architecture;
- * dokanfs_install() writes it to the system and starts the driver.  All
- * functions are GUI-thread only; the filesystem callbacks marshal their
- * rover calls onto the backend thread via backend_call().
+ * Drive-letter mounts of grub devices.
+ * All functions are GUI-thread only; the filesystem callbacks marshal
+ * their rover calls onto the backend thread via backend_call().
  */
 
 #ifndef FSROVER_DOKANFS_H
@@ -47,12 +41,27 @@ constexpr UINT WM_APP_DOKAN_MOUNTED = WM_APP + 6;
 
 struct dokan_mount;
 
-/* Load dokan2.dll and check the driver; false = feature disabled.
+enum class dokanfs_backend
+{
+	winfsp,
+	dokan,
+};
+
+/* Probe WinFsp first, then Dokan; false = feature disabled.
    NOTIFY receives WM_APP_DOKAN_GONE.  */
 bool dokanfs_init (HWND notify);
 
 /* True when the library and driver are usable.  */
 bool dokanfs_available (void);
+
+/* Name of the backend selected for new mounts. */
+const wchar_t *dokanfs_backend_name (void);
+
+/* Backend selection is process-local.  Startup prefers WinFsp, then Dokan;
+   selecting an unavailable backend fails without changing the selection. */
+bool dokanfs_backend_available (dokanfs_backend backend);
+dokanfs_backend dokanfs_current_backend (void);
+bool dokanfs_select_backend (dokanfs_backend backend);
 
 /* Install the app-embedded Dokan runtime (library + kernel driver) to
    the system, start the driver service and
@@ -85,7 +94,7 @@ dokan_mount *dokanfs_get (size_t i);
 dokan_mount *dokanfs_find_device (const std::string &device);
 dokan_mount *dokanfs_find_ptr (void *raw);
 
-/* True when PATH resolves syntactically to one of our Dokan drive letters.
+/* True when PATH resolves syntactically to one of our mounted drive letters.
    Thread-safe: the backend uses this before starting Windows file I/O.  */
 bool dokanfs_owns_path (const std::wstring &path);
 

@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
  *
@@ -16,24 +16,23 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#ifndef FSROVER_WINFSPFS_H
+#define FSROVER_WINFSPFS_H	1
 
-#define QUOTE_(x) #x
-#define QUOTE(x) QUOTE_(x)
+#include <windows.h>
 
-#define ROVER_MAJOR_VERSION 0
-#define ROVER_MINOR_VERSION 5
-#define ROVER_MICRO_VERSION 0
-#define ROVER_BUILD_VERSION 0
+#include <string>
 
-#define ROVER_VERSION   ROVER_MAJOR_VERSION,ROVER_MINOR_VERSION,ROVER_MICRO_VERSION,ROVER_BUILD_VERSION
-#define ROVER_VERSION_STR  QUOTE(ROVER_MAJOR_VERSION.ROVER_MINOR_VERSION.ROVER_MICRO_VERSION.ROVER_BUILD_VERSION)
+#include "fusefs.h"
 
-#define ROVER_COMPANY      "A1ive"
-#define ROVER_COPYRIGHT    "Copyright (c) 2026 A1ive"
-#define ROVER_FILEDESC     "FsRover -- Filesystem browser"
+struct winfsp_mount;
 
-#define ROVER_NAME         "Rover"
-#define ROVER_PRODUCT      ROVER_NAME
-#define ROVER_INTERNALNAME ROVER_NAME
-#define ROVER_ORIGINALNAME ROVER_NAME ".exe"
+bool winfspfs_init (HWND notify, UINT gone_message, UINT mounted_message);
+bool winfspfs_available (void);
+void winfspfs_shutdown (void);
+
+winfsp_mount *winfspfs_mount (fusefs *fs, wchar_t letter,
+	bool open_explorer, void *notify_context, std::wstring *error);
+void winfspfs_unmount (winfsp_mount *mount);
+
+#endif

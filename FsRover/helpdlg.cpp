@@ -52,6 +52,7 @@ HWND g_support;	/* supported-features dialog */
 const wchar_t k_credits[] =
 	L"GNU GRUB - <https://www.gnu.org/software/grub> \r\n"
 	L"Dokany - <https://github.com/dokan-dev/dokany>\r\n"
+	L"WinFsp - <https://github.com/winfsp/winfsp>\r\n"
 	L"file - <http://www.darwinsys.com/file>\r\n"
 	L"stb_image - <https://github.com/nothings/stb>\r\n"
 	L"NanoSVG - <https://github.com/memononen/nanosvg>\r\n"

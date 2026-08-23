@@ -164,6 +164,7 @@
     <ClCompile Include="cryptodlg.cpp" />
     <ClCompile Include="diskprops.cpp" />
     <ClCompile Include="dokanfs.cpp" />
+    <ClCompile Include="fusefs.cpp" />
     <ClCompile Include="game.cpp" />
     <ClCompile Include="helpdlg.cpp" />
     <ClCompile Include="hexview.cpp" />
@@ -179,6 +180,7 @@
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />
     <ClCompile Include="util.cpp" />
+    <ClCompile Include="winfspfs.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
@@ -188,6 +190,7 @@
     <ClInclude Include="dokan\fileinfo.h" />
     <ClInclude Include="dokan\public.h" />
     <ClInclude Include="dokanfs.h" />
+    <ClInclude Include="fusefs.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="libcdi\libcdi.h" />
     <ClInclude Include="md4c\entity.h" />
@@ -201,6 +204,8 @@
     <ClInclude Include="strconv.h" />
     <ClInclude Include="tiny-webp\tiny_webp.h" />
     <ClInclude Include="version.h" />
+    <ClInclude Include="winfsp_fuse.h" />
+    <ClInclude Include="winfspfs.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="FsRover.rc" />

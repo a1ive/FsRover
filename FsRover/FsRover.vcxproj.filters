@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="RC">
@@ -46,6 +46,9 @@
     <ClCompile Include="dokanfs.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="fusefs.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="game.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -88,6 +91,9 @@
     <ClCompile Include="util.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="winfspfs.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="optparse.c">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -103,6 +109,9 @@
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="dokanfs.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="fusefs.h">
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="gui.h">
@@ -137,6 +146,12 @@
     </ClInclude>
     <ClInclude Include="version.h">
       <Filter>RC</Filter>
+    </ClInclude>
+    <ClInclude Include="winfsp_fuse.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="winfspfs.h">
+      <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="dokan\dokan.h">
       <Filter>SRC\dokan</Filter>

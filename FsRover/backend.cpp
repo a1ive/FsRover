@@ -881,7 +881,7 @@ run_payload (const winfile_add_task &task, UINT, backend_result *res)
 	   worker waits for this backend thread, which would deadlock.  */
 	std::string dev = "img" + std::to_string (g_img_seq);
 	if (dokanfs_owns_path (task.path))
-		set_error (res, "cannot mount an image through FsRover's own Dokan drive; use Mount as disk instead");
+		set_error (res, "cannot mount an image through FsRover's own drive-letter mount; use Mount as disk instead");
 	else if (rover_winfile_add (dev.c_str (), narrow (task.path).c_str (),
 		task.decompress ? 1 : 0))
 		set_error (res, "cannot mount image");

@@ -10,7 +10,7 @@ FsRover is a read-only multi-filesystem explorer for Windows.
 2. [I/O filters](#2-io-filters)
 3. [Disk filters (RAID / LVM)](#3-disk-filters-raid--lvm)
 4. [Encrypted volumes](#4-encrypted-volumes)
-5. [Dokan](#5-dokan)
+5. [Windows drive mounting](#5-windows-drive-mounting)
 6. [S.M.A.R.T.](#6-smart)
 7. [Keyboard shortcuts](#7-keyboard-shortcuts)
 8. [Command line](#8-command-line)
@@ -1304,40 +1304,20 @@ Camellia-128 (`0x15`) in CBC, and AES (`0x16`) in XTS.
 
 ---
 
-## 5. Dokan
+## 5. Windows drive mounting
 
-**Mount to drive letter** hands a browsed volume to the Dokan user-mode
-filesystem driver, so it shows up as an ordinary Windows drive that any program
-can read.
+**Mount to drive letter** hands a browsed volume to a user-mode filesystem
+driver, so it shows up as an ordinary Windows drive that any program can read.
+FsRover selects **WinFsp** by default when available, otherwise **Dokan**. The
+**Mount** menu shows the selected backend and lets you choose either available
+host.
 
-### Version
+### Backends
 
-| | |
-| --- | --- |
-| Bundled runtime | **Dokany 2.3.1.1000** |
-| API version requested | `DOKAN_VERSION` 231 |
-| Minimum compatible driver | 200 — any installed Dokany **2.x** driver works |
-| Bundled architectures | x64, x86, ARM64 — matching the FsRover build |
-
-FsRover loads `dokan2.dll` dynamically. If a Dokany 2.x runtime is already
-installed on the system, that one is used. If none is installed, the **Dokan**
-menu offers **Install Dokan**, which writes the bundled runtime into `System32`,
-then creates and starts the `Dokan2` service.
-
-### Requirements
-
-- **Administrator rights.** Without an elevated token FsRover does not even load
-  `dokan2.dll`; the **Dokan** menu shows *"Using Dokan requires administrator
-  rights"* and **Mount to drive letter** is greyed out. Use
-  **File ▸ Run as Administrator** to restart elevated. Physical disks are
-  likewise only enumerated when elevated.
-- **A 64-bit build on 64-bit Windows.** The 32-bit FsRover running under WoW64
-  cannot install Dokan — writes to `System32` would be redirected to `SysWOW64`,
-  and an x86 driver cannot be loaded by a 64-bit kernel.
-- **Windows version.** Dokany 2.x supports the Windows releases its driver is
-  built for — Windows 7 SP1 and later, including Windows 10, Windows 11 and the
-  corresponding Server editions. If the bundled driver refuses to start on your
-  system, install a Dokany release that matches it and FsRover will use it.
+| Backend | Integration | Required permission |
+| --- | --- | --- |
+| WinFsp | WinFsp-FUSE 2.8 ABI | None |
+| Dokan | Dokany API 231 | Administrator (elevated) |
 
 ### Behaviour of a mounted volume
 
@@ -1353,12 +1333,12 @@ then creates and starts the `Dokan2` service.
 - **Mount to drive letter** opens a dialog where you pick a free letter
    and optionally tick *Open in
   Explorer after mounting*.
-- Mounted drives are listed under the **Dokan** menu and in the tray icon's
+- Mounted drives are listed under the **Mount** menu and in the tray icon's
   context menu; either one unmounts a single drive.
 - Closing FsRover while drives are still mounted prompts to unmount them all.
   The tray icon keeps FsRover running, and the mounts alive, when the window is
   minimised.
-- Every Dokan callback is serviced by the single grub backend thread, so a
+- Every WinFsp/Dokan request is serviced by the single grub backend thread, so a
   mounted volume stays responsive while you browse in the GUI — but a long
   extraction and heavy I/O on a mounted drive share that thread.
 

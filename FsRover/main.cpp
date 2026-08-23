@@ -90,6 +90,8 @@ constexpr int IDM_HELP_ABOUT = 221;
 constexpr int IDM_DOKAN_INSTALL = 222;
 constexpr int IDM_HELP_SHORTCUTS = 223;
 constexpr int IDM_HELP_DOC = 224;
+constexpr int IDM_BACKEND_WINFSP = 225;
+constexpr int IDM_BACKEND_DOKAN = 226;
 constexpr int IDM_FS_ENCODING_BASE = 230;
 constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
 
@@ -972,7 +974,7 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	}
 }
 
-/* Dokan drive-letter mounts */
+/* Windows drive-letter mounts (WinFsp default, selectable Dokan host). */
 
 /* Mount options collected by the dialog; the device entry is a
    snapshot because a disk refresh arriving during the modal loop
@@ -1158,9 +1160,9 @@ on_tree_rclick (void)
 		return;
 	const backend_diskent &d = g_disks[i];
 
-	/* Dokan mounting needs a recognized filesystem on the device
-	   and an installed dokan driver; otherwise the item is grey.
-	   Dokan stays usable during an extraction (backend_call jumps
+	/* Drive mounting needs a recognized filesystem on the device and
+	   either WinFsp or Dokan; otherwise the item is grey.  It stays
+	   usable during an extraction (backend_call jumps
 	   the task queue), but loopback unmount and the hex viewer
 	   would queue behind it -- and the unmount could even pull the
 	   device the extraction is reading from -- so they gray.  */
@@ -1863,8 +1865,8 @@ create_children (HWND wnd)
 	set_status (IDS_STATUS_STARTING);
 }
 
-/* The menu bar and its submenus are owned by the window and destroyed
-   with it.  The Dokan popup starts empty; on_menu_popup fills it.  */
+	/* The menu bar and its submenus are owned by the window and destroyed
+	   with it.  The drive-mount popup starts empty; on_menu_popup fills it. */
 void
 create_menu_bar (HWND wnd)
 {
@@ -1958,6 +1960,9 @@ on_menu_popup (HMENU menu)
 		DeleteMenu (menu, 0, MF_BYPOSITION);
 	if (!dokanfs_available ())
 	{
+		AppendMenuW (menu, MF_STRING | MF_GRAYED, 0,
+			res_str (IDS_MOUNT_UNAVAILABLE).c_str ());
+		AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 		/* With the driver absent and nothing in the way, offer to
 		   install the bundled runtime instead of just greying the
 		   feature out.  What can be in the way is named in the order
@@ -1973,6 +1978,31 @@ on_menu_popup (HMENU menu)
 			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
 		return;
 	}
+	wchar_t backend[96];
+	_snwprintf_s (backend, ARRAYSIZE (backend), _TRUNCATE,
+		res_str (IDS_FMT_MOUNT_BACKEND).c_str (), dokanfs_backend_name ());
+	HMENU hosts = CreatePopupMenu ();
+	dokanfs_backend selected = dokanfs_current_backend ();
+	AppendMenuW (hosts, MF_STRING
+		| (dokanfs_backend_available (dokanfs_backend::winfsp) ? 0u : MF_GRAYED)
+		| (selected == dokanfs_backend::winfsp ? MF_CHECKED : 0u),
+		IDM_BACKEND_WINFSP, L"WinFsp");
+	AppendMenuW (hosts, MF_STRING
+		| (dokanfs_backend_available (dokanfs_backend::dokan) ? 0u : MF_GRAYED)
+		| (selected == dokanfs_backend::dokan ? MF_CHECKED : 0u),
+		IDM_BACKEND_DOKAN, L"Dokan");
+	if (!dokanfs_backend_available (dokanfs_backend::dokan))
+	{
+		AppendMenuW (hosts, MF_SEPARATOR, 0, nullptr);
+		if (is_wow64 ())
+			AppendMenuW (hosts, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_WOW64).c_str ());
+		else if (!is_elevated ())
+			AppendMenuW (hosts, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
+		else
+			AppendMenuW (hosts, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
+	}
+	AppendMenuW (menu, MF_POPUP, (UINT_PTR) hosts, backend);
+	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	if (!dokanfs_count ())
 	{
 		AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NONE).c_str ());
@@ -2091,6 +2121,12 @@ on_command (int id)
 	}
 	switch (id)
 	{
+	case IDM_BACKEND_WINFSP:
+		dokanfs_select_backend (dokanfs_backend::winfsp);
+		break;
+	case IDM_BACKEND_DOKAN:
+		dokanfs_select_backend (dokanfs_backend::dokan);
+		break;
 	case IDM_DOKAN_INSTALL:
 		do_dokan_install ();
 		break;

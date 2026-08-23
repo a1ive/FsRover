@@ -17,9 +17,8 @@
  */
 
 /*
- * Read-only dokan filesystem over the rover API (see dokanfs.h).
- * Callbacks arrive on dokan worker threads; every rover call is
- * wrapped in backend_call() so grub still runs on one thread only.
+ * Drive-mount manager and Dokan adapter.
+ * Filesystem semantics live in the FUSE-shaped fusefs core.
  */
 
 #define WIN32_NO_STATUS
@@ -30,6 +29,7 @@
 
 #include <stdio.h>
 #include <wchar.h>
+#include <errno.h>
 
 #include <atomic>
 #include <string>
@@ -41,9 +41,11 @@
 
 #include "backend.h"
 #include "dokanfs.h"
+#include "fusefs.h"
 #include "gui.h"
 #include "resource.h"
 #include "strconv.h"
+#include "winfspfs.h"
 
 /* Service control for the in-app Install Dokan feature.  */
 #pragma comment (lib, "advapi32.lib")
@@ -64,7 +66,8 @@ fn_DokanCreateFileSystem p_DokanCreateFileSystem;
 fn_DokanCloseHandle p_DokanCloseHandle;
 fn_DokanDriverVersion p_DokanDriverVersion;
 
-bool g_ok;
+bool g_dokan_ok;
+dokanfs_backend g_backend = dokanfs_backend::winfsp;
 HWND g_notify;
 std::vector<dokan_mount *> g_table;	/* GUI thread only */
 std::atomic<DWORD> g_mount_mask { 0 };	/* drive letters, read by backend */
@@ -73,13 +76,11 @@ std::atomic<DWORD> g_mount_mask { 0 };	/* drive letters, read by backend */
 
 struct dokan_mount
 {
-	std::string device;	/* grub device, no parens */
-	std::string root;	/* "(device)" */
-	std::wstring fs_name;
+	fusefs core;
 	std::wstring mountpoint;	/* L"Z:\\" */
-	unsigned long long size;
-	DWORD serial;
 	bool open_explorer;	/* post WM_APP_DOKAN_MOUNTED when live */
+	bool winfsp;
+	winfsp_mount *winfsp_handle;
 	DOKAN_HANDLE handle;
 	DOKAN_OPTIONS opts;	/* must outlive the mount */
 };
@@ -93,16 +94,16 @@ mount_of (PDOKAN_FILE_INFO info)
 	return (dokan_mount *) (UINT_PTR) info->DokanOptions->GlobalContext;
 }
 
-/* "\dir\file" (UTF-16) -> "(device)/dir/file" (UTF-8).  */
+/* "\dir\file" (UTF-16) -> FUSE path "/dir/file" (UTF-8). */
 std::string
-grub_path (dokan_mount *m, LPCWSTR name)
+fuse_path (LPCWSTR name)
 {
 	std::string p = narrow (name);
 
 	for (char &c : p)
 		if (c == '\\')
 			c = '/';
-	return m->root + p;
+	return p;
 }
 
 FILETIME
@@ -128,15 +129,13 @@ fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 	if (disposition != FILE_OPEN && disposition != FILE_OPEN_IF)
 		return STATUS_MEDIA_WRITE_PROTECTED;
 
-	std::string path = grub_path (m, name);
-	rover_stat_t st = {};
-	int err = 0;
-	if (!backend_call ([&] { err = rover_stat (path.c_str (), &st); }))
-		return STATUS_DEVICE_NOT_READY;
+	std::string path = fuse_path (name);
+	fusefs_stat st = {};
+	int err = fusefs_getattr (&m->core, path.c_str (), &st);
 	if (err)
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
-	if (st.is_dir)
+	if ((st.mode & 0170000) == 0040000)
 	{
 		if (options & FILE_NON_DIRECTORY_FILE)
 			return STATUS_FILE_IS_A_DIRECTORY;
@@ -152,12 +151,9 @@ fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 void DOKAN_CALLBACK
 fs_cleanup (LPCWSTR, PDOKAN_FILE_INFO info)
 {
-	rover_file *f = (rover_file *) (UINT_PTR) info->Context;
-
-	if (!f)
-		return;
-	info->Context = 0;
-	backend_call ([&] { rover_file_close (f); });
+	uint64_t handle = info->Context;
+	fusefs_release (&handle);
+	info->Context = handle;
 }
 
 void DOKAN_CALLBACK
@@ -170,78 +166,41 @@ NTSTATUS DOKAN_CALLBACK
 fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got, LONGLONG off, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
-	std::string path = grub_path (m, name);
-	NTSTATUS ret = STATUS_SUCCESS;
-
-	*got = 0;
-	if (!backend_call ([&]
-	{
-		/* Lazily opened on first read, reused afterwards; both
-		   Context accesses run on the backend thread, so
-		   concurrent reads on one handle stay race-free.  */
-		rover_file *f = (rover_file *) (UINT_PTR) info->Context;
-		if (!f)
-		{
-			f = rover_file_open (path.c_str ());
-			if (!f)
-			{
-				ret = STATUS_OBJECT_NAME_NOT_FOUND;
-				return;
-			}
-			info->Context = (ULONG64) (UINT_PTR) f;
-		}
-
-		unsigned long long size = rover_file_size (f);
-		if ((unsigned long long) off >= size)
-		{
-			ret = STATUS_END_OF_FILE;
-			return;
-		}
-		unsigned long long want = len;
-		if (want > size - (unsigned long long) off)
-			want = size - (unsigned long long) off;
-		if (rover_file_seek (f, (unsigned long long) off))
-		{
-			ret = STATUS_UNSUCCESSFUL;
-			return;
-		}
-		long long r = rover_file_read (f, buf, want);
-		if (r < 0)
-			ret = STATUS_UNSUCCESSFUL;
-		else
-			*got = (DWORD) r;
-	}))
-		return STATUS_DEVICE_NOT_READY;
-	return ret;
+	std::string path = fuse_path (name);
+	uint64_t handle = info->Context;
+	int rc = fusefs_read (&m->core, path.c_str (), buf, len, off, &handle);
+	info->Context = handle;
+	if (rc == -ENOENT)
+		return STATUS_OBJECT_NAME_NOT_FOUND;
+	if (rc < 0)
+		return STATUS_UNSUCCESSFUL;
+	*got = (DWORD) rc;
+	return rc == 0 && len && off >= 0 ? STATUS_END_OF_FILE : STATUS_SUCCESS;
 }
 
 NTSTATUS DOKAN_CALLBACK
 fs_getinfo (LPCWSTR name, LPBY_HANDLE_FILE_INFORMATION out, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
-	std::string path = grub_path (m, name);
-	rover_stat_t st = {};
-	int err = 0;
-
-	if (!backend_call ([&] { err = rover_stat (path.c_str (), &st); }))
-		return STATUS_DEVICE_NOT_READY;
-	if (err)
+	std::string path = fuse_path (name);
+	fusefs_stat st = {};
+	if (fusefs_getattr (&m->core, path.c_str (), &st))
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
 	ZeroMemory (out, sizeof (*out));
 	out->dwFileAttributes = FILE_ATTRIBUTE_READONLY;
-	if (st.is_dir)
+	if ((st.mode & 0170000) == 0040000)
 		out->dwFileAttributes |= FILE_ATTRIBUTE_DIRECTORY;
-	FILETIME ft = unix_to_filetime (st.mtime_set ? st.mtime : 0);
+	FILETIME ft = unix_to_filetime (st.mtime);
 	out->ftCreationTime = ft;
 	out->ftLastAccessTime = ft;
 	out->ftLastWriteTime = ft;
-	if (!st.is_dir && st.size != ROVER_SIZE_UNKNOWN)
+	if ((st.mode & 0170000) != 0040000)
 	{
 		out->nFileSizeHigh = (DWORD) (st.size >> 32);
 		out->nFileSizeLow = (DWORD) st.size;
 	}
-	out->dwVolumeSerialNumber = m->serial;
+	out->dwVolumeSerialNumber = m->core.serial;
 	out->nNumberOfLinks = 1;
 	return STATUS_SUCCESS;
 }
@@ -250,89 +209,42 @@ NTSTATUS DOKAN_CALLBACK
 fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
-	std::string path = grub_path (m, name);
-	struct entry
+	std::string path = fuse_path (name);
+	struct fill_context
 	{
-		std::string name;
-		bool is_dir;
-		unsigned long long size;
-		long long mtime;
-	};
-	std::vector<entry> entries;
-	int err = 0;
-
-	if (!backend_call ([&]
-	{
-		err = rover_dir_list (path.c_str (),
-			[] (const struct rover_dirent *ent, void *data) -> int
-			{
-				auto *out = (std::vector<entry> *) data;
-				entry e;
-				e.name = ent->name;
-				e.is_dir = ent->is_dir != 0;
-				e.size = 0;
-				e.mtime = ent->mtime_set ? ent->mtime : 0;
-				out->push_back (std::move (e));
+		PFillFindData fill;
+		PDOKAN_FILE_INFO info;
+	} context = { fill, info };
+	int rc = fusefs_readdir (&m->core, path.c_str (),
+		[] (void *opaque, const char *entry_name, const fusefs_stat *st) -> int
+		{
+			if (!strcmp (entry_name, ".") || !strcmp (entry_name, ".."))
 				return 0;
-			}, &entries);
-		if (err)
-			return;
-		/* Unlike the GUI owner-data list, Dokany has no visible-range
-		   callback or unknown-size sentinel here.  It snapshots every
-		   WIN32_FIND_DATA into the directory query cache, so returning
-		   zero and trying to fill sizes later would make FindFirstFile,
-		   Explorer and copy tools observe incorrect metadata.  Keep the
-		   eager opens until rover_dir_list can supply exact sizes itself.  */
-		std::string prefix = path;
-		if (prefix.empty () || prefix.back () != '/')
-			prefix += '/';
-		for (entry &e : entries)
-		{
-			if (e.is_dir)
-				continue;
-			rover_file *f = rover_file_open ((prefix + e.name).c_str ());
-			if (f)
-			{
-				e.size = rover_file_size (f);
-				rover_file_close (f);
-			}
-		}
-	}))
-		return STATUS_DEVICE_NOT_READY;
-	if (err)
-		return STATUS_OBJECT_NAME_NOT_FOUND;
-
-	for (const entry &e : entries)
-	{
-		WIN32_FIND_DATAW fd = {};
-		fd.dwFileAttributes = FILE_ATTRIBUTE_READONLY;
-		if (e.is_dir)
-			fd.dwFileAttributes |= FILE_ATTRIBUTE_DIRECTORY;
-		FILETIME ft = unix_to_filetime (e.mtime);
-		fd.ftCreationTime = ft;
-		fd.ftLastAccessTime = ft;
-		fd.ftLastWriteTime = ft;
-		if (!e.is_dir && e.size != ROVER_SIZE_UNKNOWN)
-		{
-			fd.nFileSizeHigh = (DWORD) (e.size >> 32);
-			fd.nFileSizeLow = (DWORD) e.size;
-		}
-		wcsncpy_s (fd.cFileName, widen (e.name).c_str (), _TRUNCATE);
-		fill (&fd, info);
-	}
-	return STATUS_SUCCESS;
+			auto *context = (fill_context *) opaque;
+			WIN32_FIND_DATAW fd = {};
+			fd.dwFileAttributes = FILE_ATTRIBUTE_READONLY;
+			if ((st->mode & 0170000) == 0040000)
+				fd.dwFileAttributes |= FILE_ATTRIBUTE_DIRECTORY;
+			FILETIME ft = unix_to_filetime (st->mtime);
+			fd.ftCreationTime = ft;
+			fd.ftLastAccessTime = ft;
+			fd.ftLastWriteTime = ft;
+			fd.nFileSizeHigh = (DWORD) (st->size >> 32);
+			fd.nFileSizeLow = (DWORD) st->size;
+			wcsncpy_s (fd.cFileName, widen (entry_name).c_str (), _TRUNCATE);
+			return context->fill (&fd, context->info);
+		}, &context);
+	return rc ? STATUS_OBJECT_NAME_NOT_FOUND : STATUS_SUCCESS;
 }
 
 NTSTATUS DOKAN_CALLBACK
 fs_freespace (PULONGLONG avail, PULONGLONG total, PULONGLONG free_total, PDOKAN_FILE_INFO info)
 {
 	dokan_mount *m = mount_of (info);
-	unsigned long long size = m->size;
-
-	if (size == ~0ULL)
-		size = 0;
+	fusefs_statvfs st = {};
+	fusefs_statfs (&m->core, &st);
 	*avail = 0;
-	*total = size;
+	*total = st.blocks * st.block_size;
 	*free_total = 0;
 	return STATUS_SUCCESS;
 }
@@ -343,11 +255,11 @@ fs_volinfo (LPWSTR vol_name, DWORD vol_size, LPDWORD serial,
 {
 	dokan_mount *m = mount_of (info);
 
-	wcsncpy_s (vol_name, vol_size, widen (m->device).c_str (), _TRUNCATE);
-	*serial = m->serial;
+	wcsncpy_s (vol_name, vol_size, widen (m->core.device).c_str (), _TRUNCATE);
+	*serial = m->core.serial;
 	*max_component = 255;
 	*flags = FILE_CASE_SENSITIVE_SEARCH | FILE_CASE_PRESERVED_NAMES | FILE_UNICODE_ON_DISK | FILE_READ_ONLY_VOLUME;
-	wcsncpy_s (fs_name, fs_size, m->fs_name.c_str (), _TRUNCATE);
+	wcsncpy_s (fs_name, fs_size, widen (m->core.fs_name).c_str (), _TRUNCATE);
 	return STATUS_SUCCESS;
 }
 
@@ -383,16 +295,6 @@ DOKAN_OPERATIONS g_ops =
 	.Mounted = fs_mounted,
 	.Unmounted = fs_unmounted,
 };
-
-DWORD
-device_serial (const std::string &device)
-{
-	DWORD h = 2166136261u;
-
-	for (char c : device)
-		h = (h ^ (unsigned char) c) * 16777619u;
-	return h ? h : 1;
-}
 
 DWORD
 drive_mask (wchar_t letter)
@@ -444,7 +346,7 @@ dokan_load (void)
 		p_DokanShutdown ();
 		goto fail;
 	}
-	g_ok = true;
+	g_dokan_ok = true;
 	return true;
 
 fail:
@@ -527,19 +429,51 @@ bool
 dokanfs_init (HWND notify)
 {
 	g_notify = notify;
-	return dokan_load ();
+	bool winfsp = winfspfs_init (notify, WM_APP_DOKAN_GONE,
+		WM_APP_DOKAN_MOUNTED);
+	dokan_load ();
+	g_backend = winfsp ? dokanfs_backend::winfsp : dokanfs_backend::dokan;
+	return winfsp || g_dokan_ok;
 }
 
 bool
 dokanfs_available (void)
 {
-	return g_ok;
+	return winfspfs_available () || g_dokan_ok;
+}
+
+const wchar_t *
+dokanfs_backend_name (void)
+{
+	return g_backend == dokanfs_backend::winfsp ? L"WinFsp" : L"Dokan";
+}
+
+bool
+dokanfs_backend_available (dokanfs_backend backend)
+{
+	return backend == dokanfs_backend::winfsp
+		? winfspfs_available () : g_dokan_ok;
+}
+
+dokanfs_backend
+dokanfs_current_backend (void)
+{
+	return g_backend;
+}
+
+bool
+dokanfs_select_backend (dokanfs_backend backend)
+{
+	if (!dokanfs_backend_available (backend))
+		return false;
+	g_backend = backend;
+	return true;
 }
 
 bool
 dokanfs_install (std::wstring *error)
 {
-	if (g_ok)
+	if (g_dokan_ok)
 		return true;
 
 	/* The bundled runtime matches this executable's architecture, so a
@@ -578,56 +512,77 @@ dokanfs_install (std::wstring *error)
 		*error = L"Dokan was installed but its driver did not respond";
 		return false;
 	}
+	if (!winfspfs_available ())
+		g_backend = dokanfs_backend::dokan;
 	return true;
 }
 
 void
 dokanfs_shutdown (void)
 {
-	if (!g_ok)
-		return;
 	dokanfs_unmount_all ();
-	p_DokanShutdown ();
-	FreeLibrary (g_dll);
-	g_dll = nullptr;
-	g_ok = false;
+	winfspfs_shutdown ();
+	if (g_dokan_ok)
+	{
+		p_DokanShutdown ();
+		FreeLibrary (g_dll);
+		g_dll = nullptr;
+		g_dokan_ok = false;
+	}
 }
 
 dokan_mount *
 dokanfs_mount (const std::string &device, const std::string &fs,
 	unsigned long long size, wchar_t letter, bool open_explorer, std::wstring *error)
 {
-	if (!g_ok)
+	if (!dokanfs_backend_available (g_backend))
 	{
-		*error = L"dokan is not available";
+		*error = std::wstring (dokanfs_backend_name ()) + L" is not available";
 		return nullptr;
 	}
 
 	dokan_mount *m = new dokan_mount;
-	m->device = device;
-	m->root = "(" + device + ")";
-	m->fs_name = widen (fs);
+	fusefs_init (&m->core, device, fs, size);
 	m->mountpoint = std::wstring (1, letter) + L":\\";
-	m->size = size;
-	m->serial = device_serial (device);
 	m->open_explorer = open_explorer;
+	m->winfsp = false;
+	m->winfsp_handle = nullptr;
 	m->handle = nullptr;
-	ZeroMemory (&m->opts, sizeof (m->opts));
-	m->opts.Version = DOKAN_VERSION;
-	m->opts.Options = DOKAN_OPTION_WRITE_PROTECT;
-	m->opts.GlobalContext = (ULONG64) (UINT_PTR) m;
-	m->opts.MountPoint = m->mountpoint.c_str ();
-	m->opts.SectorSize = 512;
-	m->opts.AllocationUnitSize = 512;
 
-	int rc = p_DokanCreateFileSystem (&m->opts, &g_ops, &m->handle);
-	if (rc != DOKAN_SUCCESS)
+	/* The selected backend is authoritative: do not silently retry the other
+	   host, so backend-specific tests have deterministic results. */
+	if (g_backend == dokanfs_backend::winfsp)
 	{
-		wchar_t buf[64];
-		swprintf (buf, 64, L"dokan mount failed (%d)", rc);
-		*error = buf;
-		delete m;
-		return nullptr;
+		m->winfsp_handle = winfspfs_mount (&m->core, letter,
+			open_explorer, m, error);
+		if (m->winfsp_handle)
+			m->winfsp = true;
+		else
+		{
+			delete m;
+			return nullptr;
+		}
+	}
+
+	if (!m->winfsp)
+	{
+		ZeroMemory (&m->opts, sizeof (m->opts));
+		m->opts.Version = DOKAN_VERSION;
+		m->opts.Options = DOKAN_OPTION_WRITE_PROTECT;
+		m->opts.GlobalContext = (ULONG64) (UINT_PTR) m;
+		m->opts.MountPoint = m->mountpoint.c_str ();
+		m->opts.SectorSize = 512;
+		m->opts.AllocationUnitSize = 512;
+
+		int rc = p_DokanCreateFileSystem (&m->opts, &g_ops, &m->handle);
+		if (rc != DOKAN_SUCCESS)
+		{
+			wchar_t buf[64];
+			swprintf (buf, 64, L"dokan mount failed (%d)", rc);
+			*error = buf;
+			delete m;
+			return nullptr;
+		}
 	}
 	g_mount_mask.fetch_or (drive_mask (letter), std::memory_order_relaxed);
 	g_table.push_back (m);
@@ -637,7 +592,10 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 void
 dokanfs_unmount (dokan_mount *m)
 {
-	p_DokanCloseHandle (m->handle);
+	if (m->winfsp)
+		winfspfs_unmount (m->winfsp_handle);
+	else
+		p_DokanCloseHandle (m->handle);
 	g_mount_mask.fetch_and (~drive_mask (m->mountpoint[0]),
 		std::memory_order_relaxed);
 	for (size_t i = 0; i < g_table.size (); i++)
@@ -672,7 +630,7 @@ dokan_mount *
 dokanfs_find_device (const std::string &device)
 {
 	for (dokan_mount *m : g_table)
-		if (m->device == device)
+		if (m->core.device == device)
 			return m;
 	return nullptr;
 }
@@ -716,7 +674,7 @@ dokanfs_owns_path (const std::wstring &path)
 const std::string &
 dokanfs_device (const dokan_mount *m)
 {
-	return m->device;
+	return m->core.device;
 }
 
 std::wstring
