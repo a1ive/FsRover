@@ -274,6 +274,12 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 			}, &entries);
 		if (err)
 			return;
+		/* Unlike the GUI owner-data list, Dokany has no visible-range
+		   callback or unknown-size sentinel here.  It snapshots every
+		   WIN32_FIND_DATA into the directory query cache, so returning
+		   zero and trying to fill sizes later would make FindFirstFile,
+		   Explorer and copy tools observe incorrect metadata.  Keep the
+		   eager opens until rover_dir_list can supply exact sizes itself.  */
 		std::string prefix = path;
 		if (prefix.empty () || prefix.back () != '/')
 			prefix += '/';

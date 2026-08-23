@@ -238,8 +238,17 @@ std::map<std::wstring, int> g_icon_cache;	/* list_icon() memo, by key */
 std::string g_path;	/* listed path, UTF-8, empty = nothing shown */
 UINT g_seq_disks;	/* pending seq per task type; older results */
 UINT g_seq_list;	/* are stale and dropped */
+UINT g_view_seq;	/* list_dir seq currently represented by g_entries */
+UINT g_seq_sizes;	/* one bounded lazy-size batch at a time */
 UINT g_seq_extract;	/* also the raw image export: one long job at a time */
 bool g_export_job;	/* the running job is an export, not an extraction */
+
+constexpr size_t LIST_SIZE_BATCH = 64;
+constexpr int LIST_SIZE_WINDOW = 192;
+std::vector<bool> g_size_pending;	/* parallel to g_entries */
+std::vector<size_t> g_size_rows;	/* rows owned by g_seq_sizes */
+int g_size_want_first;
+int g_size_want_last = -1;
 
 std::set<std::string> g_mounted;	/* loopback devices we created */
 HFONT g_font;	/* message font, shared by all controls */
@@ -444,6 +453,12 @@ navigate (const std::string &path)
 	task.type = backend_task_type::list_dir;
 	task.path = path;
 	g_seq_list = backend_post (std::move (task));
+	/* A result from the old view must not populate the new one, even
+	   when both paths happen to contain the same names.  */
+	g_seq_sizes = 0;
+	g_size_pending.clear ();
+	g_size_rows.clear ();
+	g_size_want_last = -1;
 	set_status (IDS_STATUS_LISTING);
 }
 
@@ -482,6 +497,7 @@ set_fs_encoding (UINT encoding)
 	g_hist_pos = -1;
 	g_hist_seq = 0;
 	g_path = std::move (root);
+	g_view_seq = 0;
 	g_entries.clear ();
 	g_rows.clear ();
 	ListView_SetItemCountEx (g_list, 0, 0);
@@ -1406,10 +1422,128 @@ fill_tree (backend_result *res)
 }
 
 void
+queue_list_sizes (int first, int last)
+{
+	if (g_view_seq != g_seq_list || g_entries.empty ())
+		return;
+	if (first < 0)
+		first = 0;
+	if (last >= (int) g_entries.size ())
+		last = (int) g_entries.size () - 1;
+	if (first > last)
+		return;
+
+	/* A newer cache hint replaces the desired neighborhood.  The
+	   in-flight batch is deliberately small; when it finishes we fill
+	   the newest neighborhood rather than queueing scroll history.  */
+	g_size_want_first = first;
+	g_size_want_last = last;
+	if (g_seq_sizes)
+		return;
+
+	backend_task task;
+	std::vector<size_t> rows;
+	task.type = backend_task_type::list_sizes;
+	task.path = g_path;
+	task.owner_seq = g_view_seq;
+	task.paths.reserve (LIST_SIZE_BATCH);
+	rows.reserve (LIST_SIZE_BATCH);
+	for (int i = first; i <= last && rows.size () < LIST_SIZE_BATCH; i++)
+	{
+		const backend_dirent &e = g_entries[(size_t) i];
+		if (e.is_dir || e.is_symlink || e.size_set || g_size_pending[(size_t) i])
+			continue;
+		g_size_pending[(size_t) i] = true;
+		task.paths.push_back (e.name);
+		rows.push_back ((size_t) i);
+	}
+	if (rows.empty ())
+		return;
+
+	g_size_rows = std::move (rows);
+	g_seq_sizes = backend_post (std::move (task));
+}
+
+void
+hint_list_sizes (int from, int to)
+{
+	if (from < 0 || to < from || g_entries.empty ())
+		return;
+	int page = ListView_GetCountPerPage (g_list);
+	if (page < 1)
+		page = 32;
+	int span = to - from + 1;
+	int first = from - page;
+	int last = to + page;
+	if (span >= LIST_SIZE_WINDOW)
+	{
+		first = from;
+		last = from + LIST_SIZE_WINDOW - 1;
+	}
+	else if (last - first + 1 > LIST_SIZE_WINDOW)
+	{
+		int extra = LIST_SIZE_WINDOW - span;
+		first = from - extra / 2;
+		last = to + extra - extra / 2;
+	}
+	if (first < 0)
+	{
+		last -= first;
+		first = 0;
+	}
+	if (last >= (int) g_entries.size ())
+	{
+		int over = last - (int) g_entries.size () + 1;
+		last = (int) g_entries.size () - 1;
+		first = first > over ? first - over : 0;
+	}
+	queue_list_sizes (first, last);
+}
+
+void
+fill_list_sizes (backend_result *res)
+{
+	int redraw_first = (int) g_entries.size ();
+	int redraw_last = -1;
+	size_t got = res->sizes.size () < g_size_rows.size ()
+		? res->sizes.size () : g_size_rows.size ();
+
+	for (size_t row : g_size_rows)
+		if (row < g_size_pending.size ())
+			g_size_pending[row] = false;
+	for (size_t i = 0; i < got; i++)
+	{
+		size_t row = g_size_rows[i];
+		if (row >= g_entries.size () || row >= g_rows.size ())
+			continue;
+		g_entries[row].size = res->sizes[i];
+		g_entries[row].size_set = true;
+		g_rows[row].size = format_size (res->sizes[i]);
+		if ((int) row < redraw_first)
+			redraw_first = (int) row;
+		if ((int) row > redraw_last)
+			redraw_last = (int) row;
+	}
+
+	g_size_rows.clear ();
+	g_seq_sizes = 0;
+	if (redraw_last >= redraw_first)
+		ListView_RedrawItems (g_list, redraw_first, redraw_last);
+	if (g_size_want_last >= g_size_want_first)
+		queue_list_sizes (g_size_want_first, g_size_want_last);
+}
+
+void
 fill_list (backend_result *res)
 {
 	g_path = res->path;
 	g_entries = std::move (res->entries);
+	g_view_seq = res->seq;
+	g_seq_sizes = 0;
+	g_size_pending.assign (g_entries.size (), false);
+	g_size_rows.clear ();
+	g_size_want_first = 0;
+	g_size_want_last = -1;
 	hist_record (res->seq);
 	update_nav_buttons ();
 
@@ -1421,7 +1555,7 @@ fill_list (backend_result *res)
 		row.name = widen (e.name);
 		if (e.is_symlink)
 			row.size = res_str (IDS_SIZE_SYMLINK);
-		else if (!e.is_dir)
+		else if (!e.is_dir && e.size_set)
 			row.size = format_size (e.size);
 		row.mtime = format_mtime (e.mtime);
 		row.image = list_icon (e.name, e.is_dir);
@@ -1429,6 +1563,9 @@ fill_list (backend_result *res)
 	}
 
 	ListView_SetItemCountEx (g_list, (int) g_rows.size (), 0);
+	int top = ListView_GetTopIndex (g_list);
+	int per_page = ListView_GetCountPerPage (g_list);
+	hint_list_sizes (top, top + (per_page > 0 ? per_page : 1) - 1);
 	SetWindowTextW (g_address, widen (g_path).c_str ());
 
 	wchar_t text[64];
@@ -1449,6 +1586,10 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::list_dir:
 		if (res->seq != g_seq_list)
+			return;
+		break;
+	case backend_task_type::list_sizes:
+		if (res->seq != g_seq_sizes || res->owner_seq != g_seq_list)
 			return;
 		break;
 	case backend_task_type::extract:
@@ -1498,6 +1639,7 @@ on_task_done (backend_result *raw)
 			/* A failed navigation must not keep showing the
 			   previous directory's entries.  */
 			g_path.clear ();
+			g_view_seq = 0;
 			g_entries.clear ();
 			g_rows.clear ();
 			ListView_SetItemCountEx (g_list, 0, 0);
@@ -1514,6 +1656,9 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::list_dir:
 		fill_list (res.get ());
+		break;
+	case backend_task_type::list_sizes:
+		fill_list_sizes (res.get ());
 		break;
 	case backend_task_type::extract:
 	{
@@ -1562,6 +1707,7 @@ on_task_done (backend_result *raw)
 		if (g_path.rfind ("(" + res->path + ")", 0) == 0 || g_path.rfind ("(" + res->path + ",", 0) == 0)
 		{
 			g_path.clear ();
+			g_view_seq = 0;
 			g_entries.clear ();
 			g_rows.clear ();
 			ListView_SetItemCountEx (g_list, 0, 0);
@@ -1624,6 +1770,12 @@ on_list_getdispinfo (NMLVDISPINFOW *di)
 }
 
 void
+on_list_cache_hint (NMLVCACHEHINT *hint)
+{
+	hint_list_sizes (hint->iFrom, hint->iTo);
+}
+
+void
 on_list_dblclk (int item)
 {
 	if (item < 0 || item >= (int) g_entries.size ())
@@ -1657,6 +1809,8 @@ on_notify (NMHDR *hdr)
 {
 	if (hdr->hwndFrom == g_list && hdr->code == LVN_GETDISPINFOW)
 		on_list_getdispinfo ((NMLVDISPINFOW *) hdr);
+	else if (hdr->hwndFrom == g_list && hdr->code == LVN_ODCACHEHINT)
+		on_list_cache_hint ((NMLVCACHEHINT *) hdr);
 	else if (hdr->hwndFrom == g_list && hdr->code == NM_DBLCLK)
 		on_list_dblclk (((NMITEMACTIVATE *) hdr)->iItem);
 	else if (hdr->hwndFrom == g_list && hdr->code == NM_RCLICK)

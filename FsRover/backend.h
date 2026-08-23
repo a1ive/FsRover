@@ -52,6 +52,7 @@ enum class backend_task_type
 {
 	enum_disks,	/* grub devices -> result.disks */
 	list_dir,	/* path -> result.entries */
+	list_sizes,	/* path + paths (entry names) -> result.sizes */
 	extract,	/* paths -> dest, recursive for directories */
 	export_image,	/* device name + limit -> dest, raw .img copy */
 	loopback_add,	/* path (image file) -> result.path = "loopN" */
@@ -100,7 +101,8 @@ struct backend_task
 	backend_task_type type;
 	std::string path;	/* list_dir: "(hd0,gpt2)/dir";
 				   export_image: "hd0,gpt2", no parens */
-	std::vector<std::string> paths;	/* extract: sources */
+	std::vector<std::string> paths;	/* extract: sources;
+					   list_sizes: entry names */
 	std::wstring dest;	/* extract: destination directory;
 				   export_image: destination image file;
 				   winfile_add: source image file */
@@ -123,6 +125,7 @@ struct backend_task
 	bool pm_keyfile = false;	/* plainmount_unlock: key is raw key material */
 	bool decompress = false;	/* loopback_add, winfile_add: decode gzip/xz/... transparently */
 	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
+	UINT owner_seq = 0;	/* list_sizes: list_dir seq that owns the view */
 };
 
 struct backend_progress
@@ -171,6 +174,7 @@ struct backend_dirent
 	bool is_dir;
 	bool is_symlink;
 	UINT64 size;	/* BACKEND_SIZE_UNKNOWN if not determined */
+	bool size_set;	/* false until a lazy list_sizes task has run */
 	INT64 mtime;	/* seconds since Unix epoch, 0 = unknown */
 	/* On-disk identity within the volume, for telling one object from
 	   another (see struct rover_dirent).  Not every driver has one.  */
@@ -182,10 +186,12 @@ struct backend_result
 {
 	backend_task_type type;
 	UINT seq;	/* matches the backend_post() return value */
+	UINT owner_seq = 0;	/* list_sizes: originating list_dir seq */
 	std::string error;	/* empty = success */
-	std::string path;	/* list_dir: the path that was listed */
+	std::string path;	/* list_dir/list_sizes: listed directory */
 	std::vector<backend_diskent> disks;	/* enum_disks */
 	std::vector<backend_dirent> entries;	/* list_dir, dirs first */
+	std::vector<UINT64> sizes;	/* list_sizes, in task.paths order */
 	UINT64 stat_files = 0;	/* extract: files written */
 	UINT64 stat_bytes = 0;	/* extract, export_image: bytes written */
 	UINT64 stat_links = 0;	/* extract: symlinks skipped */

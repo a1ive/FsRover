@@ -69,6 +69,7 @@ std::deque<sync_request> g_requests;	/* guarded by g_lock */
 bool g_stop;	/* guarded by g_lock */
 UINT g_seq;	/* guarded by g_lock */
 std::atomic<bool> g_cancel;
+std::atomic<UINT> g_latest_list_seq;	/* newest GUI directory generation */
 UINT g_loop_seq;	/* backend thread only: next "loopN" suffix */
 UINT g_img_seq;	/* backend thread only: next "imgN" suffix */
 int g_init_flags;	/* ROVER_INIT_*, set before the thread starts */
@@ -175,7 +176,8 @@ list_dir_hook (const struct rover_dirent *ent, void *data)
 	e.name = ent->name;
 	e.is_dir = ent->is_dir != 0;
 	e.is_symlink = ent->is_symlink != 0;
-	e.size = 0;
+	e.size = e.is_dir || e.is_symlink ? 0 : BACKEND_SIZE_UNKNOWN;
+	e.size_set = e.is_dir || e.is_symlink;
 	e.mtime = ent->mtime_set ? ent->mtime : 0;
 	e.inode_set = ent->inode_set != 0;
 	e.inode = ent->inode;
@@ -202,29 +204,37 @@ run_list_dir (const std::string &path, backend_result *res)
 			return rover_sort::natural_less (a.name, b.name);
 		});
 
-	/* File sizes: grub dir hooks do not report them, so open each
-	   file once the iteration is over (never from inside the dir
-	   callback -- that would re-enter the filesystem driver).  */
-	std::string prefix = path;
+	/* grub dir hooks do not report file sizes.  The GUI asks for
+	   bounded visible ranges later instead of turning this cheap
+	   enumeration into one file open per entry.  */
+}
+
+void
+run_list_sizes (const backend_task &task, backend_result *res)
+{
+	std::string prefix = task.path;
 	if (prefix.empty () || prefix.back () != '/')
 		prefix += '/';
-	for (auto &e : res->entries)
+
+	res->path = task.path;
+	res->owner_seq = task.owner_seq;
+	res->sizes.reserve (task.paths.size ());
+	for (const std::string &name : task.paths)
 	{
-		/* Directories have no size;
-		   a symlink's own size is meaningless.  */
-		if (e.is_dir || e.is_symlink)
-			continue;
-		if (g_cancel.load (std::memory_order_relaxed))
+		/* A navigation posted while this batch is running makes the
+		   remaining random reads useless.  This is separate from the
+		   extraction cancellation flag.  */
+		if (task.owner_seq != g_latest_list_seq.load (std::memory_order_relaxed))
 			break;
 		service_requests ();
-		rover_file *f = rover_file_open ((prefix + e.name).c_str ());
+		rover_file *f = rover_file_open ((prefix + name).c_str ());
 		if (f)
 		{
-			e.size = rover_file_size (f);
+			res->sizes.push_back (rover_file_size (f));
 			rover_file_close (f);
 		}
 		else
-			e.size = BACKEND_SIZE_UNKNOWN;
+			res->sizes.push_back (BACKEND_SIZE_UNKNOWN);
 	}
 }
 
@@ -799,6 +809,9 @@ run_task (queued_task &item)
 	case backend_task_type::list_dir:
 		run_list_dir (item.task.path, res);
 		break;
+	case backend_task_type::list_sizes:
+		run_list_sizes (item.task, res);
+		break;
 	case backend_task_type::extract:
 		run_extract (item.task, item.seq, res);
 		break;
@@ -985,6 +998,8 @@ backend_post (backend_task &&task)
 	{
 		std::lock_guard<std::mutex> hold (g_lock);
 		seq = ++g_seq;
+		if (task.type == backend_task_type::list_dir)
+			g_latest_list_seq.store (seq, std::memory_order_relaxed);
 		g_queue.push_back ({ std::move (task), seq });
 	}
 	g_wake.notify_one ();
