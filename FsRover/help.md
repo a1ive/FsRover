@@ -197,6 +197,9 @@ supported WOF files are exposed as regular files.
 
 **Supported versions:** ReFS 1.x and ReFS 3.x.
 
+**Container compression:** ReFS 3.14 compacted containers using LZ4, LZ4QAT,
+or Zstandard are read transparently.
+
 **Not supported:**
 
 - alternate data streams (ADS);
