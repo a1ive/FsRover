@@ -71,6 +71,7 @@ jobs:
           $artifactDirectory = Join-Path $env:RUNNER_TEMP "Rover-${{ matrix.architecture }}"
           New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
           Copy-Item -LiteralPath "build\${{ matrix.output_directory }}\FsRover.exe" -Destination $artifactDirectory
+          Copy-Item -LiteralPath "build\${{ matrix.output_directory }}\CliRover.exe" -Destination $artifactDirectory
           Copy-Item -LiteralPath LICENSE -Destination $artifactDirectory
 
       - name: Upload artifact
@@ -113,8 +114,10 @@ jobs:
           foreach ($architecture in @('x64', 'x86', 'ARM64')) {
             $sourceDirectory = Join-Path 'release-input' "Rover-$architecture"
             $programPath = Join-Path $sourceDirectory 'FsRover.exe'
+            $cliProgramPath = Join-Path $sourceDirectory 'CliRover.exe'
             $licensePath = Join-Path $sourceDirectory 'LICENSE'
             if (-not (Test-Path -LiteralPath $programPath) -or
+                -not (Test-Path -LiteralPath $cliProgramPath) -or
                 -not (Test-Path -LiteralPath $licensePath)) {
               throw "Incomplete release input for $architecture."
             }
