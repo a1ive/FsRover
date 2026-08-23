@@ -76,8 +76,7 @@ props_start_hash (HWND dlg)
 	if (g_hashing)
 		return;
 
-	backend_task task;
-	task.type = backend_task_type::hash_file;
+	hash_file_task task;
 	task.path = g_props_path;
 	task.hash_mask = mask;
 	g_seq_hash = backend_post (std::move (task));
@@ -114,8 +113,7 @@ props_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		SendDlgItemMessageW (dlg, IDC_PROPS_PROGRESS, PBM_SETRANGE32, 0, 100);
 		EnableWindow (GetDlgItem (dlg, IDC_PROPS_COPY), FALSE);
 
-		backend_task task;
-		task.type = backend_task_type::file_props;
+		file_props_task task;
 		task.path = g_props_path;
 		g_seq_props = backend_post (std::move (task));
 		return TRUE;

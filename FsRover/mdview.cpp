@@ -236,8 +236,7 @@ md_init_dialog (HWND dlg)
 	   does not leave an empty window with nothing to say.  */
 	SetDlgItemTextW (dlg, IDC_MD_EDIT, res_str (IDS_TEXT_LOADING).c_str ());
 
-	backend_task task;
-	task.type = backend_task_type::read_chunk;
+	read_chunk_task task;
 	task.path = g_md_path;
 	task.offset = 0;
 	task.length = MD_PROBE;
@@ -374,8 +373,7 @@ md_on_chunk (backend_result *res)
 		}
 		if (res->file_size > res->data.size ())
 		{
-			backend_task task;
-			task.type = backend_task_type::read_chunk;
+			read_chunk_task task;
 			task.path = g_md_path;
 			task.offset = 0;
 			task.length = MD_MAX;

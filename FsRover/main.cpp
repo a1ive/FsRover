@@ -448,11 +448,7 @@ device_icon_id (const backend_diskent &d)
 void
 navigate (const std::string &path)
 {
-	backend_task task;
-
-	task.type = backend_task_type::list_dir;
-	task.path = path;
-	g_seq_list = backend_post (std::move (task));
+	g_seq_list = backend_post (list_dir_task { path });
 	/* A result from the old view must not populate the new one, even
 	   when both paths happen to contain the same names.  */
 	g_seq_sizes = 0;
@@ -465,10 +461,7 @@ navigate (const std::string &path)
 void
 refresh (void)
 {
-	backend_task task;
-
-	task.type = backend_task_type::enum_disks;
-	g_seq_disks = backend_post (std::move (task));
+	g_seq_disks = backend_post (enum_disks_task {});
 	set_status (IDS_STATUS_ENUM);
 	if (!g_path.empty ())
 		navigate (g_path);
@@ -717,11 +710,7 @@ fail:
 void
 mount_host_image (std::wstring file, bool decompress)
 {
-	backend_task task;
-	task.type = backend_task_type::winfile_add;
-	task.dest = std::move (file);
-	task.decompress = decompress;
-	backend_post (std::move (task));
+	backend_post (winfile_add_task { std::move (file), decompress });
 	set_status (IDS_STATUS_MOUNTING);
 }
 
@@ -827,11 +816,7 @@ start_extract (std::vector<std::string> &&paths)
 	if (dest.empty ())
 		return;
 
-	backend_task task;
-	task.type = backend_task_type::extract;
-	task.paths = std::move (paths);
-	task.dest = std::move (dest);
-	task.preserve_times = g_preserve_times;
+	extract_task task { std::move (paths), std::move (dest), g_preserve_times };
 	begin_job (backend_post (std::move (task)), false, IDS_STATUS_EXTRACTING);
 }
 
@@ -860,10 +845,7 @@ start_export (const backend_diskent &d)
 	if (dest.empty ())
 		return;
 
-	backend_task task;
-	task.type = backend_task_type::export_image;
-	task.path = d.name;
-	task.dest = std::move (dest);
+	export_image_task task { d.name, std::move (dest) };
 	/* The device size the tree already knows: on a partition it is
 	   what bounds the copy, the blocklist alone would not.  */
 	task.limit = d.size;
@@ -952,8 +934,7 @@ on_list_rclick (NMITEMACTIVATE *ia)
 		start_extract (std::move (paths));
 	else if ((cmd == IDM_MOUNT || cmd == IDM_MOUNT_DECOMP) && file_item >= 0)
 	{
-		backend_task task;
-		task.type = backend_task_type::loopback_add;
+		loopback_add_task task;
 		task.path = join_path (g_path, g_entries[(size_t) file_item].name);
 		task.decompress = (cmd == IDM_MOUNT_DECOMP);
 		backend_post (std::move (task));
@@ -1243,12 +1224,10 @@ on_tree_rclick (void)
 	case IDM_UNMOUNT:
 		if (is_loop)
 		{
-			backend_task task;
-			task.type = d.dev_id == BACKEND_DEV_WINFILE
-				? backend_task_type::winfile_del
-				: backend_task_type::loopback_del;
-			task.path = d.name;
-			backend_post (std::move (task));
+			if (d.dev_id == BACKEND_DEV_WINFILE)
+				backend_post (winfile_del_task { d.name });
+			else
+				backend_post (loopback_del_task { d.name });
 			set_status (IDS_STATUS_UNMOUNTING);
 		}
 		break;
@@ -1441,9 +1420,8 @@ queue_list_sizes (int first, int last)
 	if (g_seq_sizes)
 		return;
 
-	backend_task task;
+	list_sizes_task task;
 	std::vector<size_t> rows;
-	task.type = backend_task_type::list_sizes;
 	task.path = g_path;
 	task.owner_seq = g_view_seq;
 	task.paths.reserve (LIST_SIZE_BATCH);
@@ -2193,7 +2171,12 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		g_main_dpi = dpi_for_window (wnd);
 		create_children (wnd);
 		create_menu_bar (wnd);
-		backend_start (wnd, g_cmdline.no_windisk);
+		if (!backend_start (wnd, g_cmdline.no_windisk))
+		{
+			MessageBoxW (wnd, res_str (IDS_BACKEND_START_FAILED).c_str (),
+				res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
+			return -1;
+		}
 		dokanfs_init (wnd);
 		tray_add (wnd);
 		enable_file_drop (wnd);
@@ -2353,7 +2336,9 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		Shell_NotifyIconW (NIM_DELETE, &g_tray);
 		dokanfs_shutdown ();
 		smart_shutdown ();
-		backend_stop ();
+		if (!backend_stop ())
+			MessageBoxW (nullptr, res_str (IDS_BACKEND_STOP_FAILED).c_str (),
+				res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 		PostQuitMessage (0);
 		return 0;
 	}

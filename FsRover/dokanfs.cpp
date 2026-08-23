@@ -131,7 +131,8 @@ fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 	std::string path = grub_path (m, name);
 	rover_stat_t st = {};
 	int err = 0;
-	backend_call ([&] { err = rover_stat (path.c_str (), &st); });
+	if (!backend_call ([&] { err = rover_stat (path.c_str (), &st); }))
+		return STATUS_DEVICE_NOT_READY;
 	if (err)
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
@@ -173,7 +174,7 @@ fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got, LONGLONG off, PDOKAN_
 	NTSTATUS ret = STATUS_SUCCESS;
 
 	*got = 0;
-	backend_call ([&]
+	if (!backend_call ([&]
 	{
 		/* Lazily opened on first read, reused afterwards; both
 		   Context accesses run on the backend thread, so
@@ -209,7 +210,8 @@ fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got, LONGLONG off, PDOKAN_
 			ret = STATUS_UNSUCCESSFUL;
 		else
 			*got = (DWORD) r;
-	});
+	}))
+		return STATUS_DEVICE_NOT_READY;
 	return ret;
 }
 
@@ -221,7 +223,8 @@ fs_getinfo (LPCWSTR name, LPBY_HANDLE_FILE_INFORMATION out, PDOKAN_FILE_INFO inf
 	rover_stat_t st = {};
 	int err = 0;
 
-	backend_call ([&] { err = rover_stat (path.c_str (), &st); });
+	if (!backend_call ([&] { err = rover_stat (path.c_str (), &st); }))
+		return STATUS_DEVICE_NOT_READY;
 	if (err)
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 
@@ -258,7 +261,7 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 	std::vector<entry> entries;
 	int err = 0;
 
-	backend_call ([&]
+	if (!backend_call ([&]
 	{
 		err = rover_dir_list (path.c_str (),
 			[] (const struct rover_dirent *ent, void *data) -> int
@@ -294,7 +297,8 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 				rover_file_close (f);
 			}
 		}
-	});
+	}))
+		return STATUS_DEVICE_NOT_READY;
 	if (err)
 		return STATUS_OBJECT_NAME_NOT_FOUND;
 

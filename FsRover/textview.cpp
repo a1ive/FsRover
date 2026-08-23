@@ -536,8 +536,7 @@ text_init_dialog (HWND dlg)
 	/* Default frame centered on the owner (the template size is just a fallback).  */
 	center_on_owner (dlg, text_scale (760), text_scale (540));
 
-	backend_task task;
-	task.type = backend_task_type::read_chunk;
+	read_chunk_task task;
 	task.path = g_text_path;
 	task.offset = 0;
 	task.length = TEXT_PROBE;
@@ -657,8 +656,7 @@ text_on_chunk (backend_result *res)
 		}
 		if (res->file_size > res->data.size ())
 		{
-			backend_task task;
-			task.type = backend_task_type::read_chunk;
+			read_chunk_task task;
 			task.path = g_text_path;
 			task.offset = 0;
 			task.length = TEXT_MAX;

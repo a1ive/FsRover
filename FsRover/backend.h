@@ -34,6 +34,7 @@
 
 #include <functional>
 #include <string>
+#include <variant>
 #include <vector>
 
 /* backend -> GUI: rover_init() finished, tasks will be served now.  */
@@ -96,37 +97,112 @@ constexpr UINT BACKEND_HASH_SHA256 = 1u << 4;
 constexpr UINT BACKEND_HASH_SHA512 = 1u << 5;
 constexpr int BACKEND_HASH_COUNT = 6;
 
-struct backend_task
+constexpr UINT64 BACKEND_SIZE_UNKNOWN = ~0ULL;
+
+struct enum_disks_task
 {
-	backend_task_type type;
-	std::string path;	/* list_dir: "(hd0,gpt2)/dir";
-				   export_image: "hd0,gpt2", no parens */
-	std::vector<std::string> paths;	/* extract: sources;
-					   list_sizes: entry names */
-	std::wstring dest;	/* extract: destination directory;
-				   export_image: destination image file;
-				   winfile_add: source image file */
-	UINT hash_mask = 0;	/* hash_file: BACKEND_HASH_* bits */
-	UINT64 offset = 0;	/* read_chunk: file position */
-	UINT length = 0;	/* read_chunk: bytes wanted */
-	UINT64 limit = ~0ULL;	/* read_chunk, export_image: logical EOF */
-	std::vector<char> key;	/* crypto_unlock: passphrase or keyfile bytes;
-				   veracrypt_unlock: the passphrase with any key
-				   files already folded in */
-	UINT pim = 0;		/* veracrypt_unlock: 0 = the volume's default */
-	int prf = BACKEND_VC_PRF_AUTO;	/* veracrypt_unlock: BACKEND_VC_PRF_* */
-	UINT vc_flags = 0;	/* veracrypt_unlock: BACKEND_VC_* bits */
-	std::string pm_cipher;	/* plainmount_unlock: "aes-xts-plain64" */
-	std::string pm_hash;	/* plainmount_unlock: digest, or "plain" for none */
-	UINT pm_key_bits = 0;	/* plainmount_unlock: volume key size */
-	UINT pm_sector_size = 0;	/* plainmount_unlock: mapped sector size */
-	UINT64 pm_offset = 0;	/* plainmount_unlock: data start, 512B sectors */
-	UINT64 pm_skip = 0;	/* plainmount_unlock: IV start, 512B sectors */
-	bool pm_keyfile = false;	/* plainmount_unlock: key is raw key material */
-	bool decompress = false;	/* loopback_add, winfile_add: decode gzip/xz/... transparently */
-	bool preserve_times = true;	/* extract: stamp the source mtime on the copy */
-	UINT owner_seq = 0;	/* list_sizes: list_dir seq that owns the view */
 };
+
+struct list_dir_task
+{
+	std::string path;	/* "(hd0,gpt2)/dir" */
+};
+
+struct list_sizes_task
+{
+	std::string path;	/* listed directory */
+	std::vector<std::string> paths;	/* entry names */
+	UINT owner_seq = 0;	/* list_dir seq that owns the view */
+};
+
+struct extract_task
+{
+	std::vector<std::string> paths;	/* source paths */
+	std::wstring dest;	/* destination directory */
+	bool preserve_times = true;
+};
+
+struct export_image_task
+{
+	std::string path;	/* device name, no parens */
+	std::wstring dest;	/* destination image file */
+	UINT64 limit = BACKEND_SIZE_UNKNOWN;	/* logical EOF */
+};
+
+struct loopback_add_task
+{
+	std::string path;	/* image path in a grub filesystem */
+	bool decompress = false;
+};
+
+struct loopback_del_task
+{
+	std::string path;	/* device name */
+};
+
+struct winfile_add_task
+{
+	std::wstring path;	/* image path in the Windows filesystem */
+	bool decompress = false;
+};
+
+struct winfile_del_task
+{
+	std::string path;	/* device name */
+};
+
+struct file_props_task
+{
+	std::string path;
+};
+
+struct hash_file_task
+{
+	std::string path;
+	UINT hash_mask = 0;	/* BACKEND_HASH_* bits */
+};
+
+struct read_chunk_task
+{
+	std::string path;
+	UINT64 offset = 0;
+	UINT length = 0;
+	UINT64 limit = BACKEND_SIZE_UNKNOWN;	/* logical EOF */
+};
+
+struct crypto_unlock_task
+{
+	std::string path;	/* source device */
+	std::vector<char> key;	/* passphrase or keyfile bytes */
+};
+
+struct veracrypt_unlock_task
+{
+	std::string path;	/* source device */
+	std::vector<char> key;	/* passphrase with key files folded in */
+	UINT pim = 0;	/* 0 = the volume's default */
+	int prf = BACKEND_VC_PRF_AUTO;
+	UINT vc_flags = 0;	/* BACKEND_VC_* bits */
+};
+
+struct plainmount_unlock_task
+{
+	std::string path;	/* source device */
+	std::string cipher;	/* e.g. "aes-xts-plain64" */
+	std::string hash;	/* digest, or "plain" for none */
+	UINT key_bits = 0;	/* volume key size */
+	UINT sector_size = 0;	/* mapped sector size */
+	UINT64 offset = 0;	/* data start, 512B sectors */
+	UINT64 skip = 0;	/* IV start, 512B sectors */
+	std::vector<char> key;
+	bool keyfile = false;	/* key is raw key material */
+};
+
+using backend_task = std::variant<enum_disks_task, list_dir_task,
+	list_sizes_task, extract_task, export_image_task, loopback_add_task,
+	loopback_del_task, winfile_add_task, winfile_del_task, file_props_task,
+	hash_file_task, read_chunk_task, crypto_unlock_task,
+	veracrypt_unlock_task, plainmount_unlock_task>;
 
 struct backend_progress
 {
@@ -136,8 +212,6 @@ struct backend_progress
 	UINT64 file_total;
 	std::string name;	/* current source path, UTF-8 */
 };
-
-constexpr UINT64 BACKEND_SIZE_UNKNOWN = ~0ULL;
 
 /* Driver class of a device, from grub_disk_dev_id; values match the
    ROVER_DEV_* constants in rover.h (static_assert'd in backend.cpp).  */
@@ -208,8 +282,8 @@ struct backend_result
 /* Registered feature names for the Help "supported features" list,
    each vector sorted case-insensitively.  Fetched synchronously on the
    backend thread via backend_call(); the grub registration lists are
-   fixed once rover_init() has run, so any time after backend_start()
-   is fine.  */
+   fixed once rover_init() has run, so any time after
+   WM_APP_BACKEND_READY is fine.  */
 struct backend_support
 {
 	std::vector<std::string> fs;
@@ -224,16 +298,19 @@ backend_support backend_get_support (void);
 /* Change byte-oriented filesystem name decoding on the backend thread. */
 void backend_set_fs_char_encoding (UINT encoding);
 
-/* Start the backend thread; results are posted to NOTIFY.  With
+/* Start the backend thread; results are posted to NOTIFY.  Returns
+   false if the worker could not be created.  With
    NO_WINDISK the physical drives are left unregistered, so nothing in
    the session can reach a device that would need an elevated token
    (--file, see cmdline.cpp).  */
-void backend_start (HWND notify, bool no_windisk);
+bool backend_start (HWND notify, bool no_windisk);
 
-/* Discard queued tasks, join the thread, release grub state.  */
-void backend_stop (void);
+/* Discard queued tasks, join the thread, release grub state.  Returns
+   false if waiting for the worker failed.  */
+bool backend_stop (void);
 
-/* Queue a task; returns its seq for matching the result.  */
+/* Queue a task; returns its seq for matching the result, or zero when
+   the backend is not running.  */
 UINT backend_post (backend_task &&task);
 
 /* Ask the currently running task to stop at the next checkpoint.  */
@@ -242,7 +319,8 @@ void backend_cancel (void);
 /* Run FN on the backend thread and wait for it to finish.  This is
    how dokan worker threads reach rover: requests jump ahead of queued
    tasks and are also serviced inside long tasks between read chunks.
-   Never call from the backend thread itself.  */
-void backend_call (const std::function<void ()> &fn);
+   Never call from the backend thread itself.  Returns false if the
+   backend is not running or the request could not be queued/waited.  */
+bool backend_call (const std::function<void ()> &fn);
 
 #endif /* ! FSROVER_BACKEND_H */

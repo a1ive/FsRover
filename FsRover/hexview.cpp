@@ -92,8 +92,7 @@ hex_request (UINT64 base)
 		if (p.second == base)
 			return;
 
-	backend_task task;
-	task.type = backend_task_type::read_chunk;
+	read_chunk_task task;
 	task.path = g_hex_path;
 	task.offset = base;
 	task.length = (UINT) HEX_CHUNK;

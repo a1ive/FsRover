@@ -152,7 +152,7 @@ crypto_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		}
 		case IDOK:
 		{
-			backend_task task;
+			crypto_unlock_task task;
 			task.key = crypto_gather_key (dlg);
 			if (task.key.empty ())
 				return TRUE;	/* nothing entered; keep waiting */
@@ -161,7 +161,6 @@ crypto_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 			   result comes back through WM_APP_TASK_DONE.  Disable
 			   the inputs so it cannot be submitted twice and the KDF
 			   (Argon2 can be slow) does not look ignored.  */
-			task.type = backend_task_type::crypto_unlock;
 			task.path = g_crypto_dev;
 			crypto_enable_inputs (dlg, FALSE);
 			SendDlgItemMessageW (dlg, IDC_CRYPTO_PROGRESS, PBM_SETPOS, 0, 0);
@@ -452,7 +451,7 @@ vc_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 			return TRUE;
 		case IDOK:
 		{
-			backend_task task;
+			veracrypt_unlock_task task;
 			UINT pim = 0;
 
 			if (!vc_read_pim (dlg, &pim))
@@ -467,7 +466,6 @@ vc_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 			if (task.key.empty ())
 				return TRUE;	/* nothing entered; keep waiting */
 
-			task.type = backend_task_type::veracrypt_unlock;
 			task.path = g_vc_dev;
 			task.pim = pim;
 			task.prf = VC_PRF_ORDER[SendDlgItemMessageW (dlg, IDC_VC_PRF,
@@ -727,7 +725,7 @@ pm_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 		}
 		case IDOK:
 		{
-			backend_task task;
+			plainmount_unlock_task task;
 			wchar_t cipher[128] = {}, sector[24] = {};
 			UINT64 key_bits = 0;
 			bool is_keyfile = false;
@@ -761,15 +759,14 @@ pm_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 				return TRUE;	/* nothing usable entered */
 
 			hash_idx = (int) SendDlgItemMessageW (dlg, IDC_PM_HASH, CB_GETCURSEL, 0, 0);
-			task.type = backend_task_type::plainmount_unlock;
 			task.path = g_pm_dev;
-			task.pm_cipher = narrow (cipher);
-			task.pm_hash = hash_idx <= 0 ? "plain" : narrow (PM_HASHES[hash_idx]);
-			task.pm_key_bits = (UINT) key_bits;
-			task.pm_sector_size = (UINT) _wtoi (sector);
-			task.pm_offset = offset;
-			task.pm_skip = skip;
-			task.pm_keyfile = is_keyfile;
+			task.cipher = narrow (cipher);
+			task.hash = hash_idx <= 0 ? "plain" : narrow (PM_HASHES[hash_idx]);
+			task.key_bits = (UINT) key_bits;
+			task.sector_size = (UINT) _wtoi (sector);
+			task.offset = offset;
+			task.skip = skip;
+			task.keyfile = is_keyfile;
 
 			pm_enable_inputs (dlg, FALSE);
 			g_seq_pm = backend_post (std::move (task));

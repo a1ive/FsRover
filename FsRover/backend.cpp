@@ -32,6 +32,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <memory>
 #include <mutex>
 
 #include <rover.h>
@@ -56,8 +57,26 @@ struct queued_task
 
 struct sync_request
 {
-	const std::function<void ()> *fn;
+	sync_request (const std::function<void ()> &request_fn, HANDLE event) :
+		fn (request_fn), done (event)
+	{
+	}
+
+	~sync_request ()
+	{
+		CloseHandle (done);
+	}
+
+	std::function<void ()> fn;
 	HANDLE done;
+};
+
+enum class backend_state
+{
+	stopped,
+	starting,
+	running,
+	stopping,
 };
 
 HWND g_notify;
@@ -65,7 +84,8 @@ HANDLE g_thread;
 std::mutex g_lock;
 std::condition_variable g_wake;
 std::deque<queued_task> g_queue;	/* guarded by g_lock */
-std::deque<sync_request> g_requests;	/* guarded by g_lock */
+std::deque<std::shared_ptr<sync_request>> g_requests;	/* guarded by g_lock */
+backend_state g_state = backend_state::stopped;	/* guarded by g_lock */
 bool g_stop;	/* guarded by g_lock */
 UINT g_seq;	/* guarded by g_lock */
 std::atomic<bool> g_cancel;
@@ -82,7 +102,7 @@ service_requests (void)
 {
 	for (;;)
 	{
-		sync_request req;
+		std::shared_ptr<sync_request> req;
 		{
 			std::lock_guard<std::mutex> hold (g_lock);
 			if (g_requests.empty ())
@@ -90,8 +110,8 @@ service_requests (void)
 			req = g_requests.front ();
 			g_requests.pop_front ();
 		}
-		(*req.fn) ();
-		SetEvent (req.done);
+		req->fn ();
+		SetEvent (req->done);
 	}
 }
 
@@ -210,7 +230,7 @@ run_list_dir (const std::string &path, backend_result *res)
 }
 
 void
-run_list_sizes (const backend_task &task, backend_result *res)
+run_list_sizes (const list_sizes_task &task, backend_result *res)
 {
 	std::string prefix = task.path;
 	if (prefix.empty () || prefix.back () != '/')
@@ -284,7 +304,7 @@ post_item_progress (UINT seq, const std::string &name, int percent)
 }
 
 void
-run_extract (const backend_task &task, UINT seq, backend_result *res)
+run_extract (const extract_task &task, UINT seq, backend_result *res)
 {
 	rover_extract::options options;
 	rover_extract::result stats;
@@ -326,7 +346,7 @@ run_extract (const backend_task &task, UINT seq, backend_result *res)
  * is what actually bounds the copy (same arrangement as read_chunk).
  */
 void
-run_export_image (const backend_task &task, UINT seq, backend_result *res)
+run_export_image (const export_image_task &task, UINT seq, backend_result *res)
 {
 	std::string src = "(" + task.path + ")0+";
 	std::vector<char> buf ((size_t) 1 << 20);
@@ -547,7 +567,7 @@ crc64_fill (UINT64 table[256])
 }
 
 void
-run_hash_file (const backend_task &task, UINT seq, backend_result *res)
+run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 {
 	/* Indexed by BACKEND_HASH_* bit number; CRCs have no CNG id.  */
 	static const wchar_t *alg_ids[BACKEND_HASH_COUNT] =
@@ -661,7 +681,7 @@ run_hash_file (const backend_task &task, UINT seq, backend_result *res)
    is not an error -- the viewer sizes itself from file_size and a
    short or empty read simply ends the listing.  */
 void
-run_read_chunk (const backend_task &task, backend_result *res)
+run_read_chunk (const read_chunk_task &task, backend_result *res)
 {
 	rover_file *f = rover_file_open (task.path.c_str ());
 
@@ -739,7 +759,7 @@ crypto_progress (unsigned long long done, unsigned long long total, void *data)
    and browse into it.  The key derivation can be slow (Argon2), so drive
    a progress bar through the crypto progress hook while it runs.  */
 void
-run_crypto_unlock (const backend_task &task, backend_result *res)
+run_crypto_unlock (const crypto_unlock_task &task, backend_result *res)
 {
 	char dev[64] = { 0 };
 	crypto_prog_ctx ctx = { res->seq, 0 };
@@ -756,7 +776,7 @@ run_crypto_unlock (const backend_task &task, backend_result *res)
    parameters that are not stored in the volume.
    Key files were already folded into task.key by the dialog.  */
 void
-run_veracrypt_unlock (const backend_task &task, backend_result *res)
+run_veracrypt_unlock (const veracrypt_unlock_task &task, backend_result *res)
 {
 	char dev[64] = { 0 };
 	crypto_prog_ctx ctx = { res->seq, 0 };
@@ -773,19 +793,157 @@ run_veracrypt_unlock (const backend_task &task, backend_result *res)
 /* Plain dm-crypt volumes: no header, so every parameter comes from the
    dialog and a wrong one yields garbage rather than an error.  */
 void
-run_plainmount_unlock (const backend_task &task, backend_result *res)
+run_plainmount_unlock (const plainmount_unlock_task &task, backend_result *res)
 {
 	char dev[64] = { 0 };
 
-	if (rover_plainmount_unlock (task.path.c_str (), task.pm_cipher.c_str (),
-				     task.pm_hash.c_str (), task.pm_key_bits,
-				     task.pm_sector_size, task.pm_offset, task.pm_skip,
+	if (rover_plainmount_unlock (task.path.c_str (), task.cipher.c_str (),
+				     task.hash.c_str (), task.key_bits,
+				     task.sector_size, task.offset, task.skip,
 				     task.key.data (), task.key.size (),
-				     task.pm_keyfile ? ROVER_PM_KEYFILE : 0u, nullptr,
+				     task.keyfile ? ROVER_PM_KEYFILE : 0u, nullptr,
 				     dev, sizeof (dev)))
 		set_error (res, "cannot mount volume");
 	else
 		res->path = dev;
+}
+
+void
+run_payload (const enum_disks_task &, UINT, backend_result *res)
+{
+	res->type = backend_task_type::enum_disks;
+	rover_enum_disks (enum_disk_hook, &res->disks);
+	std::sort (res->disks.begin (), res->disks.end (),
+		[] (const backend_diskent &a, const backend_diskent &b)
+		{
+			return rover_sort::natural_less (a.name, b.name);
+		});
+}
+
+void
+run_payload (const list_dir_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::list_dir;
+	run_list_dir (task.path, res);
+}
+
+void
+run_payload (const list_sizes_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::list_sizes;
+	run_list_sizes (task, res);
+}
+
+void
+run_payload (const extract_task &task, UINT seq, backend_result *res)
+{
+	res->type = backend_task_type::extract;
+	run_extract (task, seq, res);
+}
+
+void
+run_payload (const export_image_task &task, UINT seq, backend_result *res)
+{
+	res->type = backend_task_type::export_image;
+	res->path = task.path;
+	run_export_image (task, seq, res);
+}
+
+void
+run_payload (const loopback_add_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::loopback_add;
+	std::string dev = "loop" + std::to_string (g_loop_seq);
+	if (rover_loopback_add (dev.c_str (), task.path.c_str (), task.decompress ? 1 : 0))
+		set_error (res, "cannot mount image");
+	else
+	{
+		g_loop_seq++;
+		res->path = dev;
+	}
+}
+
+void
+run_payload (const loopback_del_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::loopback_del;
+	res->path = task.path;
+	if (rover_loopback_del (task.path.c_str ()))
+		set_error (res, "cannot unmount device");
+}
+
+void
+run_payload (const winfile_add_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::winfile_add;
+	/* The image lives on the Windows filesystem, which has no grub
+	   device.  Do not enter one of our own Dokan mounts here: its
+	   worker waits for this backend thread, which would deadlock.  */
+	std::string dev = "img" + std::to_string (g_img_seq);
+	if (dokanfs_owns_path (task.path))
+		set_error (res, "cannot mount an image through FsRover's own Dokan drive; use Mount as disk instead");
+	else if (rover_winfile_add (dev.c_str (), narrow (task.path).c_str (),
+		task.decompress ? 1 : 0))
+		set_error (res, "cannot mount image");
+	else
+	{
+		g_img_seq++;
+		res->path = dev;
+	}
+}
+
+void
+run_payload (const winfile_del_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::winfile_del;
+	res->path = task.path;
+	if (rover_winfile_del (task.path.c_str ()))
+		set_error (res, "cannot unmount device");
+}
+
+void
+run_payload (const file_props_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::file_props;
+	res->path = task.path;
+	run_file_props (task.path, res);
+}
+
+void
+run_payload (const hash_file_task &task, UINT seq, backend_result *res)
+{
+	res->type = backend_task_type::hash_file;
+	res->path = task.path;
+	run_hash_file (task, seq, res);
+}
+
+void
+run_payload (const read_chunk_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::read_chunk;
+	res->path = task.path;
+	run_read_chunk (task, res);
+}
+
+void
+run_payload (const crypto_unlock_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::crypto_unlock;
+	run_crypto_unlock (task, res);
+}
+
+void
+run_payload (const veracrypt_unlock_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::veracrypt_unlock;
+	run_veracrypt_unlock (task, res);
+}
+
+void
+run_payload (const plainmount_unlock_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::plainmount_unlock;
+	run_plainmount_unlock (task, res);
 }
 
 backend_result *
@@ -793,104 +951,30 @@ run_task (queued_task &item)
 {
 	backend_result *res = new backend_result;
 
-	res->type = item.task.type;
 	res->seq = item.seq;
-
-	switch (item.task.type)
+	std::visit ([&] (const auto &task)
 	{
-	case backend_task_type::enum_disks:
-		rover_enum_disks (enum_disk_hook, &res->disks);
-		std::sort (res->disks.begin (), res->disks.end (),
-			[] (const backend_diskent &a, const backend_diskent &b)
-			{
-				return rover_sort::natural_less (a.name, b.name);
-			});
-		break;
-	case backend_task_type::list_dir:
-		run_list_dir (item.task.path, res);
-		break;
-	case backend_task_type::list_sizes:
-		run_list_sizes (item.task, res);
-		break;
-	case backend_task_type::extract:
-		run_extract (item.task, item.seq, res);
-		break;
-	case backend_task_type::export_image:
-		res->path = item.task.path;
-		run_export_image (item.task, item.seq, res);
-		break;
-	case backend_task_type::loopback_add:
-	{
-		std::string dev = "loop" + std::to_string (g_loop_seq);
-		if (rover_loopback_add (dev.c_str (), item.task.path.c_str (), item.task.decompress ? 1 : 0))
-			set_error (res, "cannot mount image");
-		else
-		{
-			g_loop_seq++;
-			res->path = dev;
-		}
-		break;
-	}
-	case backend_task_type::loopback_del:
-		res->path = item.task.path;
-		if (rover_loopback_del (item.task.path.c_str ()))
-			set_error (res, "cannot unmount device");
-		break;
-	case backend_task_type::winfile_add:
-	{
-		/* The image lives on the Windows filesystem, which has no
-		   grub device: the path crosses as UTF-8 and winfile.c
-		   opens it with the Win32 API.  Do not enter one of our own
-		   Dokan mounts here: its worker waits for this backend thread,
-		   so the resulting Windows read would deadlock both sides.  */
-		std::string dev = "img" + std::to_string (g_img_seq);
-		if (dokanfs_owns_path (item.task.dest))
-			set_error (res, "cannot mount an image through FsRover's own Dokan drive; use Mount as disk instead");
-		else if (rover_winfile_add (dev.c_str (), narrow (item.task.dest).c_str (),
-			item.task.decompress ? 1 : 0))
-			set_error (res, "cannot mount image");
-		else
-		{
-			g_img_seq++;
-			res->path = dev;
-		}
-		break;
-	}
-	case backend_task_type::winfile_del:
-		res->path = item.task.path;
-		if (rover_winfile_del (item.task.path.c_str ()))
-			set_error (res, "cannot unmount device");
-		break;
-	case backend_task_type::file_props:
-		res->path = item.task.path;
-		run_file_props (item.task.path, res);
-		break;
-	case backend_task_type::hash_file:
-		res->path = item.task.path;
-		run_hash_file (item.task, item.seq, res);
-		break;
-	case backend_task_type::read_chunk:
-		res->path = item.task.path;
-		run_read_chunk (item.task, res);
-		break;
-	case backend_task_type::veracrypt_unlock:
-		run_veracrypt_unlock (item.task, res);
-		break;
-	case backend_task_type::plainmount_unlock:
-		run_plainmount_unlock (item.task, res);
-		break;
-	case backend_task_type::crypto_unlock:
-		run_crypto_unlock (item.task, res);
-		break;
-	}
+		run_payload (task, item.seq, res);
+	}, item.task);
 	return res;
 }
 
 unsigned __stdcall
 backend_main (void *)
 {
+	bool notify = false;
+
 	rover_init (g_init_flags);
-	PostMessageW (g_notify, WM_APP_BACKEND_READY, 0, 0);
+	{
+		std::lock_guard<std::mutex> hold (g_lock);
+		if (g_state == backend_state::starting)
+		{
+			g_state = backend_state::running;
+			notify = true;
+		}
+	}
+	if (notify)
+		PostMessageW (g_notify, WM_APP_BACKEND_READY, 0, 0);
 
 	for (;;)
 	{
@@ -926,6 +1010,10 @@ backend_main (void *)
 	service_requests ();
 	rover_fini ();
 	filetype_shutdown ();
+	{
+		std::lock_guard<std::mutex> hold (g_lock);
+		g_state = backend_state::stopped;
+	}
 	return 0;
 }
 
@@ -966,29 +1054,59 @@ backend_set_fs_char_encoding (UINT encoding)
 	});
 }
 
-void
+bool
 backend_start (HWND notify, bool no_windisk)
 {
+	std::lock_guard<std::mutex> hold (g_lock);
+
+	if (g_state != backend_state::stopped || g_thread)
+		return false;
 	g_notify = notify;
 	g_init_flags = no_windisk ? ROVER_INIT_NO_WINDISK : 0;
+	g_stop = false;
+	g_cancel.store (false, std::memory_order_relaxed);
+	g_state = backend_state::starting;
 	g_thread = (HANDLE) _beginthreadex (nullptr, 0, backend_main, nullptr, 0, nullptr);
+	if (!g_thread)
+	{
+		g_state = backend_state::stopped;
+		return false;
+	}
+	return true;
 }
 
-void
+bool
 backend_stop (void)
 {
-	if (!g_thread)
-		return;
+	HANDLE thread;
 	{
 		std::lock_guard<std::mutex> hold (g_lock);
-		g_stop = true;
-		g_queue.clear ();
+		thread = g_thread;
+		if (!thread)
+			return true;
+		if (g_state != backend_state::stopped)
+		{
+			g_state = backend_state::stopping;
+			g_stop = true;
+			g_queue.clear ();
+		}
 	}
 	g_cancel.store (true, std::memory_order_relaxed);
 	g_wake.notify_one ();
-	WaitForSingleObject (g_thread, INFINITE);
-	CloseHandle (g_thread);
-	g_thread = nullptr;
+	if (WaitForSingleObject (thread, INFINITE) != WAIT_OBJECT_0)
+		return false;
+	{
+		std::lock_guard<std::mutex> hold (g_lock);
+		if (g_thread == thread)
+		{
+			CloseHandle (g_thread);
+			g_thread = nullptr;
+		}
+		g_state = backend_state::stopped;
+		g_stop = false;
+		g_requests.clear ();
+	}
+	return true;
 }
 
 UINT
@@ -997,8 +1115,10 @@ backend_post (backend_task &&task)
 	UINT seq;
 	{
 		std::lock_guard<std::mutex> hold (g_lock);
+		if (g_state != backend_state::running)
+			return 0;
 		seq = ++g_seq;
-		if (task.type == backend_task_type::list_dir)
+		if (std::holds_alternative<list_dir_task> (task))
 			g_latest_list_seq.store (seq, std::memory_order_relaxed);
 		g_queue.push_back ({ std::move (task), seq });
 	}
@@ -1012,15 +1132,38 @@ backend_cancel (void)
 	g_cancel.store (true, std::memory_order_relaxed);
 }
 
-void
+bool
 backend_call (const std::function<void ()> &fn)
 {
 	HANDLE done = CreateEventW (nullptr, TRUE, FALSE, nullptr);
+	if (!done)
+		return false;
+	auto req = std::make_shared<sync_request> (fn, done);
+	HANDLE thread_wait = nullptr;
 	{
 		std::lock_guard<std::mutex> hold (g_lock);
-		g_requests.push_back ({ &fn, done });
+		if (g_state != backend_state::running
+		    || !DuplicateHandle (GetCurrentProcess (), g_thread,
+			GetCurrentProcess (), &thread_wait, SYNCHRONIZE, FALSE, 0))
+			return false;
+		g_requests.push_back (req);
 	}
 	g_wake.notify_one ();
-	WaitForSingleObject (done, INFINITE);
-	CloseHandle (done);
+	HANDLE waits[] = { done, thread_wait };
+	DWORD wait = WaitForMultipleObjects (2, waits, FALSE, INFINITE);
+	CloseHandle (thread_wait);
+	if (wait == WAIT_OBJECT_0)
+		return true;
+
+	/* The backend exited, or the wait itself failed.  Remove a request
+	   that had not been claimed so its captured references cannot run
+	   after this call returns.  A claimed request is always completed
+	   before the backend thread handle becomes signalled.  */
+	{
+		std::lock_guard<std::mutex> hold (g_lock);
+		auto it = std::find (g_requests.begin (), g_requests.end (), req);
+		if (it != g_requests.end ())
+			g_requests.erase (it);
+	}
+	return false;
 }

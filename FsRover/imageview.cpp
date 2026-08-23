@@ -859,8 +859,7 @@ img_init_dialog (HWND dlg)
 	   a fallback).  */
 	center_on_owner (dlg, img_scale (760), img_scale (540));
 
-	backend_task task;
-	task.type = backend_task_type::read_chunk;
+	read_chunk_task task;
 	task.path = g_img_path;
 	task.offset = 0;
 	task.length = IMG_PROBE;
@@ -1028,8 +1027,7 @@ img_on_chunk (backend_result *res)
 		}
 		if (res->file_size > res->data.size ())
 		{
-			backend_task task;
-			task.type = backend_task_type::read_chunk;
+			read_chunk_task task;
 			task.path = g_img_path;
 			task.offset = 0;
 			task.length = (UINT) res->file_size;
