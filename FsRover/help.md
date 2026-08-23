@@ -48,6 +48,17 @@ Images carrying a 512-byte boot prefix are accepted.
 
 **Not supported:** XIP images, which use direct block pointers.
 
+#### DwarFS — `dwarfs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: per-file · Symlinks: listed
+
+**Supported versions:** 2.x.
+
+**Compression:** none, XZ/LZMA, Zstandard, LZ4/LZ4HC, Brotli.
+
+**Not supported:** the specialised FLAC and ricepp block codecs. Images that
+declare an unknown incompatible feature are refused.
+
 #### EROFS — `erofs`
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved

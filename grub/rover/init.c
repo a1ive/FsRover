@@ -98,6 +98,7 @@
 	mod (cpio_be)	\
 	mod (cramfs)	\
 	mod (deb)	\
+	mod (dwarfs)	\
 	mod (erofs)	\
 	mod (exfat)	\
 	mod (ext2)	\
