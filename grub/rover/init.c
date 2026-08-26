@@ -109,6 +109,7 @@
 	mod (hfs)	\
 	mod (hfsplus)	\
 	mod (hfspluscomp)	\
+	mod (hikvision)	\
 	mod (hpfs)	\
 	mod (iso9660)	\
 	mod (jffs2)	\

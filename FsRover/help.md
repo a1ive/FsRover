@@ -660,6 +660,26 @@ images.
 **Compression:** none. A stage or payload stored LZMA-compressed is listed and
 extracted as the raw compressed component, not as its contents.
 
+#### Hikvision DVR HDD — `hikvision`
+
+> Origin: FsRover · Label: `HIKVISION DVR` · UUID: no · Timestamps: per-recording + volume · Symlinks: none
+
+Hikvision's proprietary DVR disk layout is presented as one synthetic directory
+per camera channel (`CH001`, `CH002`, …). Recording names contain their UTC
+start/end times together with the physical data-block and HIKBTREE-entry numbers;
+an in-progress block is named `RECORDING`. MPEG Program Stream and Annex-B H.264
+starts are detected, while unrecognized block contents remain available as `.bin`.
+
+**Supported layout:** `HIK.2011.03.08` with 48-byte HIKBTREE entries. The primary
+tree is checked against its page list, linked-page chain and footer; the backup
+HIKBTREE is used if the primary copy is invalid.
+
+**Limitation:** the available references do not establish a reliable mapping from
+the trailing `OFNI` IDR table to exact video-frame offsets. A listed file therefore
+runs from the first recognized media start through the end of its indexed physical
+block and can include trailing proprietary metadata. Multiple logical recordings
+that reference the same block remain separate files.
+
 #### proc filesystem — `procfs`
 
 > Origin: GRUB · Label: no · UUID: no · Timestamps: none · Symlinks: none

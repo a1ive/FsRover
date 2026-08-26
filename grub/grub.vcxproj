@@ -243,6 +243,7 @@
     <ClCompile Include="grub-core\fs\hfs.c" />
     <ClCompile Include="grub-core\fs\hfsplus.c" />
     <ClCompile Include="grub-core\fs\hfspluscomp.c" />
+    <ClCompile Include="grub-core\fs\hikvision.c" />
     <ClCompile Include="grub-core\fs\hpfs.c" />
     <ClCompile Include="grub-core\fs\iso9660.c" />
     <ClCompile Include="grub-core\fs\jffs2.c">
