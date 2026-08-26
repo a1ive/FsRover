@@ -44,10 +44,9 @@ struct md_rtf_link
 	std::wstring target;
 };
 
-/* A heading, under the slug a "#..." link would name it by.  The slug
-   is built the way GitHub builds one -- lowercased, punctuation
-   dropped, spaces turned into hyphens -- so a table of contents
-   written for GitHub resolves here too.  */
+/* An internal link target.  Heading slugs are built the way GitHub
+   builds them -- lowercased, punctuation dropped, spaces turned into
+   hyphens -- and footnote definitions use the reserved "fn:N" form.  */
 struct md_rtf_anchor
 {
 	std::wstring slug;
@@ -80,7 +79,7 @@ struct md_rtf_doc
 {
 	std::string rtf;	/* ready for EM_STREAMIN with SF_RTF */
 	std::vector<md_rtf_link> links;	/* in document order */
-	std::vector<md_rtf_anchor> anchors;	/* one per heading */
+	std::vector<md_rtf_anchor> anchors;	/* headings and footnote definitions */
 	LONG chars;
 };
 

@@ -35,9 +35,9 @@
  * running total is the character position the RichEdit will report.
  * Link spans are recorded with those positions and the caller turns
  * them into CFE_LINK ranges after streaming; mdview.cpp checks the
- * total against the control before trusting them.  Headings are
- * recorded the same way under their GitHub slug, which is what makes a
- * "#section" link in a table of contents land somewhere.
+ * total against the control before trusting them.  Headings and
+ * footnote definitions are recorded as anchors, which makes both a
+ * "#section" link and a footnote reference land somewhere.
  *
  * Two constructs work around what RichEdit does not read.  Tables are
  * laid out with tab stops instead of \trowd rows, so a cell wider than
@@ -294,6 +294,8 @@ private:
 	unsigned m_cell = 0;	/* cells emitted in the current row */
 	bool m_head_row = false;	/* the row is a table header */
 	std::string m_stops;	/* tab stops shared by the table's rows */
+	unsigned m_footnote_id = 0;	/* active definition, 0 outside one */
+	bool m_footnote_at_start = false;	/* its number is waiting for the first paragraph */
 	bool m_in_link = false;
 	LONG m_link_at = 0;
 	std::wstring m_link_target;
@@ -355,7 +357,7 @@ renderer::open_para (void)
 		putf ("\\sa40\\li%d\\fi-%d", m_indent + col, col);
 		put (m_stops.c_str ());
 	}
-	else if (!m_marker.empty ())
+	else if (m_footnote_at_start || !m_marker.empty ())
 		putf ("\\sa60\\li%d\\fi-%d", m_indent, LIST_HANG);
 	else if (m_rule)
 		putf ("\\sb120\\sa120\\li%d\\tx%d", m_indent, m_indent + RULE_W);
@@ -376,6 +378,16 @@ renderer::open_para (void)
 	put (" ");
 	if (m_heading && m_head_at < 0)
 		m_head_at = m_chars;
+
+	if (m_footnote_at_start)
+	{
+		std::wstring id = std::to_wstring (m_footnote_id);
+		m_anchors.push_back ({ L"fn:" + id, m_chars });
+		put_text (L"[" + id + L"]");
+		put ("\\tab ");
+		m_chars++;
+		m_footnote_at_start = false;
+	}
 
 	if (!m_marker.empty ())
 	{
@@ -555,6 +567,29 @@ renderer::enter_block (MD_BLOCKTYPE type, void *detail)
 		m_code = true;
 		m_code_nl = 0;
 		break;
+	case MD_BLOCK_ADMONITION:
+	{
+		std::wstring label = attr_text (&((MD_BLOCK_ADMONITION_DETAIL *) detail)->type);
+		close_para ();
+		m_quote++;
+		m_indent += INDENT_STEP;
+		if (!label.empty ())
+			label[0] = (wchar_t) towupper ((wint_t) label[0]);
+		open_para ();
+		put ("\\b ");
+		put_text (label);
+		put ("\\b0 ");
+		close_para ();
+		break;
+	}
+	case MD_BLOCK_FOOTNOTE_DEF_SECTION:
+		emit_rule ();
+		break;
+	case MD_BLOCK_FOOTNOTE_DEF:
+		close_para ();
+		m_footnote_id = ((MD_BLOCK_FOOTNOTE_DEF_DETAIL *) detail)->id;
+		m_footnote_at_start = true;
+		break;
 	case MD_BLOCK_TABLE:
 	{
 		unsigned cols = ((MD_BLOCK_TABLE_DETAIL *) detail)->col_count;
@@ -602,6 +637,7 @@ renderer::leave_block (MD_BLOCKTYPE type, void *)
 	switch (type)
 	{
 	case MD_BLOCK_QUOTE:
+	case MD_BLOCK_ADMONITION:
 		close_para ();
 		m_quote--;
 		m_indent -= INDENT_STEP;
@@ -637,6 +673,14 @@ renderer::leave_block (MD_BLOCKTYPE type, void *)
 		m_code = false;
 		m_code_nl = 0;
 		break;
+	case MD_BLOCK_FOOTNOTE_DEF:
+		/* An empty definition still shows a target and its number.  */
+		if (m_footnote_at_start)
+			open_para ();
+		close_para ();
+		m_footnote_id = 0;
+		m_footnote_at_start = false;
+		break;
 	case MD_BLOCK_TABLE:
 		close_para ();
 		m_cols = 0;
@@ -652,6 +696,7 @@ renderer::leave_block (MD_BLOCKTYPE type, void *)
 	case MD_BLOCK_HR:
 	case MD_BLOCK_HTML:
 	case MD_BLOCK_P:
+	case MD_BLOCK_FOOTNOTE_DEF_SECTION:
 	case MD_BLOCK_TBODY:
 	case MD_BLOCK_TR:
 		close_para ();
@@ -696,6 +741,18 @@ renderer::enter_span (MD_SPANTYPE type, void *detail)
 	case MD_SPAN_LATEXMATH:
 	case MD_SPAN_LATEXMATH_DISPLAY:
 		break;
+	case MD_SPAN_FOOTNOTE_REF:
+	{
+		unsigned id = ((MD_SPAN_FOOTNOTE_REF_DETAIL *) detail)->id;
+		std::wstring number = std::to_wstring (id);
+		std::wstring marker = L"[" + number + L"]";
+		begin_link (L"#fn:" + number);
+		put ("\\super ");
+		/* Synthetic reference text must not become part of a heading slug.  */
+		rtf_escape (m_out, marker);
+		m_chars += (LONG) marker.size ();
+		break;
+	}
 	}
 	return 0;
 }
@@ -731,6 +788,10 @@ renderer::leave_span (MD_SPANTYPE type, void *)
 		break;
 	case MD_SPAN_LATEXMATH:
 	case MD_SPAN_LATEXMATH_DISPLAY:
+		break;
+	case MD_SPAN_FOOTNOTE_REF:
+		put ("\\nosupersub ");
+		end_link ();
 		break;
 	}
 	return 0;
