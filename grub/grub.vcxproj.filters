@@ -1245,6 +1245,15 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_des.c">
       <Filter>grub-core\lib\libgcrypt</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\lib\ghost.c">
+      <Filter>grub-core\lib</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\io\gho.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\fs\gho.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -1342,6 +1351,9 @@
     </ClInclude>
     <ClInclude Include="grub-core\lib\libgcrypt\const-time.h">
       <Filter>grub-core\lib\libgcrypt</Filter>
+    </ClInclude>
+    <ClInclude Include="include\grub\ghost.h">
+      <Filter>include\grub</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

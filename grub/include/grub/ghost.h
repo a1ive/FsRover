@@ -16,11 +16,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * Shared bits of the Symantec (Norton) Ghost image format, used by the
- * io\gho.c virtual disk filter and the fs\gho.c catalogue browser.
- */
-
 #ifndef GRUB_GHOST_HEADER
 #define GRUB_GHOST_HEADER	1
 
@@ -81,16 +76,15 @@ static inline grub_uint32_t
 grub_ghost_get32 (const grub_uint8_t *p)
 {
 	return (grub_uint32_t) p[0] | ((grub_uint32_t) p[1] << 8)
-	       | ((grub_uint32_t) p[2] << 16) | ((grub_uint32_t) p[3] << 24);
+		| ((grub_uint32_t) p[2] << 16) | ((grub_uint32_t) p[3] << 24);
 }
 
 static inline int
 grub_ghost_comp_supported (grub_uint8_t comp)
 {
 	return comp == GRUB_GHOST_COMP_NONE || comp == GRUB_GHOST_COMP_FAST
-	       || (comp >= GRUB_GHOST_COMP_ZLIB_FIRST
-		   && comp <= GRUB_GHOST_COMP_ZLIB_LAST)
-	       || comp == GRUB_GHOST_COMP_NTFS;
+		|| (comp >= GRUB_GHOST_COMP_ZLIB_FIRST && comp <= GRUB_GHOST_COMP_ZLIB_LAST)
+		|| comp == GRUB_GHOST_COMP_NTFS;
 }
 
 /*
@@ -100,7 +94,7 @@ grub_ghost_comp_supported (grub_uint8_t comp)
  */
 grub_err_t
 grub_ghost_decode (grub_uint8_t comp, grub_int32_t *hash,
-		   const grub_uint8_t *src, grub_size_t clen,
-		   grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen);
+	const grub_uint8_t *src, grub_size_t clen,
+	grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen);
 
 #endif /* ! GRUB_GHOST_HEADER */

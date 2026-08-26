@@ -26,6 +26,8 @@
 
 #pragma warning(push)
 #pragma warning(disable: 4244)
+#pragma warning(disable: 4456)
+#pragma warning(disable: 4702)
 
 #define NANOSVG_ALL_COLOR_KEYWORDS
 #define NANOSVG_IMPLEMENTATION

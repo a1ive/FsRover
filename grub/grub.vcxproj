@@ -606,6 +606,7 @@
   <ItemGroup>
     <ClInclude Include="grub-core\lib\libgcrypt\const-time.h" />
     <ClInclude Include="grub-core\lib\libgcrypt\hash-common.h" />
+    <ClInclude Include="include\grub\ghost.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\fscharset.h" />
     <ClInclude Include="rover\rover.h" />

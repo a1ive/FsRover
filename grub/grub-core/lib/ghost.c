@@ -3,7 +3,7 @@
  *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
  *
- *  The Fast LZ token stream follows ref\gho (github.com/nyarime/gho, MIT),
+ *  The Fast LZ token stream follows <https://github.com/nyarime/gho> (MIT),
  *  reverse engineered from Norton Ghost 11.5.1.
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -53,7 +53,7 @@ gho_fastlz_hash (grub_uint8_t b0, grub_uint8_t b1, grub_uint8_t b2)
  */
 static grub_err_t
 gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
-	    grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
+	grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
 {
 	grub_size_t sp = 0;
 	grub_size_t out = 0;
@@ -74,8 +74,7 @@ gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
 		{
 			if (srclen - sp < 2)
 				break;
-			ctrl = (grub_uint32_t) src[sp]
-			       | ((grub_uint32_t) src[sp + 1] << 8) | 0x10000;
+			ctrl = (grub_uint32_t) src[sp] | ((grub_uint32_t) src[sp + 1] << 8) | 0x10000;
 			sp += 2;
 		}
 
@@ -97,15 +96,13 @@ gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
 
 				if (srclen - sp < 2)
 					goto done;
-				idx = (grub_uint32_t) src[sp + 1]
-				      | (((grub_uint32_t) src[sp] & 0xf0) << 4);
+				idx = (grub_uint32_t) src[sp + 1] | (((grub_uint32_t) src[sp] & 0xf0) << 4);
 				total = 3 + (src[sp] & 0x0f);
 				match = hash[idx];
 				sp += 2;
 
 				if (total > dstcap - out)
-					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-							   "overlong match in Ghost block");
+					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "overlong match in Ghost block");
 				for (j = 0; j < total; j++)
 				{
 					if (match < 0)
@@ -127,11 +124,9 @@ gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
 
 					if (pos + 2 < out)
 					{
-						hash[gho_fastlz_hash (dst[pos], dst[pos + 1], dst[pos + 2])]
-							= (grub_int32_t) pos;
+						hash[gho_fastlz_hash (dst[pos], dst[pos + 1], dst[pos + 2])] = (grub_int32_t) pos;
 						if (prev_lit == 2 && pos + 3 < out)
-							hash[gho_fastlz_hash (dst[pos + 1], dst[pos + 2], dst[pos + 3])]
-								= (grub_int32_t) (pos + 1);
+							hash[gho_fastlz_hash (dst[pos + 1], dst[pos + 2], dst[pos + 3])] = (grub_int32_t) (pos + 1);
 					}
 				}
 				if (lit > 0)
@@ -144,8 +139,7 @@ gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
 			else
 			{
 				if (out >= dstcap)
-					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-							   "overlong Ghost block");
+					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "overlong Ghost block");
 				dst[out++] = src[sp++];
 				lit++;
 				prev_lit = lit;
@@ -153,8 +147,7 @@ gho_fastlz (grub_int32_t *hash, const grub_uint8_t *src, grub_size_t srclen,
 				{
 					grub_size_t pos = out - 3;
 
-					hash[gho_fastlz_hash (dst[pos], dst[pos + 1], dst[pos + 2])]
-						= (grub_int32_t) pos;
+					hash[gho_fastlz_hash (dst[pos], dst[pos + 1], dst[pos + 2])] = (grub_int32_t) pos;
 					lit = 2;
 					prev_lit = 2;
 				}
@@ -173,8 +166,8 @@ done:
 
 grub_err_t
 grub_ghost_decode (grub_uint8_t comp, grub_int32_t *hash,
-		   const grub_uint8_t *src, grub_size_t clen,
-		   grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
+	const grub_uint8_t *src, grub_size_t clen,
+	grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
 {
 	grub_ssize_t n;
 
@@ -204,14 +197,12 @@ grub_ghost_decode (grub_uint8_t comp, grub_int32_t *hash,
 	case GRUB_GHOST_COMP_FAST:
 		if (clen <= GHO_FASTLZ_SKIP)
 			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "short Fast LZ block");
-		return gho_fastlz (hash, src + GHO_FASTLZ_SKIP, clen - GHO_FASTLZ_SKIP,
-				   dst, dstcap, outlen);
+		return gho_fastlz (hash, src + GHO_FASTLZ_SKIP, clen - GHO_FASTLZ_SKIP, dst, dstcap, outlen);
 
 	default:
 		n = grub_zlib_decompress ((char *) src, clen, 0, (char *) dst, dstcap);
 		if (n < 0)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					   "corrupt zlib block in Ghost image");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "corrupt zlib block in Ghost image");
 		*outlen = (grub_size_t) n;
 		return GRUB_ERR_NONE;
 	}
