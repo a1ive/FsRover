@@ -85,6 +85,7 @@
 	mod (part_sunpc)	\
 	mod (part_unixware)	\
 	/* filesystems */	\
+	mod (adfs)	\
 	mod (affs)	\
 	mod (afs)	\
 	mod (apfs)	\

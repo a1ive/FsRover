@@ -281,6 +281,18 @@ Mac OS Extended, including case-sensitive HFSX volumes.
 
 ### 1.4 Unix and legacy filesystems
 
+#### Acorn Disc Filing System — `adfs`
+
+> Origin: FsRover · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: listed
+
+New-map E/E+ and F/F+ filesystems, 256-, 512- and 1024-byte sectors, shared
+fragments and fragmented files are supported.
+
+LinkFS objects are identified as symbolic links, but their RISC OS target-path
+syntax is not translated or followed.
+
+**Not supported:** Old-map ADFS.
+
 #### Amiga FFS — `affs`
 
 > Origin: GRUB · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved
