@@ -368,6 +368,9 @@
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="grub-core\io\ntfsclone.c" />
+    <ClCompile Include="grub-core\io\partclone.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\io\offset.c" />
     <ClCompile Include="grub-core\io\isz.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

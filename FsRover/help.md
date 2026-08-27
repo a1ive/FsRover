@@ -964,6 +964,15 @@ only ever hold one, and it is the main disk of a multi-store V2 image.
 **Supported:** format version 10.0 (the first endianness-safe version) and the
 older pre-10.0 layout.
 
+#### Partclone image — `partclone`
+
+> Origin: FsRover
+
+**Supported:** image formats 0001 and little-endian 0002.
+
+**Not supported:** big-endian 0002 images, extended feature sections, XXH128,
+and images whose bitmap would exceed 256 MiB.
+
 #### CD/DVD image containers — `cdimage`
 
 > Origin: FsRover / libcdio

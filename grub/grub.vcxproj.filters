@@ -501,6 +501,9 @@
     <ClCompile Include="grub-core\io\ntfsclone.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\partclone.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\offset.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>

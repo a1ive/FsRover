@@ -187,6 +187,7 @@
 	mod (pmf)	\
 	mod (pmfx)	\
 	mod (ntfsclone)	\
+	mod (partclone)	\
 	mod (sna)	\
 	mod (cdimage)	\
 	mod (gho)	\

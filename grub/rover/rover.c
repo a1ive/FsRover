@@ -802,7 +802,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 			"gzio", "xzio", "lzopio", "lz4io", "zstdio", "bz2io", "brio", "lzmaio",
 			"vhd", "vhdx", "vdi", "qcow", "qed", "vmdk", "dmg", "isz",
 			"sparse", "parallels", "ffu", "tib", "tibx", "pmf", "pmfx",
-			"ntfsclone", "sna", "cdimage", "gho", "ifw", "ewf",
+			"ntfsclone", "partclone", "sna", "cdimage", "gho", "ifw", "ewf",
 		};
 		int id;
 		COMPILE_TIME_ASSERT (ARRAY_SIZE (names)
