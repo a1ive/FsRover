@@ -229,6 +229,7 @@
     <ClCompile Include="grub-core\fs\dwarfs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;$(ProjectDir)grub-core\lib\brotli\include;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\efs.c" />
     <ClCompile Include="grub-core\fs\erofs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\7z;$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

@@ -372,6 +372,9 @@
     <ClCompile Include="grub-core\fs\dwarfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\efs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\jffs2.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

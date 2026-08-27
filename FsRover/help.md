@@ -305,6 +305,10 @@ syntax is not translated or followed.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved
 
+#### SGI Extent File System — `efs`
+
+> Origin: FsRover · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved
+
 #### HPFS — `hpfs`
 
 > Origin: Linux · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved

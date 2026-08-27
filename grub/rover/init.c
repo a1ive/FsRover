@@ -100,6 +100,7 @@
 	mod (cramfs)	\
 	mod (deb)	\
 	mod (dwarfs)	\
+	mod (efs)	\
 	mod (erofs)	\
 	mod (exfat)	\
 	mod (ext2)	\
