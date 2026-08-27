@@ -900,6 +900,19 @@ without a chunk definition table (no table means raw contiguous data).
 the specification does not define the password key derivation, so it cannot be
 implemented from it.
 
+#### Expert Witness Compression Format — `ewf`
+
+> Origin: FsRover
+
+Open the first `.E01` or SMART `.s01` file. Numbered segment files beside it
+are found and joined automatically; each segment header and number must match.
+
+**Supported:** physical-media EWF version 1 images, raw chunks and RFC1950/zlib
+compressed chunks.
+
+**Not supported:** EWF2 `.Ex01`, logical evidence `.L01`, and AccessData
+`ADCRYPT` encryption.
+
 #### Android sparse image — `sparse`
 
 > Origin: FsRover

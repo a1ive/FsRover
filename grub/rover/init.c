@@ -188,7 +188,8 @@
 	mod (sna)	\
 	mod (cdimage)	\
 	mod (gho)	\
-	mod (ifw)
+	mod (ifw)	\
+	mod (ewf)
 
 #define ROVER_MOD_DECLARE(name)	\
 	void grub_##name##_init (void);	\

@@ -486,6 +486,9 @@
     <ClCompile Include="grub-core\io\gzio.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\ewf.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\isz.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
