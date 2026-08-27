@@ -1437,6 +1437,8 @@ FsRover.exe [options]
 | `-m`, `--minimize` | — | Start minimized to the notification area. The main window is never shown, so no taskbar button appears and disappears. |
 | `-f`, `--file=FILE` | path | Mount `FILE` as a virtual disk at startup. |
 | `-d`, `--file-dec=FILE` | path | The same, but run the compression filters over the image first (a `.img.gz`, `.iso.xz`, …). |
+| `-n`, `--no-times` | — | Start with **Settings → Preserve Timestamps** turned off. |
+| `-c`, `--fs-encoding=ENCODING` | name | Select the byte-oriented file name encoding: `UTF-8`, `GBK`, `Big5`, `Shift-JIS`, or `EUC-KR`. |
 | `-h`, `--help` | — | Show the usage box and exit. |
 
 ### Syntax
@@ -1445,6 +1447,8 @@ FsRover.exe [options]
   both `-fPATH` and `-f PATH`.
 - `-f` and `-d` may be repeated and mixed; every image is mounted in the order
   given, with decompression applied only to the corresponding `-d` argument.
+- Encoding names are case-insensitive. If `--fs-encoding` is repeated, the last
+  value sets the initial selection under **Settings → File name encoding**.
 - Option names are matched **case-insensitively**, and the Windows-style
   `/file=PATH` / `/m` spelling is accepted alongside `--file=PATH` / `-m`.
 - `--` ends option parsing.
@@ -1470,5 +1474,6 @@ FsRover.exe [options]
 FsRover.exe --file "D:\images\rootfs.img"
 FsRover.exe -d D:\images\sdcard.img.xz
 FsRover.exe -f C:\downloads\package.rpm
+FsRover.exe -c Shift-JIS --no-times -f D:\images\legacy.iso
 FsRover.exe --minimize
 ```

@@ -35,6 +35,9 @@
     <ClInclude Include="..\common\extract_core.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\fs_encoding.h">
+      <Filter>common</Filter>
+    </ClInclude>
     <ClInclude Include="..\common\optparse.h">
       <Filter>common</Filter>
     </ClInclude>

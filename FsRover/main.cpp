@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "backend.h"
+#include "../common/fs_encoding.h"
 #include "dokanfs.h"
 #include "gui.h"
 #include "resource.h"
@@ -94,21 +95,6 @@ constexpr int IDM_BACKEND_WINFSP = 225;
 constexpr int IDM_BACKEND_DOKAN = 226;
 constexpr int IDM_FS_ENCODING_BASE = 230;
 constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
-
-struct fs_encoding
-{
-	const wchar_t *name;
-	UINT code_page;
-};
-
-constexpr fs_encoding FS_ENCODINGS[] =
-{
-	{ L"UTF-8", BACKEND_FS_ENCODING_UTF8 },
-	{ L"GBK", BACKEND_FS_ENCODING_GBK },
-	{ L"Big5", BACKEND_FS_ENCODING_BIG5 },
-	{ L"Shift-JIS", BACKEND_FS_ENCODING_SHIFT_JIS },
-	{ L"EUC-KR", BACKEND_FS_ENCODING_EUC_KR },
-};
 
 constexpr int IDM_EXTRACT = 1;
 constexpr int IDM_MOUNT = 2;
@@ -1893,9 +1879,9 @@ create_menu_bar (HWND wnd)
 
 	g_menu_settings = CreatePopupMenu ();
 	g_menu_encoding = CreatePopupMenu ();
-	for (int i = 0; i < (int) ARRAYSIZE (FS_ENCODINGS); i++)
+	for (int i = 0; i < (int) ARRAYSIZE (rover_fs_encoding::OPTIONS); i++)
 		AppendMenuW (g_menu_encoding, MF_STRING, IDM_FS_ENCODING_BASE + i,
-			FS_ENCODINGS[i].name);
+			rover_fs_encoding::OPTIONS[i].name);
 	AppendMenuW (g_menu_settings, MF_POPUP, (UINT_PTR) g_menu_encoding,
 		res_str (IDS_MENU_FS_ENCODING).c_str ());
 	AppendMenuW (g_menu_settings, MF_SEPARATOR, 0, nullptr);
@@ -1943,11 +1929,11 @@ on_menu_popup (HMENU menu)
 	if (menu == g_menu_encoding)
 	{
 		int selected = IDM_FS_ENCODING_BASE;
-		for (int i = 0; i < (int) ARRAYSIZE (FS_ENCODINGS); i++)
-			if (FS_ENCODINGS[i].code_page == g_fs_encoding)
+		for (int i = 0; i < (int) ARRAYSIZE (rover_fs_encoding::OPTIONS); i++)
+			if (rover_fs_encoding::OPTIONS[i].code_page == g_fs_encoding)
 				selected += i;
 		CheckMenuRadioItem (menu, IDM_FS_ENCODING_BASE,
-			IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (FS_ENCODINGS) - 1,
+			IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (rover_fs_encoding::OPTIONS) - 1,
 			selected, MF_BYCOMMAND);
 		return;
 	}
@@ -2105,10 +2091,10 @@ void
 on_command (int id)
 {
 	if (id >= IDM_FS_ENCODING_BASE
-		&& id < IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (FS_ENCODINGS))
+		&& id < IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (rover_fs_encoding::OPTIONS))
 	{
 		if (!g_extracting)
-			set_fs_encoding (FS_ENCODINGS[id - IDM_FS_ENCODING_BASE].code_page);
+			set_fs_encoding (rover_fs_encoding::OPTIONS[id - IDM_FS_ENCODING_BASE].code_page);
 		return;
 	}
 	if (id >= IDM_DOKAN_UNMOUNT_BASE)
@@ -2309,6 +2295,8 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		on_drop_files ((HDROP) wp);
 		return 0;
 	case WM_APP_BACKEND_READY:
+		/* Apply command-line settings before any startup mount or enumeration. */
+		backend_set_fs_char_encoding (g_fs_encoding);
 		/* --file/--file-dec stand in for the first refresh: each mount
 		   ends in one of its own (on_task_done), and doing both would
 		   leave two enumerations racing for the tree.  */
@@ -2394,6 +2382,8 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 		CoUninitialize ();
 		return 0;
 	}
+	g_preserve_times = g_cmdline.preserve_times;
+	g_fs_encoding = g_cmdline.fs_encoding;
 	load_dpi_api ();
 
 	INITCOMMONCONTROLSEX icc = { sizeof (icc),

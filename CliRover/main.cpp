@@ -28,6 +28,7 @@
 
 #include <rover.h>
 
+#include "../common/fs_encoding.h"
 #include "../common/natural_sort.h"
 #include "../common/optparse.h"
 #include "extract.h"
@@ -46,6 +47,8 @@ struct command_options
 {
 	std::vector<mount_options> mounts;
 	bool list = false;
+	bool preserve_times = true;
+	unsigned int fs_encoding = ROVER_FS_ENCODING_UTF8;
 	std::wstring list_path;
 	std::vector<std::wstring> extracts;
 	std::wstring output;
@@ -66,6 +69,8 @@ enum
 	OPT_EXTRACT,
 	OPT_OUTPUT,
 	OPT_LIST,
+	OPT_NO_TIMES,
+	OPT_FS_ENCODING,
 	OPT_HELP,
 };
 
@@ -78,6 +83,8 @@ const struct optparse_option OPTIONS[] =
 	{ L"extract", L'e', OPTPARSE_REQUIRED },
 	{ L"output", L'o', OPTPARSE_REQUIRED },
 	{ L"list", L'l', OPTPARSE_OPTIONAL },
+	{ L"no-times", L'n', OPTPARSE_NONE },
+	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
 	{ L"help", L'h', OPTPARSE_NONE },
 	{ nullptr, 0, OPTPARSE_NONE },
 };
@@ -92,6 +99,9 @@ const char USAGE[] =
 	"  -l, --list[=PATH]     List devices, a directory, or a file.\r\n"
 	"  -e, --extract=PATH    Extract a GRUB file or directory.\r\n"
 	"  -o, --output=DIR      Destination directory for --extract.\r\n"
+	"  -n, --no-times        Do not preserve extracted timestamps.\r\n"
+	"  -c, --fs-encoding=X   File name encoding: UTF-8, GBK, Big5,\r\n"
+	"                         Shift-JIS, or EUC-KR.\r\n"
 	"  -h, --help            Show this help.\r\n"
 	"\r\n"
 	"Mount options may be repeated and are processed in command-line order.\r\n";
@@ -240,6 +250,22 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 			if (parser.optarg)
 				options->list_path = parser.optarg;
 			break;
+		case OPT_NO_TIMES:
+			options->preserve_times = false;
+			break;
+		case OPT_FS_ENCODING:
+		{
+			const rover_fs_encoding::option *encoding
+				= rover_fs_encoding::find (parser.optarg);
+			if (!encoding)
+			{
+				*error = "invalid file name encoding '" + narrow (parser.optarg)
+					+ "' (expected UTF-8, GBK, Big5, Shift-JIS, or EUC-KR)";
+				return false;
+			}
+			options->fs_encoding = encoding->code_page;
+			break;
+		}
 		case OPT_HELP:
 			*show_help = true;
 			return true;
@@ -553,6 +579,13 @@ wmain (int argc, wchar_t **argv)
 		[] (const mount_options &mount) { return !mount.loopback; });
 	rover_init (has_host_mount ? ROVER_INIT_NO_WINDISK : 0);
 	int result = 0;
+	if (rover_set_fs_char_encoding (options.fs_encoding))
+	{
+		const char *message = rover_last_error ();
+		result = report_error (message ? message : "cannot set file name encoding");
+		rover_fini ();
+		return result;
+	}
 	size_t img_seq = 0;
 	size_t loop_seq = 0;
 	for (size_t i = 0; i < options.mounts.size (); i++)
@@ -591,7 +624,8 @@ wmain (int argc, wchar_t **argv)
 		for (const std::wstring &source : options.extracts)
 			sources.push_back (narrow (source));
 		extract_result stats;
-		bool extracted = extract_paths (sources, options.output, &stats, &error);
+		bool extracted = extract_paths (sources, options.output,
+			options.preserve_times, &stats, &error);
 		for (const std::string &item_error : stats.errors)
 			result = report_error (item_error);
 		if (!extracted && !error.empty ())

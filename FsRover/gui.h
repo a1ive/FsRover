@@ -84,6 +84,8 @@ void mount_host_image (std::wstring file, bool decompress);	/* winfile */
 struct cmdline_options
 {
 	bool minimize = false;	/* -m: come up in the tray, no window */
+	bool preserve_times = true;	/* -n: extracted items keep no source times */
+	UINT fs_encoding = BACKEND_FS_ENCODING_UTF8;	/* -c: byte-oriented names */
 	/* -f/-d: the physical disks are the one thing an unprivileged
 	   process cannot read, and a session about someone's own image
 	   file has no use for them.  */

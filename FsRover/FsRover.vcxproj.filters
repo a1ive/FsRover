@@ -168,6 +168,9 @@
     <ClInclude Include="..\common\extract_core.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\fs_encoding.h">
+      <Filter>common</Filter>
+    </ClInclude>
     <ClInclude Include="..\common\natural_sort.h">
       <Filter>common</Filter>
     </ClInclude>

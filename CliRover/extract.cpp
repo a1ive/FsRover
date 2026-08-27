@@ -161,7 +161,8 @@ show_progress (console_context &context,
 
 bool
 extract_paths (const std::vector<std::string> &sources,
-	const std::wstring &destination, extract_result *result, std::string *error)
+	const std::wstring &destination, bool preserve_times,
+	extract_result *result, std::string *error)
 {
 	console_context context;
 	rover_extract::options options;
@@ -172,6 +173,7 @@ extract_paths (const std::vector<std::string> &sources,
 	g_cancel.store (false, std::memory_order_relaxed);
 	handler_set = SetConsoleCtrlHandler (ctrl_handler, TRUE) != FALSE;
 	context.console_progress = stderr_is_console ();
+	options.preserve_times = preserve_times;
 	options.cancelled = [] ()
 	{
 		return g_cancel.load (std::memory_order_relaxed);

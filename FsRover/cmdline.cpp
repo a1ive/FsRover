@@ -23,6 +23,7 @@
 #include <string>
 
 #include "gui.h"
+#include "../common/fs_encoding.h"
 #include "../common/optparse.h"
 #include "resource.h"
 
@@ -38,6 +39,8 @@ enum
 	OPT_MINIMIZE,
 	OPT_FILE,
 	OPT_FILE_DEC,
+	OPT_NO_TIMES,
+	OPT_FS_ENCODING,
 	OPT_HELP,
 };
 
@@ -46,6 +49,8 @@ const struct optparse_option OPTS[] =
 	{ L"minimize", L'm', OPTPARSE_NONE },
 	{ L"file", L'f', OPTPARSE_REQUIRED },
 	{ L"file-dec", L'd', OPTPARSE_REQUIRED },
+	{ L"no-times", L'n', OPTPARSE_NONE },
+	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
 	{ L"help", L'h', OPTPARSE_NONE },
 	{ nullptr, 0, OPTPARSE_NONE },
 };
@@ -122,6 +127,25 @@ cmdline_parse (void)
 				opt == OPT_FILE_DEC });
 			g_cmdline.no_windisk = true;
 			break;
+		case OPT_NO_TIMES:
+			g_cmdline.preserve_times = false;
+			break;
+		case OPT_FS_ENCODING:
+		{
+			const rover_fs_encoding::option *encoding
+				= rover_fs_encoding::find (parser.optarg);
+			if (!encoding)
+			{
+				wchar_t text[320];
+				_snwprintf_s (text, ARRAYSIZE (text), _TRUNCATE,
+					L"Invalid file name encoding -- '%s'", parser.optarg);
+				show_usage (text);
+				ok = false;
+				goto out;
+			}
+			g_cmdline.fs_encoding = encoding->code_page;
+			break;
+		}
 		case OPT_HELP:
 			show_usage (nullptr);
 			ok = false;

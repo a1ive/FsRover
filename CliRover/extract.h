@@ -13,6 +13,7 @@ struct extract_result
 };
 
 bool extract_paths (const std::vector<std::string> &sources,
-	const std::wstring &destination, extract_result *result, std::string *error);
+	const std::wstring &destination, bool preserve_times,
+	extract_result *result, std::string *error);
 
 #endif /* ! CLIROVER_EXTRACT_H */

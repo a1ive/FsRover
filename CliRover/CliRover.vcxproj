@@ -147,6 +147,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
+    <ClInclude Include="..\common\fs_encoding.h" />
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="extract.h" />
