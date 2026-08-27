@@ -463,6 +463,15 @@ disc shows its `Non-Allocatable Space` placeholder alongside real files.
 sequence is read from the start of the medium, so a multi-session disc is read
 as its first session. Named streams and extended attributes are not exposed.
 
+#### Xbox DVD File System — `xdvdfs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: volume only · Symlinks: none
+
+Names are case-insensitive and use the selected filename encoding.
+
+**Not supported:** Xbox security/encryption layers, raw optical-sector decoding,
+or layouts whose XDVDFS partition begins at a non-standard offset.
+
 ---
 
 ### 1.6 Archives, packages and databases

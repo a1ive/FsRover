@@ -432,6 +432,9 @@
     <ClCompile Include="grub-core\fs\xar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\xdvdfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\xfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
