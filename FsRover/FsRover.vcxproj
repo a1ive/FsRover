@@ -159,6 +159,7 @@
   <ItemGroup>
     <ClCompile Include="..\common\extract_core.cpp" />
     <ClCompile Include="..\common\natural_sort.cpp" />
+    <ClCompile Include="..\common\optparse.c" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="cryptodlg.cpp" />
@@ -174,7 +175,6 @@
     <ClCompile Include="md4c\md4c.c" />
     <ClCompile Include="mdrtf.cpp" />
     <ClCompile Include="mdview.cpp" />
-    <ClCompile Include="optparse.c" />
     <ClCompile Include="propsdlg.cpp" />
     <ClCompile Include="smartdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
@@ -185,6 +185,7 @@
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
     <ClInclude Include="..\common\natural_sort.h" />
+    <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="dokan\dokan.h" />
     <ClInclude Include="dokan\fileinfo.h" />
@@ -198,7 +199,6 @@
     <ClInclude Include="mdrtf.h" />
     <ClInclude Include="nanosvg\nanosvg.h" />
     <ClInclude Include="nanosvg\nanosvgrast.h" />
-    <ClInclude Include="optparse.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="strconv.h" />

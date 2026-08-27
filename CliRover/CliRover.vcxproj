@@ -141,19 +141,15 @@
   <ItemGroup>
     <ClCompile Include="..\common\extract_core.cpp" />
     <ClCompile Include="..\common\natural_sort.cpp" />
+    <ClCompile Include="..\common\optparse.c" />
     <ClCompile Include="extract.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="..\FsRover\optparse.c">
-      <Link>optparse.c</Link>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
     <ClInclude Include="..\common\natural_sort.h" />
+    <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="extract.h" />
-    <ClInclude Include="..\FsRover\optparse.h">
-      <Link>optparse.h</Link>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\grub\grub.vcxproj">

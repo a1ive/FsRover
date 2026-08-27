@@ -29,7 +29,7 @@
 #include <rover.h>
 
 #include "../common/natural_sort.h"
-#include "../FsRover/optparse.h"
+#include "../common/optparse.h"
 #include "extract.h"
 
 namespace

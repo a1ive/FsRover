@@ -94,13 +94,13 @@
     <ClCompile Include="winfspfs.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
-    <ClCompile Include="optparse.c">
-      <Filter>SRC</Filter>
-    </ClCompile>
     <ClCompile Include="..\common\extract_core.cpp">
       <Filter>common</Filter>
     </ClCompile>
     <ClCompile Include="..\common\natural_sort.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\optparse.c">
       <Filter>common</Filter>
     </ClCompile>
   </ItemGroup>
@@ -162,9 +162,6 @@
     <ClInclude Include="dokan\public.h">
       <Filter>SRC\dokan</Filter>
     </ClInclude>
-    <ClInclude Include="optparse.h">
-      <Filter>SRC</Filter>
-    </ClInclude>
     <ClInclude Include="tiny-webp\tiny_webp.h">
       <Filter>SRC\tiny-webp</Filter>
     </ClInclude>
@@ -172,6 +169,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="..\common\natural_sort.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\optparse.h">
       <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>

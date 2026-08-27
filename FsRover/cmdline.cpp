@@ -23,7 +23,7 @@
 #include <string>
 
 #include "gui.h"
-#include "optparse.h"
+#include "../common/optparse.h"
 #include "resource.h"
 
 cmdline_options g_cmdline;
