@@ -239,6 +239,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\fat.c" />
+    <ClCompile Include="grub-core\fs\fatx.c" />
     <ClCompile Include="grub-core\fs\fbfs.c" />
     <ClCompile Include="grub-core\fs\gho.c" />
     <ClCompile Include="grub-core\fs\fshelp.c" />

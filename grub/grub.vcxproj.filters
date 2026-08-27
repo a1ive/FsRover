@@ -297,6 +297,9 @@
     <ClCompile Include="grub-core\fs\fat.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\fatx.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\fshelp.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

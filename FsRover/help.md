@@ -309,6 +309,18 @@ syntax is not translated or followed.
 
 > Origin: FsRover · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved
 
+#### Xbox FATX / XTAF — `fatx`
+
+> Origin: FsRover · Label: no · UUID: yes · Timestamps: per-file · Symlinks: none
+
+Original-Xbox `FATX` volumes (little-endian) and Xbox 360 `XTAF` volumes
+(big-endian) are supported.
+
+Names are case-insensitive and use the selected filename encoding.
+
+**Not supported:** recovery of `0xE5` deleted directory entries, Xbox 360
+security/encryption layers, or non-standard partition maps.
+
 #### HPFS — `hpfs`
 
 > Origin: Linux · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved

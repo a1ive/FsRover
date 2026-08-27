@@ -106,6 +106,7 @@
 	mod (ext2)	\
 	mod (f2fs)	\
 	mod (fat)	\
+	mod (fatx)	\
 	mod (fbfs)	\
 	mod (ghofs)	\
 	mod (hfs)	\
