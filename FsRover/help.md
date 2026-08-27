@@ -511,6 +511,20 @@ Names are stored in an OEM code page and use the selected filename encoding.
 **Not supported:** garbled (password-protected) entries and entries continued in
 another volume.
 
+#### FsArchiver FSA — `fsa`
+
+> Origin: FsRover · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved
+
+Reads `FsArCh_002` archives created by FsArchiver, including both `savefs`
+filesystem backups and `savedir` flat-file archives. A single backed-up
+filesystem is shown directly at the archive root; archives containing several
+filesystems use `fs0/`, `fs1/`, ... so that equal paths cannot collide.
+
+Stored, LZO, gzip, bzip2, XZ/LZMA, LZ4 and Zstandard data blocks are supported.
+
+**Not supported:** Blowfish-encrypted archives, split-volume sets, and the old
+`FsArCh_001` format.
+
 #### Microsoft Cabinet — `cab`
 
 > Origin: 7-Zip · Label: no · UUID: no · Timestamps: per-file + volume · Symlinks: none

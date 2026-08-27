@@ -294,6 +294,9 @@
     <ClCompile Include="grub-core\fs\f2fs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\fsa.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\fat.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

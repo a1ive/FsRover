@@ -105,6 +105,7 @@
 	mod (exfat)	\
 	mod (ext2)	\
 	mod (f2fs)	\
+	mod (fsa)	\
 	mod (fat)	\
 	mod (fatx)	\
 	mod (fbfs)	\

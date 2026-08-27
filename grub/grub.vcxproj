@@ -238,6 +238,10 @@
     <ClCompile Include="grub-core\fs\f2fs.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\fsa.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\minilzo;$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;$(ProjectDir)grub-core\lib\bzip2;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\fat.c" />
     <ClCompile Include="grub-core\fs\fatx.c" />
     <ClCompile Include="grub-core\fs\fbfs.c" />
