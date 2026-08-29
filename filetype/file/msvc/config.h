@@ -22,11 +22,14 @@
 #define HAVE_STDINT_H 1
 #define HAVE_INTTYPES_H 1
 #define HAVE_UNISTD_H 1
+#define HAVE_DIRENT_H 1
+#define HAVE_REGEX_H 1
 #define HAVE_WCHAR_H 1
 #define HAVE_WCTYPE_H 1
 #define HAVE_STRTOF 1
+#define HAVE_PIPE 1
+#define HAVE_TZSET 1
 #define HAVE_VISIBILITY 0
-#define HAVE_FORK 0
 
 #define BUILTIN_ELF 1
 #define ELFCORE 1
