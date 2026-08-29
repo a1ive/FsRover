@@ -46,8 +46,10 @@
  * Names live only in the trailing directory tree, which carries no
  * pointer into the block stream.  The tree's ts field is the archive
  * offset of that entry's 'f' metadata, which the writer emits in the
- * same order it emits content, so sorting the non-empty files by it
- * recovers the block stream order.  Finding where file N starts still
+ * same order it emits content, so sorting the non-empty content owners
+ * by it recovers the block stream order.  A hard-link alias instead
+ * carries the path of its content owner in the tree and contributes no
+ * block-stream record of its own.  Finding where file N starts still
  * means scanning the stream for the N preceding 'n' records; that scan
  * is incremental (it only ever runs as far as the file being read) and
  * its results, along with the parsed tree, are cached across mounts so
@@ -94,6 +96,11 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define TIB_TREE_OFF_SIZE	0x0c
 #define TIB_TREE_OFF_ORDER	0x1c
 #define TIB_TREE_OFF_ATTR	0x24
+/* A nonzero cookie at +0x34 followed by a counted UTF-16 path is the
+   content owner of a hard-link alias.  Ordinary entries keep both zero.  */
+#define TIB_TREE_OFF_LINK_COOKIE	0x34
+#define TIB_TREE_OFF_LINK_CHARS	0x38
+#define TIB_TREE_OFF_LINK_PATH	0x3c
 /* The only attribute bit the writer sets on a container.  */
 #define TIB_ATTR_DIR		0x80
 
@@ -123,7 +130,9 @@ GRUB_MOD_LICENSE ("GPLv3+");
 struct tib_ent
 {
 	char *path;		/* full path, '/' separated, UTF-8 */
+	char *link;		/* hard-link content owner while resolving the tree */
 	grub_uint32_t base;	/* offset of the basename within path */
+	grub_uint32_t source;	/* canonical entry that owns the content */
 	grub_uint64_t size;
 	grub_uint64_t order;	/* block stream ordering key */
 	grub_uint32_t file_no;	/* position in the block stream */
@@ -171,6 +180,8 @@ struct tib_file
 
 static struct grub_fs grub_tib_fs;
 static struct tib_data *tib_cache;
+
+static struct tib_ent *tib_lookup (const struct tib_data *data, const char *path);
 
 /* Inflate the stream at byte offset OFF, which may not run past END.
    With *BUFP NULL the output buffer is allocated and grown as needed and
@@ -389,6 +400,7 @@ tib_parse_record (const grub_uint8_t *blob, grub_size_t len, grub_size_t *pos,
 	grub_size_t tail, sub;
 	grub_uint32_t n;
 	char *path;
+	char *link = NULL;
 	const grub_uint8_t *fixed;
 
 	if (p + 4 > len)
@@ -444,11 +456,38 @@ tib_parse_record (const grub_uint8_t *blob, grub_size_t len, grub_size_t *pos,
 	}
 
 	fixed = blob + p + sub;
+	if (tail - sub >= TIB_TREE_OFF_LINK_PATH
+	    && grub_le_to_cpu32 (grub_get_unaligned32 (fixed + TIB_TREE_OFF_LINK_COOKIE)) != 0)
+	{
+		grub_uint32_t link_chars;
+
+		link_chars = grub_le_to_cpu32 (grub_get_unaligned32 (fixed + TIB_TREE_OFF_LINK_CHARS));
+		if (link_chars == 0 || link_chars > TIB_MAX_NAME_CHARS
+		    || link_chars > (tail - sub - TIB_TREE_OFF_LINK_PATH) / 2)
+		{
+			grub_free (path);
+			goto bad;
+		}
+		link = tib_utf16_path (fixed + TIB_TREE_OFF_LINK_PATH, link_chars);
+		if (!link)
+		{
+			grub_free (path);
+			return grub_errno;
+		}
+		if (!*link)
+		{
+			grub_free (path);
+			grub_free (link);
+			goto bad;
+		}
+	}
 	ent->path = path;
+	ent->link = link;
 	ent->size = grub_le_to_cpu64 (grub_get_unaligned64 (fixed + TIB_TREE_OFF_SIZE));
 	ent->order = grub_le_to_cpu64 (grub_get_unaligned64 (fixed + TIB_TREE_OFF_ORDER));
 	ent->dir = (grub_le_to_cpu32 (grub_get_unaligned32 (fixed + TIB_TREE_OFF_ATTR)) & TIB_ATTR_DIR) != 0;
 	ent->file_no = TIB_NO_FILE;
+	ent->source = TIB_NO_FILE;
 	ent->base = 0;
 	for (n = 0; path[n]; n++)
 		if (path[n] == '/')
@@ -494,12 +533,48 @@ tib_parse_tree (struct tib_data *data, const grub_uint8_t *blob, grub_size_t len
 	}
 
 	for (i = 0; i < nrec; i++)
-	{
 		data->by_path[i] = i;
-		if (!data->ents[i].dir && data->ents[i].size)
-			nfiles++;
-	}
 	tib_sort (data->by_path, tmp, nrec, data->ents, tib_cmp_path);
+
+	/* Resolve the explicit target carried by every hard-link alias before
+	   counting block-stream files.  The alias and its target must describe
+	   the same logical file and therefore the same stream-order key.  */
+	for (i = 0; i < nrec; i++)
+		data->ents[i].source = i;
+	for (i = 0; i < nrec; i++)
+		if (data->ents[i].link)
+		{
+			struct tib_ent *ent = &data->ents[i];
+			struct tib_ent *target = tib_lookup (data, ent->link);
+
+			if (!target || target == ent || target->dir
+			    || target->size != ent->size || target->order != ent->order)
+			{
+				err = grub_error (GRUB_ERR_BAD_FS, "bad tib hard link `%s'", ent->path);
+				goto fail;
+			}
+			ent->source = (grub_uint32_t) (target - data->ents);
+			grub_free (ent->link);
+			ent->link = NULL;
+		}
+	for (i = 0; i < nrec; i++)
+	{
+		grub_uint32_t source = i, hops;
+
+		for (hops = 0; data->ents[source].source != source && hops < nrec; hops++)
+			source = data->ents[source].source;
+		if (hops == nrec)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "cyclic tib hard link");
+			goto fail;
+		}
+		data->ents[i].source = source;
+	}
+
+	for (i = 0; i < nrec; i++)
+		if (!data->ents[i].dir && data->ents[i].size
+		    && data->ents[i].source == i)
+			nfiles++;
 
 	data->nfiles = nfiles;
 	if (nfiles)
@@ -517,7 +592,8 @@ tib_parse_tree (struct tib_data *data, const grub_uint8_t *blob, grub_size_t len
 			goto fail;
 		}
 		for (i = 0; i < nrec; i++)
-			if (!data->ents[i].dir && data->ents[i].size)
+			if (!data->ents[i].dir && data->ents[i].size
+			    && data->ents[i].source == i)
 				order[n++] = i;
 		tib_sort (order, tmp, nfiles, data->ents, tib_cmp_order);
 		for (n = 0; n < nfiles; n++)
@@ -527,6 +603,9 @@ tib_parse_tree (struct tib_data *data, const grub_uint8_t *blob, grub_size_t len
 		}
 		grub_free (order);
 	}
+	for (i = 0; i < nrec; i++)
+		if (data->ents[i].source != i)
+			data->ents[i].file_no = data->ents[data->ents[i].source].file_no;
 
 	grub_free (tmp);
 	return GRUB_ERR_NONE;
@@ -544,7 +623,10 @@ tib_free (struct tib_data *data)
 	grub_uint32_t i;
 
 	for (i = 0; i < data->nents; i++)
+	{
 		grub_free (data->ents[i].path);
+		grub_free (data->ents[i].link);
+	}
 	grub_free (data->ents);
 	grub_free (data->by_path);
 	grub_free (data->by_file);
@@ -1053,7 +1135,7 @@ grub_tib_dir (grub_device_t device, const char *path,
 		grub_memset (&info, 0, sizeof (info));
 		info.dir = ent->dir;
 		info.inodeset = 1;
-		info.inode = (grub_uint64_t) (ent - data->ents);
+		info.inode = ent->source;
 		if (hook (ent->path + plen, &info, hook_data))
 			break;
 	}
