@@ -161,6 +161,7 @@
 	mod (xar)	\
 	mod (xdvdfs)	\
 	mod (xfs)	\
+	mod (yaffs)	\
 	mod (zfs)	\
 	mod (zip)	\
 	/* transparent decompression filters */	\

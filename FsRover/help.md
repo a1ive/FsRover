@@ -100,6 +100,12 @@ rejected.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved
 
+#### YAFFS1 / YAFFS2 — `yaffs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: per-file · Symlinks: resolved
+
+**Not supported:** vendor-specific OOB byte shuffles, hardware-ECC correction.
+
 #### littlefs — `littlefs`
 
 > Origin: FsRover · Label: no · UUID: no · Timestamps: none · Symlinks: none

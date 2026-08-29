@@ -332,6 +332,7 @@
     </ClCompile>
     <ClCompile Include="grub-core\fs\xdvdfs.c" />
     <ClCompile Include="grub-core\fs\xfs.c" />
+    <ClCompile Include="grub-core\fs\yaffs.c" />
     <ClCompile Include="grub-core\fs\zip.c">
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>

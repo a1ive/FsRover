@@ -444,6 +444,9 @@
     <ClCompile Include="grub-core\fs\xfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\yaffs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\zfs\zfs.c">
       <Filter>grub-core\fs\zfs</Filter>
     </ClCompile>
