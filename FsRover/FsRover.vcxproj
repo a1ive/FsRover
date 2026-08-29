@@ -204,7 +204,7 @@
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="strconv.h" />
     <ClInclude Include="tiny-webp\tiny_webp.h" />
-    <ClInclude Include="version.h" />
+    <ClInclude Include="..\grub\rover\version.h" />
     <ClInclude Include="winfsp_fuse.h" />
     <ClInclude Include="winfspfs.h" />
   </ItemGroup>

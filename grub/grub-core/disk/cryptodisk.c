@@ -26,7 +26,6 @@
 #include <grub/file.h>
 #include <grub/procfs.h>
 #include <grub/partition.h>
-#include <grub/safemath.h>
 
 /*
  * Rover port: the interactive `cryptomount' command (grub/extcmd.h),
@@ -1412,60 +1411,13 @@ hex (grub_uint8_t val)
   return 'a' + val - 10;
 }
 
-/* Open a file named NAME and initialize FILE.  */
-static char *
-luks_script_get (grub_size_t *sz)
+static grub_err_t
+luks_script_generate (struct grub_procfs_entry *entry,
+		      struct grub_procfs_writer *writer)
 {
   grub_cryptodisk_t i;
-  grub_size_t size = 0, mul;
-  char *ptr, *ret;
 
-  *sz = 0;
-
-  for (i = cryptodisk_list; i != NULL; i = i->next)
-    if (grub_strcmp (i->modname, "luks") == 0 ||
-	grub_strcmp (i->modname, "luks2") == 0)
-      {
-	/*
-	 * Add space in the line for (in order) spaces, cipher mode, cipher IV
-	 * mode, sector offset, sector size and the trailing newline. This is
-	 * an upper bound on the size of this data. There are 15 extra bytes
-	 * in an earlier version of this code that are unaccounted for. It is
-	 * left in the calculations in case it is needed. At worst, its short-
-	 * lived wasted space.
-	 *
-	 * 60 = 5 + 5 + 8 + 20 + 6 + 1 + 15
-	 */
-	if (grub_add (size, grub_strlen (i->modname), &size) ||
-	    grub_add (size, sizeof ("_mount") + 60, &size) ||
-	    grub_add (size, grub_strlen (i->uuid), &size) ||
-	    grub_add (size, grub_strlen (i->cipher->cipher->name), &size) ||
-	    grub_mul (i->keysize, 2, &mul) ||
-	    grub_add (size, mul, &size))
-	  {
-	    grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
-	    return 0;
-	  }
-	if (i->essiv_hash)
-	  {
-	    if (grub_add (size, grub_strlen (i->essiv_hash->name), &size))
-	      {
-		grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
-		return 0;
-	      }
-	  }
-      }
-  if (grub_add (size, 1, &size))
-    {
-      grub_error (GRUB_ERR_OUT_OF_RANGE, "overflow detected while obtaining size of luks script");
-      return 0;
-    }
-
-  ret = grub_malloc (size);
-  if (!ret)
-    return 0;
-
-  ptr = ret;
+  (void) entry;
 
   for (i = cryptodisk_list; i != NULL; i = i->next)
     if (grub_strcmp (i->modname, "luks") == 0 ||
@@ -1473,68 +1425,69 @@ luks_script_get (grub_size_t *sz)
       {
 	unsigned j;
 	const char *iptr;
-	ptr = grub_stpcpy (ptr, i->modname);
-	ptr = grub_stpcpy (ptr, "_mount ");
-	ptr = grub_stpcpy (ptr, i->uuid);
-	*ptr++ = ' ';
-	ptr += grub_snprintf (ptr, 21, "%" PRIxGRUB_OFFSET, i->offset_sectors);
-	*ptr++ = ' ';
-	ptr += grub_snprintf (ptr, 7, "%u", 1 << i->log_sector_size);
-	*ptr++ = ' ';
+	char pair[2];
+
+	grub_procfs_printf (writer, "%s_mount %s %" PRIxGRUB_OFFSET " %u ",
+			    i->modname, i->uuid, i->offset_sectors,
+			    1U << i->log_sector_size);
 	for (iptr = i->cipher->cipher->name; *iptr; iptr++)
-	  *ptr++ = grub_tolower (*iptr);
+	  {
+	    char c = grub_tolower (*iptr);
+	    grub_procfs_write (writer, &c, 1);
+	  }
 	switch (i->mode)
 	  {
 	  case GRUB_CRYPTODISK_MODE_ECB:
-	    ptr = grub_stpcpy (ptr, "-ecb");
+	    grub_procfs_puts (writer, "-ecb");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_CBC:
-	    ptr = grub_stpcpy (ptr, "-cbc");
+	    grub_procfs_puts (writer, "-cbc");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_PCBC:
-	    ptr = grub_stpcpy (ptr, "-pcbc");
+	    grub_procfs_puts (writer, "-pcbc");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_XTS:
-	    ptr = grub_stpcpy (ptr, "-xts");
+	    grub_procfs_puts (writer, "-xts");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_LRW:
-	    ptr = grub_stpcpy (ptr, "-lrw");
+	    grub_procfs_puts (writer, "-lrw");
 	    break;
 	  }
 
 	switch (i->mode_iv)
 	  {
 	  case GRUB_CRYPTODISK_MODE_IV_NULL:
-	    ptr = grub_stpcpy (ptr, "-null");
+	    grub_procfs_puts (writer, "-null");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_IV_PLAIN:
-	    ptr = grub_stpcpy (ptr, "-plain");
+	    grub_procfs_puts (writer, "-plain");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_IV_PLAIN64:
-	    ptr = grub_stpcpy (ptr, "-plain64");
+	    grub_procfs_puts (writer, "-plain64");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_IV_BENBI:
-	    ptr = grub_stpcpy (ptr, "-benbi");
+	    grub_procfs_puts (writer, "-benbi");
 	    break;
 	  case GRUB_CRYPTODISK_MODE_IV_ESSIV:
-	    ptr = grub_stpcpy (ptr, "-essiv:");
-	    ptr = grub_stpcpy (ptr, i->essiv_hash->name);
+	    grub_procfs_puts (writer, "-essiv:");
+	    grub_procfs_puts (writer, i->essiv_hash->name);
 	    break;
 	  case GRUB_CRYPTODISK_MODE_IV_BYTECOUNT64:
 	  case GRUB_CRYPTODISK_MODE_IV_BYTECOUNT64_HASH:
 	    break;
 	  }
-	*ptr++ = ' ';
+	grub_procfs_puts (writer, " ");
 	for (j = 0; j < i->keysize; j++)
 	  {
-	    *ptr++ = hex (i->key[j] >> 4);
-	    *ptr++ = hex (i->key[j] & 0xf);
+	    pair[0] = hex (i->key[j] >> 4);
+	    pair[1] = hex (i->key[j] & 0xf);
+	    grub_procfs_write (writer, pair, sizeof (pair));
 	  }
-	*ptr++ = '\n';
+	grub_procfs_puts (writer, "\n");
+	if (grub_procfs_writer_error (writer) != GRUB_ERR_NONE)
+	  break;
       }
-  *ptr = '\0';
-  *sz = ptr - ret;
-  return ret;
+  return grub_procfs_writer_error (writer);
 }
 
 #ifdef GRUB_MACHINE_EFI
@@ -1648,13 +1601,14 @@ grub_cryptodisk_erasesecrets (void)
 struct grub_procfs_entry luks_script =
 {
   .name = "luks_script",
-  .get_contents = luks_script_get
+  .data = NULL,
+  .generate = luks_script_generate
 };
 
 GRUB_MOD_INIT (cryptodisk)
 {
   grub_disk_dev_register (&grub_cryptodisk_dev);
-  grub_procfs_register ("luks_script", &luks_script);
+  grub_procfs_register (&luks_script);
 }
 
 GRUB_MOD_FINI (cryptodisk)

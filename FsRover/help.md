@@ -735,10 +735,17 @@ that reference the same block remain separate files.
 
 > Origin: GRUB · Label: no · UUID: no · Timestamps: none · Symlinks: none
 
-A synthetic device that appears in the tree as `(proc)`.It exposes:
+A synthetic, read-only diagnostics device that appears in the tree as `(proc)`.
+It exposes:
 
 - `luks_script` — the master keys of unlocked LUKS volumes, in hex;
-- `fve_keys` — the credential used for each unlocked BitLocker volume.
+- `fve_keys` — the credential used for each unlocked BitLocker volume;
+- `version` — the FsRover and GRUB versions, target architecture, platform and compiler;
+- `devices` — registered disk providers, volume/RAID handlers, crypto handlers and I/O filters;
+- `partitions` — current devices and partitions with start LBA, sector count and sector size;
+- `mounts` — devices whose filesystems can currently be probed, and the selected filesystem driver;
+- `diskstats` — per-device logical read calls, successfully read bytes, cache hits/misses and backend I/O errors;
+- `errors` — the last 32 GRUB errors reported to a GUI or CLI caller, oldest first.
 
 ---
 

@@ -25,6 +25,7 @@
 #include <grub/time.h>
 #include <grub/file.h>
 #include <grub/i18n.h>
+#include <grub/procfs.h>
 
 #define	GRUB_CACHE_TIMEOUT	2
 
@@ -94,21 +95,21 @@ grub_disk_cache_invalidate_all (void)
 }
 
 static char *
-grub_disk_cache_fetch (unsigned long dev_id, unsigned long disk_id,
-		       grub_disk_addr_t sector)
+grub_disk_cache_fetch (grub_disk_t disk, grub_disk_addr_t sector)
 {
   struct grub_disk_cache *cache;
   unsigned cache_index;
 
-  cache_index = grub_disk_cache_get_index (dev_id, disk_id, sector);
+  cache_index = grub_disk_cache_get_index (disk->dev->id, disk->id, sector);
   cache = grub_disk_cache_table + cache_index;
 
   do {
-    if (cache->dev_id == dev_id && cache->disk_id == disk_id
+    if (cache->dev_id == disk->dev->id && cache->disk_id == disk->id
 	&& cache->sector == sector)
       {
 	if (cache->data)
 	  cache->lock = 1;
+	grub_procfs_record_cache (disk, cache->data != NULL);
 #if DISK_CACHE_STATS
 	if (cache->data)
 	  grub_disk_cache_hits++;
@@ -122,6 +123,8 @@ grub_disk_cache_fetch (unsigned long dev_id, unsigned long disk_id,
 #if DISK_CACHE_STATS
   grub_disk_cache_misses++;
 #endif
+
+  grub_procfs_record_cache (disk, 0);
 
   return 0;
 }
@@ -435,7 +438,7 @@ grub_disk_read_small_real (grub_disk_t disk, grub_disk_addr_t sector,
   char *tmp_buf;
 
   /* Fetch the cache.  */
-  data = grub_disk_cache_fetch (disk->dev->id, disk->id, sector);
+  data = grub_disk_cache_fetch (disk, sector);
   if (data)
     {
       /* Just copy it!  */
@@ -528,6 +531,7 @@ grub_disk_read (grub_disk_t disk, grub_disk_addr_t sector,
 		grub_off_t offset, grub_size_t size, void *buf)
 {
   grub_err_t err = GRUB_ERR_NONE;
+  grub_size_t requested_size = size;
 
   /* First of all, check if the region is within the disk.  */
   if (grub_disk_adjust_range (disk, &sector, &offset, size) != GRUB_ERR_NONE)
@@ -536,6 +540,7 @@ grub_disk_read (grub_disk_t disk, grub_disk_addr_t sector,
       grub_dprintf ("disk", "Read out of range: sector 0x%llx (%s).\n",
 		    (unsigned long long) sector, grub_errmsg);
       grub_error_pop ();
+      grub_procfs_record_disk_read (disk, requested_size, grub_errno);
       return grub_errno;
     }
 
@@ -581,8 +586,7 @@ grub_disk_read (grub_disk_t disk, grub_disk_addr_t sector,
 	     && agglomerate < disk->max_agglomerate;
 	   agglomerate++)
 	{
-	  data = grub_disk_cache_fetch (disk->dev->id, disk->id,
-					sector + (agglomerate
+	  data = grub_disk_cache_fetch (disk, sector + (agglomerate
 						  << GRUB_DISK_CACHE_BITS));
 	  if (data)
 	    break;
@@ -652,6 +656,8 @@ grub_disk_read (grub_disk_t disk, grub_disk_addr_t sector,
 
  error:
   read_recursion_depth--;
+  grub_procfs_record_disk_read (disk, requested_size,
+				err != GRUB_ERR_NONE ? err : grub_errno);
   return err;
 }
 

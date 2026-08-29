@@ -24,6 +24,7 @@
 
 #include <grub/crypto.h>
 
+#include "proc.h"
 #include "rover.h"
 
 #define ROVER_MODULE_LIST(mod)	\
@@ -216,11 +217,13 @@ rover_init (int flags)
 	if (!(flags & ROVER_INIT_NO_WINDISK))
 		grub_windisk_init ();
 	ROVER_MODULE_LIST (ROVER_MOD_INIT)
+	rover_proc_init ();
 }
 
 void
 rover_fini (void)
 {
+	rover_proc_fini ();
 	grub_windisk_fini ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)
 }

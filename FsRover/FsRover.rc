@@ -5,7 +5,7 @@
 #include <winresrc.h>
 
 #include "resource.h"
-#include "version.h"
+#include "../grub/rover/version.h"
 #include "../filetype/resource.h"
 
 /////////////////////////////////////////////////////////////////////////////

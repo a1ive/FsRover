@@ -96,6 +96,7 @@ __rover_clzll (unsigned __int64 x)
 
 #define GRUB_FILE	__FILE__
 #define PACKAGE_STRING	"GRUB 2.15"
+#define PACKAGE_VERSION	"2.15"
 
 #if !defined(__CHAR_BIT__)
 #define __CHAR_BIT__	8

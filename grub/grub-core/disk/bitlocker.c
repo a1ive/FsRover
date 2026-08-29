@@ -1247,15 +1247,13 @@ struct grub_cryptodisk_dev bitlocker_crypto = {
  * per unlocked BitLocker volume: "<volume-uuid> <credential>", where the
  * credential is the password or recovery password the user unlocked it with.
  */
-static char *
-fve_keys_get (grub_size_t *sz)
+static grub_err_t
+fve_keys_generate (struct grub_procfs_entry *entry,
+		   struct grub_procfs_writer *writer)
 {
   grub_cryptodisk_t dev;
-  grub_size_t total = 0;
-  char *ret, *ptr;
 
-  *sz = 0;
-
+  (void) entry;
   for (dev = grub_cryptodisk_list_head (); dev != NULL; dev = dev->next)
     {
       struct grub_bitlocker *ctx = dev->dev_data;
@@ -1263,42 +1261,27 @@ fve_keys_get (grub_size_t *sz)
       if (grub_strcmp (dev->modname, "bitlocker") != 0
 	  || ctx == NULL || ctx->saved_key == NULL)
 	continue;
-      total += grub_strlen (dev->uuid) + 1 + ctx->saved_key_len + 1;
+      grub_procfs_puts (writer, dev->uuid);
+      grub_procfs_puts (writer, " ");
+      grub_procfs_write (writer, ctx->saved_key, ctx->saved_key_len);
+      grub_procfs_puts (writer, "\n");
+      if (grub_procfs_writer_error (writer) != GRUB_ERR_NONE)
+	break;
     }
-
-  ret = grub_malloc (total + 1);
-  if (ret == NULL)
-    return NULL;
-
-  ptr = ret;
-  for (dev = grub_cryptodisk_list_head (); dev != NULL; dev = dev->next)
-    {
-      struct grub_bitlocker *ctx = dev->dev_data;
-
-      if (grub_strcmp (dev->modname, "bitlocker") != 0
-	  || ctx == NULL || ctx->saved_key == NULL)
-	continue;
-      ptr = grub_stpcpy (ptr, dev->uuid);
-      *ptr++ = ' ';
-      grub_memcpy (ptr, ctx->saved_key, ctx->saved_key_len);
-      ptr += ctx->saved_key_len;
-      *ptr++ = '\n';
-    }
-  *ptr = '\0';
-  *sz = (grub_size_t) (ptr - ret);
-  return ret;
+  return grub_procfs_writer_error (writer);
 }
 
 static struct grub_procfs_entry fve_keys =
 {
   .name = "fve_keys",
-  .get_contents = fve_keys_get
+  .data = NULL,
+  .generate = fve_keys_generate
 };
 
 GRUB_MOD_INIT (bitlocker)
 {
   grub_cryptodisk_dev_register (&bitlocker_crypto);
-  grub_procfs_register ("fve_keys", &fve_keys);
+  grub_procfs_register (&fve_keys);
 }
 
 GRUB_MOD_FINI (bitlocker)

@@ -138,6 +138,9 @@
     <ClCompile Include="rover\mm.c">
       <Filter>rover</Filter>
     </ClCompile>
+    <ClCompile Include="rover\proc.c">
+      <Filter>rover</Filter>
+    </ClCompile>
     <ClCompile Include="rover\rover.c">
       <Filter>rover</Filter>
     </ClCompile>
@@ -750,7 +753,13 @@
     <ClInclude Include="rover\fscharset.h">
       <Filter>rover</Filter>
     </ClInclude>
+    <ClInclude Include="rover\proc.h">
+      <Filter>rover</Filter>
+    </ClInclude>
     <ClInclude Include="rover\rover.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\version.h">
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="include\grub\acorn_filecore.h">

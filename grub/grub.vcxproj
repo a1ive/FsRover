@@ -166,6 +166,7 @@
     <ClCompile Include="rover\fscharset.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
+    <ClCompile Include="rover\proc.c" />
     <ClCompile Include="rover\rover.c" />
     <ClCompile Include="rover\time.c" />
     <ClCompile Include="grub-core\kern\device.c" />
@@ -620,7 +621,9 @@
     <ClInclude Include="include\grub\ghost.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\fscharset.h" />
+    <ClInclude Include="rover\proc.h" />
     <ClInclude Include="rover\rover.h" />
+    <ClInclude Include="rover\version.h" />
     <ClInclude Include="include\grub\cryptodisk.h" />
     <ClInclude Include="include\grub\veracrypt.h" />
     <ClInclude Include="include\grub\plainmount.h" />

@@ -144,7 +144,7 @@
     <ClInclude Include="strconv.h">
       <Filter>SRC</Filter>
     </ClInclude>
-    <ClInclude Include="version.h">
+    <ClInclude Include="..\grub\rover\version.h">
       <Filter>RC</Filter>
     </ClInclude>
     <ClInclude Include="winfsp_fuse.h">

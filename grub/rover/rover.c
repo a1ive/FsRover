@@ -35,6 +35,7 @@
 #include <grub/cryptodisk.h>
 #include <grub/veracrypt.h>
 #include <grub/plainmount.h>
+#include <grub/procfs.h>
 
 #include "fscharset.h"
 #include "rover.h"
@@ -257,9 +258,13 @@ rover_strip_location (const char *msg)
 const char *
 rover_last_error (void)
 {
+	const char *message;
+
 	if (grub_errno == GRUB_ERR_NONE)
 		return NULL;
-	return rover_strip_location (grub_errmsg);
+	message = rover_strip_location (grub_errmsg);
+	grub_procfs_record_error (grub_errno, message);
+	return message;
 }
 
 /* Disk/volume enumeration */
