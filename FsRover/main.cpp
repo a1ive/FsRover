@@ -372,17 +372,19 @@ device_icon (const backend_diskent &d)
 int
 list_icon (const std::string &name, bool is_dir)
 {
-	std::wstring wname = widen (name);
-	std::wstring key;
+	std::wstring key = is_dir ? L"\x01" L"dir" : L"\x01" L"file";
+	std::wstring lookup_name = is_dir ? L"folder" : L"file";
 
-	if (is_dir)
-		key = L"\x01" L"dir";
-	else
+	if (!is_dir)
 	{
-		size_t dot = wname.rfind (L'.');
-		key = (dot == std::wstring::npos) ? std::wstring (L"\x01" L"file") : wname.substr (dot);
-		for (wchar_t &c : key)
-			c = (wchar_t) towlower (c);
+		size_t dot = name.rfind ('.');
+		if (dot != std::string::npos)
+		{
+			key = widen (name.substr (dot));
+			for (wchar_t &c : key)
+				c = (wchar_t) towlower (c);
+			lookup_name += key;
+		}
 	}
 
 	auto it = g_icon_cache.find (key);
@@ -391,16 +393,20 @@ list_icon (const std::string &name, bool is_dir)
 
 	SHFILEINFOW sfi = {};
 	DWORD attr = is_dir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
+	/* Never pass the image entry name to the shell: names such as "M:"
+	   retain drive-path semantics even with SHGFI_USEFILEATTRIBUTES and can
+	   poison the shared directory icon cache with a disk icon.  The cache key
+	   contains all the type information needed for a synthetic lookup name.  */
 	int idx = -1;
 	int icon_w = 16;
 	int icon_h = 16;
 	ImageList_GetIconSize (g_list_iml, &icon_w, &icon_h);
-	if (SHGetFileInfoW (wname.c_str (), attr, &sfi, sizeof (sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES))
+	if (SHGetFileInfoW (lookup_name.c_str (), attr, &sfi, sizeof (sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES))
 	{
 		HICON icon = nullptr;
 		if (g_shell_iml)
 			g_shell_iml->GetIcon (sfi.iIcon, ILD_TRANSPARENT, &icon);
-		if (!icon && SHGetFileInfoW (wname.c_str (), attr, &sfi, sizeof (sfi),
+		if (!icon && SHGetFileInfoW (lookup_name.c_str (), attr, &sfi, sizeof (sfi),
 				SHGFI_ICON | (icon_w <= 16 ? SHGFI_SMALLICON : SHGFI_LARGEICON) | SHGFI_USEFILEATTRIBUTES))
 			icon = sfi.hIcon;
 		if (icon)
