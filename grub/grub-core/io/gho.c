@@ -3,11 +3,6 @@
  *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
  *
- *  Block layout and the Fast LZ token stream follow ref\gho
- *  (github.com/nyarime/gho, MIT); the container walk was re-derived
- *  from Ghost 11/12 images because the reference only ever looks for
- *  four record types and misses the ones these images use.
- *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
  *  the Free Software Foundation, either version 3 of the License, or
@@ -123,12 +118,8 @@ struct gho_image
 	grub_int32_t *hash_tbl;		/* GRUB_GHOST_FASTLZ_HASH_SIZE entries */
 };
 
-/* ------------------------------------------------------------------ */
-/* the concatenated stream                                             */
-
 static grub_err_t
-gho_pread (struct gho_image *image, grub_uint64_t off, void *buf,
-	   grub_size_t len)
+gho_pread (struct gho_image *image, grub_uint64_t off, void *buf, grub_size_t len)
 {
 	grub_uint8_t *out = buf;
 	unsigned i = 0;
@@ -143,8 +134,7 @@ gho_pread (struct gho_image *image, grub_uint64_t off, void *buf,
 		grub_size_t n;
 		grub_ssize_t got;
 
-		while (i < image->nspans
-		       && off >= image->spans[i].start + image->spans[i].size)
+		while (i < image->nspans && off >= image->spans[i].start + image->spans[i].size)
 			i++;
 		if (i >= image->nspans)
 			return grub_error (GRUB_ERR_BAD_DEVICE, "Ghost image truncated");
@@ -170,13 +160,9 @@ gho_pread (struct gho_image *image, grub_uint64_t off, void *buf,
 	return GRUB_ERR_NONE;
 }
 
-/* ------------------------------------------------------------------ */
-/* blocks                                                              */
-
 /* Decode the block starting at stream offset POS.  */
 static grub_err_t
-gho_decode_block (struct gho_image *image, grub_uint64_t pos,
-		  grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
+gho_decode_block (struct gho_image *image, grub_uint64_t pos, grub_uint8_t *dst, grub_size_t dstcap, grub_size_t *outlen)
 {
 	grub_uint8_t len_buf[2];
 	grub_uint32_t stored;
@@ -195,8 +181,7 @@ gho_decode_block (struct gho_image *image, grub_uint64_t pos,
 	if (err)
 		return err;
 
-	return grub_ghost_decode (image->comp, image->hash_tbl, image->cmp_buf,
-				  clen, dst, dstcap, outlen);
+	return grub_ghost_decode (image->comp, image->hash_tbl, image->cmp_buf, clen, dst, dstcap, outlen);
 }
 
 static grub_err_t
@@ -209,13 +194,11 @@ gho_load_block (struct gho_image *image, grub_uint32_t nr)
 		return GRUB_ERR_NONE;
 	image->cached_nr = GHO_CACHE_NONE;
 
-	err = gho_decode_block (image, image->blocks[nr], image->blk_buf,
-				GRUB_GHOST_BLOCK_MAX, &n);
+	err = gho_decode_block (image, image->blocks[nr], image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
 	if (err)
 		return err;
 	if (n > image->block_size)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "oversized block in Ghost image");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "oversized block in Ghost image");
 	if (n < image->block_size)
 		grub_memset (image->blk_buf + n, 0, image->block_size - n);
 
@@ -232,13 +215,11 @@ gho_load_ntfs_block (struct gho_image *image, grub_uint32_t nr)
 	if (image->cached_nr == nr)
 		return GRUB_ERR_NONE;
 	image->cached_nr = GHO_CACHE_NONE;
-	err = gho_decode_block (image, image->ntfs_blocks[nr].phys,
-				image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
+	err = gho_decode_block (image, image->ntfs_blocks[nr].phys, image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
 	if (err)
 		return err;
 	if (n != image->ntfs_blocks[nr].len)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "Ghost NTFS block size changed");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "Ghost NTFS block size changed");
 	image->cached_nr = nr;
 	return GRUB_ERR_NONE;
 }
@@ -296,8 +277,7 @@ gho_ntfs_pread (struct gho_image *image, grub_uint64_t off, void *buf,
 }
 
 static grub_err_t
-gho_read_ntfs (struct gho_image *image, grub_uint64_t off, void *buf,
-	       grub_size_t len, grub_size_t *actually_read)
+gho_read_ntfs (struct gho_image *image, grub_uint64_t off, void *buf, grub_size_t len, grub_size_t *actually_read)
 {
 	grub_uint32_t lo = 0;
 	grub_uint32_t hi = image->nextents;
@@ -378,9 +358,6 @@ gho_read (struct gho_image *image, grub_uint64_t off, void *buf,
 	*actually_read = len;
 	return GRUB_ERR_NONE;
 }
-
-/* ------------------------------------------------------------------ */
-/* opening                                                             */
 
 static void
 gho_free_image (struct gho_image *image)
@@ -468,23 +445,21 @@ gho_open_span (struct gho_image *image, const char *name, unsigned nr)
 		if (!path)
 			return NULL;
 		if (image->spans[0].file->fs
-		    && grub_strcmp (image->spans[0].file->fs->name, "winfile") == 0)
-			file = grub_winfile_open (path, GRUB_FILE_TYPE_LOOPBACK
-						     | GRUB_FILE_TYPE_NO_DECOMPRESS);
+			&& grub_strcmp (image->spans[0].file->fs->name, "winfile") == 0)
+			file = grub_winfile_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		else
-			file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK
-						 | GRUB_FILE_TYPE_NO_DECOMPRESS);
+			file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		grub_free (path);
 		grub_errno = GRUB_ERR_NONE;
 		if (!file)
 			continue;
 
 		if (grub_file_size (file) > GRUB_GHOST_HEADER_SIZE
-		    && grub_file_size (file) != GRUB_FILE_SIZE_UNKNOWN
-		    && grub_file_read (file, hdr, sizeof (hdr)) == (grub_ssize_t) sizeof (hdr)
-		    && hdr[0] == 0xfe && hdr[1] == 0xef
-		    && hdr[2] == GRUB_GHOST_FILE_SPAN && hdr[3] == image->comp
-		    && grub_ghost_get32 (hdr + 4) == image->id + nr)
+			&& grub_file_size (file) != GRUB_FILE_SIZE_UNKNOWN
+			&& grub_file_read (file, hdr, sizeof (hdr)) == (grub_ssize_t) sizeof (hdr)
+			&& hdr[0] == 0xfe && hdr[1] == 0xef
+			&& hdr[2] == GRUB_GHOST_FILE_SPAN && hdr[3] == image->comp
+			&& grub_ghost_get32 (hdr + 4) == image->id + nr)
 			return file;
 
 		grub_file_close (file);
@@ -525,8 +500,7 @@ gho_open_spans (struct gho_image *image, const char *name)
    between it and the file header is an opaque descriptor blob whose
    length is not recorded anywhere, so it is scanned over.  */
 static grub_err_t
-gho_find_data_start (struct gho_image *image, grub_uint8_t *scan,
-		     grub_uint8_t *subtype)
+gho_find_data_start (struct gho_image *image, grub_uint8_t *scan, grub_uint8_t *subtype)
 {
 	grub_uint64_t limit = image->spans[0].size;
 	grub_uint64_t pos = GRUB_GHOST_HEADER_SIZE;
@@ -549,8 +523,8 @@ gho_find_data_start (struct gho_image *image, grub_uint8_t *scan,
 
 		for (i = 0; i + 8 <= len; i++)
 			if (scan[i] == 0xfe && scan[i + 1] == 0xef
-			    && scan[i + 3] == image->comp
-			    && grub_ghost_get32 (scan + i + 4) == image->id)
+				&& scan[i + 3] == image->comp
+				&& grub_ghost_get32 (scan + i + 4) == image->id)
 			{
 				*subtype = scan[i + 2];
 				image->data_start = pos + i + GRUB_GHOST_HEADER_SIZE;
@@ -565,8 +539,7 @@ gho_find_data_start (struct gho_image *image, grub_uint8_t *scan,
 }
 
 static int
-gho_ntfs_id_packet (const grub_uint8_t *p, grub_uint16_t *id,
-		    grub_uint64_t *value)
+gho_ntfs_id_packet (const grub_uint8_t *p, grub_uint16_t *id, grub_uint64_t *value)
 {
 	unsigned i;
 
@@ -634,8 +607,7 @@ gho_find_ntfs_data_start (struct gho_image *image, grub_uint8_t *scan)
 
 static grub_err_t
 gho_add_ntfs_block (struct gho_image *image, grub_uint32_t *capacity,
-		    grub_uint64_t phys, grub_uint64_t logical,
-		    grub_uint32_t len)
+	grub_uint64_t phys, grub_uint64_t logical, grub_uint32_t len)
 {
 	if (image->nntfs_blocks == *capacity)
 	{
@@ -646,7 +618,7 @@ gho_add_ntfs_block (struct gho_image *image, grub_uint32_t *capacity,
 		if (want > GHO_MAX_BLOCKS)
 			want = GHO_MAX_BLOCKS;
 		if (want == *capacity
-		    || grub_mul ((grub_size_t) want, sizeof (*blocks), &sz))
+			|| grub_mul ((grub_size_t) want, sizeof (*blocks), &sz))
 			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost NTFS stream too large");
 		blocks = grub_realloc (image->ntfs_blocks, sz);
 		if (!blocks)
@@ -686,11 +658,9 @@ gho_build_ntfs_block_index (struct gho_image *image)
 		if (err)
 			return err;
 		if (outlen == 0 || outlen > GRUB_GHOST_BLOCK_MAX
-		    || logical > ~((grub_uint64_t) 0) - outlen)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					   "bad Ghost NTFS block");
-		err = gho_add_ntfs_block (image, &capacity, pos, logical,
-					  (grub_uint32_t) outlen);
+			|| logical > ~((grub_uint64_t) 0) - outlen)
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS block");
+		err = gho_add_ntfs_block (image, &capacity, pos, logical, (grub_uint32_t) outlen);
 		if (err)
 			return err;
 		logical += outlen;
@@ -704,8 +674,7 @@ gho_build_ntfs_block_index (struct gho_image *image)
 }
 
 static grub_err_t
-gho_ntfs_read_id (struct gho_image *image, grub_uint64_t *pos,
-		  grub_uint16_t *id, grub_uint64_t *value)
+gho_ntfs_read_id (struct gho_image *image, grub_uint64_t *pos, grub_uint16_t *id, grub_uint64_t *value)
 {
 	grub_uint8_t packet[16];
 	grub_err_t err;
@@ -714,15 +683,13 @@ gho_ntfs_read_id (struct gho_image *image, grub_uint64_t *pos,
 	if (err)
 		return err;
 	if (!gho_ntfs_id_packet (packet, id, value))
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "bad Ghost NTFS id packet");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS id packet");
 	*pos += sizeof (packet);
 	return GRUB_ERR_NONE;
 }
 
 static grub_err_t
-gho_ntfs_read_data_packet (struct gho_image *image, grub_uint64_t *pos,
-			   grub_uint32_t *value)
+gho_ntfs_read_data_packet (struct gho_image *image, grub_uint64_t *pos, grub_uint32_t *value)
 {
 	grub_uint8_t packet[10];
 	grub_err_t err;
@@ -732,12 +699,10 @@ gho_ntfs_read_data_packet (struct gho_image *image, grub_uint64_t *pos,
 	if (err)
 		return err;
 	if (packet[0] != 0x0f || packet[9] != 0x0e)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "bad Ghost NTFS data packet");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS data packet");
 	for (i = 5; i < 9; i++)
 		if (packet[i] != 0)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					   "bad Ghost NTFS data packet");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS data packet");
 	*value = grub_ghost_get32 (packet + 1);
 	*pos += sizeof (packet);
 	return GRUB_ERR_NONE;
@@ -757,8 +722,7 @@ gho_ntfs_skip_crc (struct gho_image *image, grub_uint64_t *pos)
 	if (packet[0] != 0x0a)
 		return GRUB_ERR_NONE;
 	if (image->ntfs_stream_size - *pos < sizeof (packet))
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "truncated Ghost NTFS checksum");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated Ghost NTFS checksum");
 	err = gho_ntfs_pread (image, *pos, packet, sizeof (packet));
 	if (err)
 		return err;
@@ -778,12 +742,12 @@ gho_ntfs_boundary (struct gho_image *image, grub_uint64_t pos)
 	if (pos == image->ntfs_stream_size)
 		return 1;
 	if (image->ntfs_stream_size - pos >= 10
-	    && gho_ntfs_pread (image, pos, packet, 10) == GRUB_ERR_NONE
-	    && packet[0] == 0x0a && packet[9] == 0x0b)
+		&& gho_ntfs_pread (image, pos, packet, 10) == GRUB_ERR_NONE
+		&& packet[0] == 0x0a && packet[9] == 0x0b)
 		pos += 10;
 	grub_errno = GRUB_ERR_NONE;
 	if (image->ntfs_stream_size - pos < sizeof (packet)
-	    || gho_ntfs_pread (image, pos, packet, sizeof (packet)) != GRUB_ERR_NONE)
+		|| gho_ntfs_pread (image, pos, packet, sizeof (packet)) != GRUB_ERR_NONE)
 	{
 		grub_errno = GRUB_ERR_NONE;
 		return 0;
@@ -792,8 +756,7 @@ gho_ntfs_boundary (struct gho_image *image, grub_uint64_t pos)
 }
 
 static grub_err_t
-gho_ntfs_infer_cluster_size (struct gho_image *image, grub_uint64_t pos,
-			     grub_uint64_t clusters)
+gho_ntfs_infer_cluster_size (struct gho_image *image, grub_uint64_t pos, grub_uint64_t clusters)
 {
 	grub_uint32_t candidate;
 	grub_uint32_t found = 0;
@@ -805,26 +768,22 @@ gho_ntfs_infer_cluster_size (struct gho_image *image, grub_uint64_t pos,
 		if (clusters > (~((grub_uint64_t) 0) / candidate))
 			continue;
 		bytes = clusters * candidate;
-		if (bytes <= image->ntfs_stream_size - pos
-		    && gho_ntfs_boundary (image, pos + bytes))
+		if (bytes <= image->ntfs_stream_size - pos && gho_ntfs_boundary (image, pos + bytes))
 		{
 			if (found != 0)
-				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-						   "ambiguous Ghost NTFS cluster size");
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "ambiguous Ghost NTFS cluster size");
 			found = candidate;
 		}
 	}
 	if (found == 0)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "cannot determine Ghost NTFS cluster size");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "cannot determine Ghost NTFS cluster size");
 	image->cluster_size = found;
 	return GRUB_ERR_NONE;
 }
 
 static grub_err_t
 gho_add_ntfs_extent (struct gho_image *image, grub_uint32_t *capacity,
-		     grub_uint64_t disk, grub_uint64_t stream,
-		     grub_uint64_t len)
+	grub_uint64_t disk, grub_uint64_t stream, grub_uint64_t len)
 {
 	if (image->nextents == *capacity)
 	{
@@ -835,7 +794,7 @@ gho_add_ntfs_extent (struct gho_image *image, grub_uint32_t *capacity,
 		if (want > GHO_MAX_EXTENTS)
 			want = GHO_MAX_EXTENTS;
 		if (want == *capacity
-		    || grub_mul ((grub_size_t) want, sizeof (*extents), &sz))
+			|| grub_mul ((grub_size_t) want, sizeof (*extents), &sz))
 			return grub_error (GRUB_ERR_OUT_OF_RANGE, "too many Ghost NTFS extents");
 		extents = grub_realloc (image->extents, sz);
 		if (!extents)
@@ -863,8 +822,7 @@ gho_ntfs_fixup (grub_uint8_t *record, grub_uint32_t size)
 		return GRUB_ERR_NONE;
 	usa = grub_ghost_get16 (record + 4);
 	count = grub_ghost_get16 (record + 6);
-	if (count < 2 || usa > size || (grub_uint32_t) count * 2 > size - usa
-	    || size % (count - 1) != 0)
+	if (count < 2 || usa > size || (grub_uint32_t) count * 2 > size - usa || size % (count - 1) != 0)
 		return grub_error (GRUB_ERR_BAD_FS, "bad NTFS fixup in Ghost image");
 	sector_size = size / (count - 1);
 	marker = grub_ghost_get16 (record + usa);
@@ -899,7 +857,7 @@ gho_ntfs_check_boot (struct gho_image *image, grub_uint64_t stream)
 		return grub_error (GRUB_ERR_BAD_FS, "bad NTFS boot sector in Ghost image");
 	bytes_per_sector = grub_ghost_get16 (boot + 0x0b);
 	if (bytes_per_sector < 512 || bytes_per_sector > 4096
-	    || (bytes_per_sector & (bytes_per_sector - 1)) != 0 || boot[0x0d] == 0)
+		|| (bytes_per_sector & (bytes_per_sector - 1)) != 0 || boot[0x0d] == 0)
 		return grub_error (GRUB_ERR_BAD_FS, "bad NTFS geometry in Ghost image");
 	cluster_size = bytes_per_sector * boot[0x0d];
 	if (cluster_size != image->cluster_size)
@@ -926,8 +884,7 @@ gho_ntfs_signed (const grub_uint8_t *p, unsigned size)
 
 static grub_err_t
 gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
-			grub_uint32_t attr, grub_uint64_t *pos,
-			grub_uint32_t *capacity)
+	grub_uint32_t attr, grub_uint64_t *pos, grub_uint32_t *capacity)
 {
 	grub_uint32_t attr_len = grub_ghost_get32 (record + attr + 4);
 	grub_uint32_t run = attr + grub_ghost_get16 (record + attr + 0x20);
@@ -944,8 +901,7 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 	if (id == 0x8040)
 		return gho_ntfs_skip_crc (image, pos);
 	if (id != 0x8020 || run >= end)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				   "bad Ghost NTFS attribute packet");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS attribute packet");
 
 	while (run < end && record[run] != 0)
 	{
@@ -969,9 +925,8 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 			grub_int64_t delta = gho_ntfs_signed (record + run, off_size);
 
 			if ((delta > 0
-			     && lcn > (grub_int64_t) 0x7fffffffffffffffULL - delta)
-			    || (delta < 0
-				&& lcn < (grub_int64_t) 0x8000000000000000ULL - delta))
+				&& lcn > (grub_int64_t) 0x7fffffffffffffffULL - delta)
+				|| (delta < 0 && lcn < (grub_int64_t) 0x8000000000000000ULL - delta))
 				return grub_error (GRUB_ERR_OUT_OF_RANGE, "NTFS run overflow");
 			lcn += delta;
 		}
@@ -981,8 +936,7 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 		if (err)
 			return err;
 		if (id != 0x0002 || value != run_index++)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					   "bad Ghost NTFS run packet");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS run packet");
 		if (off_size == 0)
 			continue;
 		if (lcn < 0 || clusters == 0)
@@ -994,8 +948,7 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 			if (err)
 				return err;
 			if (stored_clusters != clusters)
-				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-						   "Ghost NTFS run length mismatch");
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "Ghost NTFS run length mismatch");
 		}
 		if (image->cluster_size == 0)
 		{
@@ -1007,9 +960,8 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost NTFS run too large");
 		bytes = clusters * image->cluster_size;
 		if (bytes > image->ntfs_stream_size - *pos
-		    || (grub_uint64_t) lcn > ~((grub_uint64_t) 0) / image->cluster_size)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					   "truncated Ghost NTFS run");
+			|| (grub_uint64_t) lcn > ~((grub_uint64_t) 0) / image->cluster_size)
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated Ghost NTFS run");
 		disk_base = (grub_uint64_t) lcn * image->cluster_size;
 		if (disk_base > ~((grub_uint64_t) 0) - bytes)
 			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost NTFS run too large");
@@ -1040,8 +992,7 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 }
 
 static int
-gho_ntfs_extent_before (const struct gho_ntfs_extent *a,
-			const struct gho_ntfs_extent *b)
+gho_ntfs_extent_before (const struct gho_ntfs_extent *a, const struct gho_ntfs_extent *b)
 {
 	if (a->disk != b->disk)
 		return a->disk < b->disk;
@@ -1049,8 +1000,7 @@ gho_ntfs_extent_before (const struct gho_ntfs_extent *a,
 }
 
 static void
-gho_ntfs_extent_sift (struct gho_ntfs_extent *ext, grub_size_t root,
-		      grub_size_t n)
+gho_ntfs_extent_sift (struct gho_ntfs_extent *ext, grub_size_t root, grub_size_t n)
 {
 	while (1)
 	{
@@ -1060,7 +1010,7 @@ gho_ntfs_extent_sift (struct gho_ntfs_extent *ext, grub_size_t root,
 		if (child >= n)
 			return;
 		if (child + 1 < n
-		    && gho_ntfs_extent_before (&ext[child], &ext[child + 1]))
+			&& gho_ntfs_extent_before (&ext[child], &ext[child + 1]))
 			child++;
 		if (!gho_ntfs_extent_before (&ext[root], &ext[child]))
 			return;
@@ -1148,10 +1098,9 @@ gho_build_ntfs_extents (struct gho_image *image)
 		if (err)
 			goto fail;
 		if (record_size < 0x30 || record_size > GHO_NTFS_RECORD_MAX
-		    || record_size > image->ntfs_stream_size - pos)
+			|| record_size > image->ntfs_stream_size - pos)
 		{
-			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-					  "bad Ghost NTFS record size");
+			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS record size");
 			goto fail;
 		}
 		err = gho_ntfs_pread (image, pos, record, record_size);
@@ -1177,20 +1126,17 @@ gho_build_ntfs_extents (struct gho_image *image)
 					break;
 				if (attr_len < 16 || attr_len > used - attr)
 				{
-					err = grub_error (GRUB_ERR_BAD_FS,
-							  "bad NTFS attribute in Ghost image");
+					err = grub_error (GRUB_ERR_BAD_FS, "bad NTFS attribute in Ghost image");
 					goto fail;
 				}
 				if (record[attr + 8] != 0)
 				{
 					if (attr_len < 0x40)
 					{
-						err = grub_error (GRUB_ERR_BAD_FS,
-								  "short NTFS runlist in Ghost image");
+						err = grub_error (GRUB_ERR_BAD_FS, "short NTFS runlist in Ghost image");
 						goto fail;
 					}
-					err = gho_ntfs_map_attribute (image, record, attr,
-							      &pos, &capacity);
+					err = gho_ntfs_map_attribute (image, record, attr, &pos, &capacity);
 					if (err)
 						goto fail;
 				}
@@ -1203,8 +1149,7 @@ gho_build_ntfs_extents (struct gho_image *image)
 	}
 	if (records == 0 || image->nextents == 0 || image->total_bytes == 0)
 	{
-		err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-				  "incomplete Ghost NTFS stream");
+		err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "incomplete Ghost NTFS stream");
 		goto fail;
 	}
 	gho_ntfs_sort_extents (image);
@@ -1218,8 +1163,7 @@ fail:
 }
 
 static grub_err_t
-gho_add_block (struct gho_image *image, grub_uint32_t *capacity,
-	       grub_uint64_t pos)
+gho_add_block (struct gho_image *image, grub_uint32_t *capacity, grub_uint64_t pos)
 {
 	if (image->nblocks == *capacity)
 	{
@@ -1266,7 +1210,7 @@ gho_build_index (struct gho_image *image, grub_uint8_t *scan)
 		grub_uint32_t stored;
 
 		if (buf_len == 0 || pos < buf_at
-		    || pos + GRUB_GHOST_REC_HDR_SIZE > buf_at + buf_len)
+			|| pos + GRUB_GHOST_REC_HDR_SIZE > buf_at + buf_len)
 		{
 			buf_len = GHO_SCAN_BUF;
 			if (buf_len > image->stream_size - pos)
@@ -1285,16 +1229,16 @@ gho_build_index (struct gho_image *image, grub_uint8_t *scan)
 
 			/* Any other record ends the image.  */
 			if (avail < GRUB_GHOST_REC_HDR_SIZE
-			    || (grub_ghost_get16 (p) != GHO_REC_CONTINUE))
+				|| (grub_ghost_get16 (p) != GHO_REC_CONTINUE))
 				break;
 			pos += GRUB_GHOST_REC_HDR_SIZE + grub_ghost_get16 (p + 8);
 
 			/* The resumed chain may be re-introduced by a
 			   fresh partition header.  */
 			if (pos + GRUB_GHOST_HEADER_SIZE <= image->stream_size
-			    && gho_pread (image, pos, next, sizeof (next)) == GRUB_ERR_NONE
-			    && next[0] == 0xfe && next[1] == 0xef
-			    && grub_ghost_get32 (next + 4) == image->id)
+				&& gho_pread (image, pos, next, sizeof (next)) == GRUB_ERR_NONE
+				&& next[0] == 0xfe && next[1] == 0xef
+				&& grub_ghost_get32 (next + 4) == image->id)
 				pos += GRUB_GHOST_HEADER_SIZE;
 			grub_errno = GRUB_ERR_NONE;
 			buf_len = 0;
@@ -1336,8 +1280,7 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	if (hdr[2] != GRUB_GHOST_FILE_PRIMARY)
 		return grub_error (GRUB_ERR_BAD_SIGNATURE, "not the first file of a Ghost image");
 	if (!grub_ghost_comp_supported (hdr[3]))
-		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
-				   "unsupported Ghost compression type %u", hdr[3]);
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported Ghost compression type %u", hdr[3]);
 	image->comp = hdr[3];
 	image->id = grub_ghost_get32 (hdr + 4);
 
@@ -1347,8 +1290,7 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 
 	image->blk_buf = grub_malloc (GRUB_GHOST_BLOCK_MAX);
 	image->cmp_buf = grub_malloc (GRUB_GHOST_STORED_MAX);
-	image->hash_tbl = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE,
-				       sizeof (*image->hash_tbl));
+	image->hash_tbl = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE, sizeof (*image->hash_tbl));
 	scan = grub_malloc (GHO_SCAN_BUF);
 	if (!image->blk_buf || !image->cmp_buf || !image->hash_tbl || !scan)
 	{
@@ -1360,7 +1302,7 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	if (err)
 		goto fail;
 	if (image->comp == GRUB_GHOST_COMP_NTFS
-	    && subtype == GRUB_GHOST_PART_NTFS)
+		&& subtype == GRUB_GHOST_PART_NTFS)
 	{
 		err = gho_find_ntfs_data_start (image, scan);
 		if (err)
@@ -1384,13 +1326,11 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	err = gho_pread (image, image->data_start, hdr, 8);
 	if (err)
 		goto fail;
-	if (grub_ghost_get32 (hdr + 4) == GRUB_GHOST_REC_MAGIC
-	    || subtype != GRUB_GHOST_PART_SECTOR)
+	if (grub_ghost_get32 (hdr + 4) == GRUB_GHOST_REC_MAGIC || subtype != GRUB_GHOST_PART_SECTOR)
 	{
 		if (image->nspans < 2)
 		{
-			err = grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
-					  "file based Ghost image, nothing to decode");
+			err = grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "file based Ghost image, nothing to decode");
 			goto fail;
 		}
 		image->raw = 1;
@@ -1400,12 +1340,11 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	}
 
 	/* The first block fixes the block size.  */
-	err = gho_decode_block (image, image->data_start, image->blk_buf,
-				GRUB_GHOST_BLOCK_MAX, &n);
+	err = gho_decode_block (image, image->data_start, image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
 	if (err)
 		goto fail;
 	if (n < GRUB_DISK_SECTOR_SIZE || n > GRUB_GHOST_BLOCK_MAX
-	    || (n & (GRUB_DISK_SECTOR_SIZE - 1)) != 0)
+		|| (n & (GRUB_DISK_SECTOR_SIZE - 1)) != 0)
 	{
 		err = grub_error (GRUB_ERR_BAD_DEVICE, "bad Ghost block size %" PRIuGRUB_SIZE, n);
 		goto fail;
@@ -1417,8 +1356,7 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 		goto fail;
 
 	/* Only the final block may be short.  */
-	err = gho_decode_block (image, image->blocks[image->nblocks - 1],
-				image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
+	err = gho_decode_block (image, image->blocks[image->nblocks - 1], image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
 	if (err)
 		goto fail;
 	if (n == 0 || n > image->block_size)
@@ -1436,9 +1374,6 @@ fail:
 	grub_free (scan);
 	return err;
 }
-
-/* ------------------------------------------------------------------ */
-/* io filter wrapper                                                   */
 
 struct grub_gho
 {
