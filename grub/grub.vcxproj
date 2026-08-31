@@ -216,6 +216,7 @@
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\mscab;$(ProjectDir)grub-core\lib\miniz;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\msi.c" />
     <ClCompile Include="grub-core\fs\arj.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\7z;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -624,6 +625,7 @@
   <ItemGroup>
     <ClInclude Include="grub-core\lib\libgcrypt\const-time.h" />
     <ClInclude Include="grub-core\lib\libgcrypt\hash-common.h" />
+    <ClInclude Include="include\grub\cab.h" />
     <ClInclude Include="include\grub\ghost.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\fscharset.h" />

@@ -95,6 +95,7 @@
 	mod (bootfs)	\
 	mod (btrfs)	\
 	mod (cab)	\
+	mod (msi)	\
 	mod (cbfs)	\
 	mod (cpio)	\
 	mod (cpio_be)	\

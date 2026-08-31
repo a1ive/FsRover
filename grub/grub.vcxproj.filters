@@ -1263,6 +1263,9 @@
     <ClCompile Include="grub-core\fs\cab.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\msi.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\mscab\lzx.c">
       <Filter>grub-core\lib\mscab</Filter>
     </ClCompile>
@@ -1295,6 +1298,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\grub\cab.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>

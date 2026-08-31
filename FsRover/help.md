@@ -548,6 +548,22 @@ use the selected filename encoding.
 **Not supported:** entries that span cabinets, and folders continued from a
 previous cabinet. Listing a spanned cabinet still works.
 
+#### Microsoft Installer — `msi`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: no · Symlinks: none
+
+Reads `.msi` compound files and presents the files described by the standard
+`Directory`, `Component`, `File`, and `Media` tables at their installation
+paths.
+
+The directory tree reflects the package's target layout, not the internal CFB
+streams. Directories that contain no files are therefore not shown.
+
+**Not supported:** external cabinets, uncompressed loose source files,
+multi-cabinet-spanning payloads, patches (`.msp`), transforms (`.mst`), and
+other compound-file classes. Only the Windows Installer database CLSID is
+accepted.
+
 #### cpio — `cpiofs`, `cpiofs_be`, `newc`, `odc`
 
 > Origin: GRUB · Label: no · UUID: no · Timestamps: per-file · Symlinks: resolved

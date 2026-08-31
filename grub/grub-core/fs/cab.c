@@ -28,6 +28,7 @@
 #include <miniz.h>
 
 #include <mscab.h>
+#include <grub/cab.h>
 
 #include "fscharset.h"
 
@@ -81,14 +82,24 @@ struct cab_item
 
 struct grub_cab_data
 {
-	grub_disk_t disk;
-	grub_uint64_t disk_size;
+	grub_cab_read_at_t read_at;
+	void *read_context;
+	grub_uint64_t source_size;
 	struct cab_folder_ent *folders;
 	struct cab_item *items;
 	unsigned num_folders;
 	unsigned num_items;
 	grub_uint8_t res_data;	/* per-datablock reserved bytes */
 };
+
+static grub_err_t
+cab_read (struct grub_cab_data *data, grub_uint64_t offset,
+	  grub_size_t size, void *buffer)
+{
+	if (offset > data->source_size || size > data->source_size - offset)
+		return grub_error (GRUB_ERR_OUT_OF_RANGE, "cab read out of range");
+	return data->read_at (data->read_context, offset, size, buffer);
+}
 
 static grub_uint16_t
 cab_get16 (const grub_uint8_t *p)
@@ -154,7 +165,7 @@ cab_skip_string (struct grub_cab_data *data, grub_uint64_t *pos)
 	{
 		grub_uint8_t b;
 
-		if (grub_disk_read (data->disk, 0, *pos + i, 1, &b))
+		if (cab_read (data, *pos + i, 1, &b))
 			return grub_errno;
 		if (b == 0)
 		{
@@ -165,8 +176,8 @@ cab_skip_string (struct grub_cab_data *data, grub_uint64_t *pos)
 	return grub_error (GRUB_ERR_BAD_FS, "bad cab string");
 }
 
-static void
-cab_free_data (struct grub_cab_data *data)
+void
+grub_cab_free (struct grub_cab_data *data)
 {
 	unsigned i;
 
@@ -180,8 +191,9 @@ cab_free_data (struct grub_cab_data *data)
 	grub_free (data);
 }
 
-static struct grub_cab_data *
-grub_cab_mount (grub_disk_t disk)
+struct grub_cab_data *
+grub_cab_mount_source (grub_cab_read_at_t read_at, void *context,
+		       grub_uint64_t size)
 {
 	struct grub_cab_data *data = 0;
 	grub_uint8_t hdr[0x28];
@@ -191,26 +203,32 @@ grub_cab_mount (grub_disk_t disk)
 	grub_uint64_t pos;
 	unsigned i;
 
-	if (grub_disk_read (disk, 0, 0, sizeof (hdr), hdr))
-		goto fail;
-	if (grub_memcmp (hdr, "MSCF", 4) != 0 || cab_get32 (hdr + 4) != 0
-	    || cab_get32 (hdr + 0x0C) != 0 || cab_get32 (hdr + 0x14) != 0)
-		goto fail;
-	cab_size = cab_get32 (hdr + 8);
-	flags = cab_get16 (hdr + 0x1E);
-	coff_files = cab_get32 (hdr + 0x10);
-	if (cab_size < 36 || flags > 7
-	    || (coff_files != 0 && coff_files > cab_size))
-		goto fail;
-	num_folders = cab_get16 (hdr + 0x1A);
-	num_files = cab_get16 (hdr + 0x1C);
-
+	if (!read_at)
+	{
+		grub_error (GRUB_ERR_BAD_ARGUMENT, "cab read callback is missing");
+		return 0;
+	}
 	data = grub_zalloc (sizeof (*data));
 	if (!data)
 		goto fail_data;
-	data->disk = disk;
-	data->disk_size = grub_disk_native_sectors (disk)
-			  << GRUB_DISK_SECTOR_BITS;
+	data->read_at = read_at;
+	data->read_context = context;
+	data->source_size = size;
+	if (cab_read (data, 0, sizeof (hdr), hdr))
+		goto fail_data;
+	if (grub_memcmp (hdr, "MSCF", 4) != 0 || cab_get32 (hdr + 4) != 0
+	    || cab_get32 (hdr + 0x0C) != 0 || cab_get32 (hdr + 0x14) != 0)
+		goto fail_data_bad;
+	cab_size = cab_get32 (hdr + 8);
+	flags = cab_get16 (hdr + 0x1E);
+	coff_files = cab_get32 (hdr + 0x10);
+	if (cab_size < 36 || cab_size > size || flags > 7
+	    || (coff_files != 0 && coff_files > cab_size))
+		goto fail_data_bad;
+	data->source_size = cab_size;
+	num_folders = cab_get16 (hdr + 0x1A);
+	num_files = cab_get16 (hdr + 0x1C);
+
 	data->num_folders = num_folders;
 
 	pos = 0x24;	/* fixed part + setID + iCabinet */
@@ -218,7 +236,7 @@ grub_cab_mount (grub_disk_t disk)
 	{
 		grub_uint8_t res[4];
 
-		if (grub_disk_read (disk, 0, pos, sizeof (res), res))
+		if (cab_read (data, pos, sizeof (res), res))
 			goto fail_data;
 		res_folder = res[2];
 		data->res_data = res[3];
@@ -248,7 +266,7 @@ grub_cab_mount (grub_disk_t disk)
 	{
 		grub_uint8_t f[8];
 
-		if (grub_disk_read (disk, 0, pos, sizeof (f), f))
+		if (cab_read (data, pos, sizeof (f), f))
 			goto fail_data;
 		data->folders[i].data_start = cab_get32 (f);
 		data->folders[i].num_blocks = cab_get16 (f + 4);
@@ -278,7 +296,7 @@ grub_cab_mount (grub_disk_t disk)
 		grub_uint16_t attrs;
 		char *decoded;
 
-		if (grub_disk_read (disk, 0, pos, sizeof (fh), fh))
+		if (cab_read (data, pos, sizeof (fh), fh))
 			goto fail_data;
 		item->size = cab_get32 (fh);
 		item->offset = cab_get32 (fh + 4);
@@ -292,10 +310,12 @@ grub_cab_mount (grub_disk_t disk)
 		pos += 16;
 
 		got = CAB_MAX_NAME;
-		if (pos + got > data->disk_size)
-			got = (grub_size_t) (data->disk_size - pos);
+		if (pos > data->source_size)
+			goto fail_data_bad;
+		if (got > data->source_size - pos)
+			got = (grub_size_t) (data->source_size - pos);
 		if (got == 0
-		    || grub_disk_read (disk, 0, pos, got, name_buf))
+		    || cab_read (data, pos, got, name_buf))
 			goto fail_data;
 		for (j = 0; j < got && name_buf[j] != 0; j++)
 			;
@@ -345,12 +365,22 @@ fail_data_bad:
 	grub_error (GRUB_ERR_BAD_FS, "corrupt cab header");
 fail_data:
 	grub_free (name_buf);
-	cab_free_data (data);
+	grub_cab_free (data);
 	return 0;
+}
 
-fail:
-	grub_error (GRUB_ERR_BAD_FS, "not a cab filesystem");
-	return 0;
+static grub_err_t
+cab_disk_read_at (void *context, grub_uint64_t offset, grub_size_t size,
+		  void *buffer)
+{
+	return grub_disk_read ((grub_disk_t) context, 0, offset, size, buffer);
+}
+
+static struct grub_cab_data *
+grub_cab_mount (grub_disk_t disk)
+{
+	return grub_cab_mount_source (cab_disk_read_at, disk,
+		grub_disk_native_sectors (disk) << GRUB_DISK_SECTOR_BITS);
 }
 
 struct grub_cab_file
@@ -420,8 +450,7 @@ cab_read_block (struct grub_cab_file *ctx, grub_uint32_t *unpack_size)
 	{
 		grub_uint32_t pack, unpack, csum;
 
-		if (grub_disk_read (data->disk, 0, ctx->block_pos, hdr_size,
-				    hdr))
+		if (cab_read (data, ctx->block_pos, hdr_size, hdr))
 			return grub_errno;
 		csum = cab_get32 (hdr);
 		pack = cab_get16 (hdr + 4);
@@ -430,9 +459,8 @@ cab_read_block (struct grub_cab_file *ctx, grub_uint32_t *unpack_size)
 			return grub_error (GRUB_ERR_BAD_FS,
 					   "corrupt cab data");
 		if (pack != 0
-		    && grub_disk_read (data->disk, 0,
-				       ctx->block_pos + hdr_size, pack,
-				       ctx->pack + ctx->pack_size))
+		    && cab_read (data, ctx->block_pos + hdr_size, pack,
+				 ctx->pack + ctx->pack_size))
 			return grub_errno;
 		if (csum != 0
 		    && (cab_checksum (hdr + 4, hdr_size - 4)
@@ -588,8 +616,45 @@ cab_file_free (struct grub_cab_file *ctx)
 	grub_free (ctx->dict);
 	grub_free (ctx->lin);
 	grub_free (ctx->pack);
-	cab_free_data (ctx->data);
+	grub_cab_free (ctx->data);
 	grub_free (ctx);
+}
+
+unsigned
+grub_cab_item_count (const struct grub_cab_data *data)
+{
+	return data->num_items;
+}
+
+const char *
+grub_cab_item_name (const struct grub_cab_data *data, unsigned index)
+{
+	return index < data->num_items ? data->items[index].name : 0;
+}
+
+grub_uint32_t
+grub_cab_item_size (const struct grub_cab_data *data, unsigned index)
+{
+	return index < data->num_items ? data->items[index].size : 0;
+}
+
+grub_int64_t
+grub_cab_item_mtime (const struct grub_cab_data *data, unsigned index)
+{
+	return index < data->num_items ? data->items[index].mtime : 0;
+}
+
+int
+grub_cab_item_is_dir (const struct grub_cab_data *data, unsigned index)
+{
+	return index < data->num_items && data->items[index].is_dir;
+}
+
+int
+grub_cab_item_is_unsupported (const struct grub_cab_data *data,
+			      unsigned index)
+{
+	return index >= data->num_items || data->items[index].unsupported;
 }
 
 /* skips leading slashes and returns the normalized path length */
@@ -700,7 +765,7 @@ grub_cab_dir (grub_device_t device, const char *path,
 	buckets = grub_calloc (CAB_SEEN_BUCKETS, sizeof (*buckets));
 	if (!buckets)
 	{
-		cab_free_data (data);
+		grub_cab_free (data);
 		return grub_errno;
 	}
 
@@ -775,7 +840,7 @@ out:
 			grub_free (ent);
 		}
 	grub_free (buckets);
-	cab_free_data (data);
+	grub_cab_free (data);
 	return err;
 }
 
@@ -802,8 +867,7 @@ static grub_err_t
 grub_cab_open (struct grub_file *file, const char *name)
 {
 	struct grub_cab_data *data;
-	struct grub_cab_file *ctx = 0;
-	struct cab_item *item;
+	struct grub_cab_file *ctx;
 	int index;
 
 	data = grub_cab_mount (file->device->disk);
@@ -815,6 +879,29 @@ grub_cab_open (struct grub_file *file, const char *name)
 	{
 		grub_error (GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found",
 			    name);
+		grub_cab_free (data);
+		return grub_errno;
+	}
+	ctx = grub_cab_file_open (data, (unsigned) index);
+	if (!ctx)
+		return grub_errno ? grub_errno : GRUB_ERR_BAD_FS;
+
+	file->data = ctx;
+	file->size = grub_cab_item_size (ctx->data, (unsigned) index);
+	file->not_easily_seekable = 1;
+	return GRUB_ERR_NONE;
+}
+
+struct grub_cab_file *
+grub_cab_file_open (struct grub_cab_data *data, unsigned index)
+{
+	struct grub_cab_file *ctx = 0;
+	struct cab_item *item;
+	const struct cab_folder_ent *fo;
+
+	if (index >= data->num_items)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "corrupt cab item index");
 		goto fail;
 	}
 	item = &data->items[index];
@@ -834,66 +921,57 @@ grub_cab_open (struct grub_file *file, const char *name)
 	if (!ctx)
 		goto fail;
 	ctx->data = data;
-	ctx->target = (unsigned) index;
-
-	if (item->size != 0)
+	ctx->target = index;
+	if (item->size == 0)
+		return ctx;
+	if (item->folder >= data->num_folders)
 	{
-		const struct cab_folder_ent *fo;
-
-		if (item->folder >= data->num_folders)
-		{
-			grub_error (GRUB_ERR_BAD_FS, "corrupt cab header");
-			goto fail;
-		}
-		fo = &data->folders[item->folder];
-		ctx->fo = fo;
-		ctx->pack = grub_malloc (CAB_PACK_MAX);
-		if (!ctx->pack)
-			goto fail;
-
-		switch (fo->method)
-		{
-		case CAB_METHOD_NONE:
-			break;
-		case CAB_METHOD_MSZIP:
-			ctx->infl = grub_malloc (sizeof (*ctx->infl));
-			ctx->dict = grub_malloc (TINFL_LZ_DICT_SIZE);
-			ctx->lin = grub_malloc (CAB_BLOCK_MAX);
-			if (!ctx->infl || !ctx->dict || !ctx->lin)
-				goto fail;
-			break;
-		case CAB_METHOD_QUANTUM:
-			ctx->qtm = cab_qtm_create (fo->minor);
-			if (!ctx->qtm)
-			{
-				if (!grub_errno)
-					grub_error (GRUB_ERR_BAD_FS,
-						"bad quantum dictionary size");
-				goto fail;
-			}
-			break;
-		case CAB_METHOD_LZX:
-			ctx->lzx = cab_lzx_create (fo->minor);
-			if (!ctx->lzx)
-			{
-				if (!grub_errno)
-					grub_error (GRUB_ERR_BAD_FS,
-						"bad lzx dictionary size");
-				goto fail;
-			}
-			break;
-		default:
-			grub_error (GRUB_ERR_BAD_FS,
-				    "unsupported cab method %u",
-				    (unsigned) fo->method);
-			goto fail;
-		}
+		grub_error (GRUB_ERR_BAD_FS, "corrupt cab header");
+		goto fail;
 	}
+	fo = &data->folders[item->folder];
+	ctx->fo = fo;
+	ctx->pack = grub_malloc (CAB_PACK_MAX);
+	if (!ctx->pack)
+		goto fail;
 
-	file->data = ctx;
-	file->size = item->size;
-	file->not_easily_seekable = 1;
-	return GRUB_ERR_NONE;
+	switch (fo->method)
+	{
+	case CAB_METHOD_NONE:
+		break;
+	case CAB_METHOD_MSZIP:
+		ctx->infl = grub_malloc (sizeof (*ctx->infl));
+		ctx->dict = grub_malloc (TINFL_LZ_DICT_SIZE);
+		ctx->lin = grub_malloc (CAB_BLOCK_MAX);
+		if (!ctx->infl || !ctx->dict || !ctx->lin)
+			goto fail;
+		break;
+	case CAB_METHOD_QUANTUM:
+		ctx->qtm = cab_qtm_create (fo->minor);
+		if (!ctx->qtm)
+		{
+			if (!grub_errno)
+				grub_error (GRUB_ERR_BAD_FS,
+					    "bad quantum dictionary size");
+			goto fail;
+		}
+		break;
+	case CAB_METHOD_LZX:
+		ctx->lzx = cab_lzx_create (fo->minor);
+		if (!ctx->lzx)
+		{
+			if (!grub_errno)
+				grub_error (GRUB_ERR_BAD_FS,
+					    "bad lzx dictionary size");
+			goto fail;
+		}
+		break;
+	default:
+		grub_error (GRUB_ERR_BAD_FS, "unsupported cab method %u",
+			    (unsigned) fo->method);
+		goto fail;
+	}
+	return ctx;
 
 fail:
 	if (ctx)
@@ -901,21 +979,34 @@ fail:
 		ctx->data = 0;
 		cab_file_free (ctx);
 	}
-	cab_free_data (data);
-	return grub_errno ? grub_errno : GRUB_ERR_BAD_FS;
+	grub_cab_free (data);
+	return 0;
 }
 
 static grub_ssize_t
 grub_cab_read (grub_file_t file, char *buf, grub_size_t len)
 {
-	struct grub_cab_file *ctx = file->data;
+	return grub_cab_file_read (file->data, file->offset, buf, len);
+}
+
+grub_ssize_t
+grub_cab_file_read (struct grub_cab_file *ctx, grub_uint64_t offset,
+		    char *buf, grub_size_t len)
+{
 	const struct cab_item *item = &ctx->data->items[ctx->target];
 	grub_uint64_t want;
 
 	if (len == 0 || item->size == 0)
 		return 0;
 
-	want = (grub_uint64_t) item->offset + file->offset;
+	if (offset > item->size)
+	{
+		grub_error (GRUB_ERR_OUT_OF_RANGE, "cab read out of range");
+		return -1;
+	}
+	if (len > item->size - offset)
+		len = (grub_size_t) (item->size - offset);
+	want = (grub_uint64_t) item->offset + offset;
 
 	if (ctx->started && want < ctx->stream_pos)
 		ctx->started = 0;
@@ -945,8 +1036,14 @@ grub_cab_read (grub_file_t file, char *buf, grub_size_t len)
 static grub_err_t
 grub_cab_close (grub_file_t file)
 {
-	cab_file_free (file->data);
+	grub_cab_file_close (file->data);
 	return GRUB_ERR_NONE;
+}
+
+void
+grub_cab_file_close (struct grub_cab_file *file)
+{
+	cab_file_free (file);
 }
 
 static grub_err_t
@@ -962,7 +1059,7 @@ grub_cab_mtime (grub_device_t device, grub_int64_t *tm)
 	for (i = 0; i < data->num_items; i++)
 		if (data->items[i].mtime > *tm)
 			*tm = data->items[i].mtime;
-	cab_free_data (data);
+	grub_cab_free (data);
 	return GRUB_ERR_NONE;
 }
 
