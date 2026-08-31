@@ -155,6 +155,7 @@
 	mod (ufs1)	\
 	mod (ufs1_be)	\
 	mod (ufs2)	\
+	mod (vma)	\
 	mod (vmfs)	\
 	mod (vxfs)	\
 	mod (wim)	\

@@ -639,6 +639,17 @@ fields with leading spaces, as old tars wrote them, are accepted, and a
 typeflag of `\0` is treated as a regular file (or a directory when the name ends
 in `/`).
 
+#### Proxmox Virtual Machine Archive — `vma`
+
+> Origin: FsRover · Label: no · UUID: yes · Timestamps: volume · Symlinks: none
+
+Reads version 1 Proxmox VMA backup archives. Configuration blobs keep their
+stored names at the archive root. Disk streams use the reference extractor's
+`disk-<device>.raw` names, and a saved VM state is exposed as `vmstate.bin`.
+
+Compressed `vma.zst`, `vma.lzo` or `vma.gz` streams must be decompressed
+to a seekable `.vma` file first.
+
 #### Apple XAR / macOS installer package — `xar`
 
 > Origin: FsRover · Label: no · UUID: no · Timestamps: per-file + volume · Symlinks: flagged

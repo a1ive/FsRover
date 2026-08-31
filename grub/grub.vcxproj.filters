@@ -435,6 +435,9 @@
     <ClCompile Include="grub-core\fs\ufs_be.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\vma.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\xar.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
