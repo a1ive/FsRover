@@ -182,6 +182,7 @@
 	mod (qed)	\
 	mod (vmdk)	\
 	mod (dmg)	\
+	mod (sprs)	\
 	mod (isz)	\
 	mod (sparse)	\
 	mod (parallels)	\

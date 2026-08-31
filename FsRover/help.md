@@ -944,6 +944,14 @@ bzip2, and LZFSE (BLKX type `0x80000007`).
 
 **Not supported:** encrypted disk images, and segmented images (`cSegments` > 1).
 
+#### Apple sparse disk images — `sparseimage`
+
+> Origin: FsRover
+
+**Supported:** version-3 `.sparseimage` files.
+
+**Not supported:** `.sparsebundle`, encrypted sparse images.
+
 #### UltraISO ISZ — `isz`
 
 > Origin: FsRover

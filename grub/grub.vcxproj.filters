@@ -477,6 +477,9 @@
     <ClCompile Include="grub-core\io\dmg.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\io\sprs.c">
+      <Filter>grub-core\io</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\io\ffu.c">
       <Filter>grub-core\io</Filter>
     </ClCompile>

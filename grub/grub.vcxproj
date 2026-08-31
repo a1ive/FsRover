@@ -364,6 +364,7 @@
     <ClCompile Include="grub-core\io\dmg.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\vbox;$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="grub-core\io\sprs.c" />
     <ClCompile Include="grub-core\io\ffu.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\wimboot;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
