@@ -183,6 +183,7 @@
 	mod (vmdk)	\
 	mod (dmg)	\
 	mod (sprs)	\
+	mod (asif)	\
 	mod (isz)	\
 	mod (sparse)	\
 	mod (parallels)	\

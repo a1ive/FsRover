@@ -952,6 +952,12 @@ bzip2, and LZFSE (BLKX type `0x80000007`).
 
 **Not supported:** `.sparsebundle`, encrypted sparse images.
 
+#### Apple Sparse Image Format — `asif`
+
+> Origin: FsRover, implemented from asif-format and dissect.hypervisor
+
+**Supported:** version-1 ASIF (`shdw`) files.
+
 #### UltraISO ISZ — `isz`
 
 > Origin: FsRover
