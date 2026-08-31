@@ -368,7 +368,9 @@
     </ClCompile>
     <ClCompile Include="grub-core\io\gzio.c" />
     <ClCompile Include="grub-core\io\gho.c" />
-    <ClCompile Include="grub-core\io\ewf.c" />
+    <ClCompile Include="grub-core\io\ewf.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\bzip2;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\io\ifw.c">
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\miniz;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>MINIZ_NO_STDIO;MINIZ_NO_DEFLATE_APIS;%(PreprocessorDefinitions)</PreprocessorDefinitions>

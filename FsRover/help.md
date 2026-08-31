@@ -952,14 +952,17 @@ implemented from it.
 
 > Origin: FsRover
 
-Open the first `.E01` or SMART `.s01` file. Numbered segment files beside it
-are found and joined automatically; each segment header and number must match.
+Open the first `.E01`, SMART `.s01`, or EWF2 `.Ex01` file. Numbered segment
+files beside it are found and joined automatically; each segment header,
+number, and set identifier must match.
 
-**Supported:** physical-media EWF version 1 images, raw chunks and RFC1950/zlib
-compressed chunks.
+**Supported:** physical-media EWF version 1 and unencrypted EWF2 version 2.1
+images. EWF1 supports raw and RFC1950/zlib chunks. EWF2 supports raw,
+RFC1950/zlib, bzip2, and 64-bit pattern-fill chunks; section descriptors,
+metadata geometry, chunk tables, and available integrity checks are validated.
 
-**Not supported:** EWF2 `.Ex01`, logical evidence `.L01`, and AccessData
-`ADCRYPT` encryption.
+**Not supported:** logical evidence `.L01`/`.Lx01`, EWF2 compression method 0,
+encrypted EWF2 sections/key records, and AccessData `ADCRYPT` containers.
 
 #### Android sparse image — `sparse`
 

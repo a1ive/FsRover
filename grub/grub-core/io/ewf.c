@@ -1,10 +1,7 @@
 /* ewf.c - Expert Witness Compression Format disk image filter */
 /*
- *  Rover -- GRUB 2 filesystem browser for Windows
+ *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
- *
- *  The on-disk layout and compatibility rules are based on ref\libewf,
- *  in particular its EWF specification and version 1 segment/table reader.
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,8 +23,11 @@
 #include <grub/mm.h>
 #include <grub/dl.h>
 #include <grub/deflate.h>
+#include <grub/crypto.h>
 #include <grub/safemath.h>
 #include <grub/winfile.h>
+
+#include <bzlib.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -38,6 +38,13 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define EWF_VOLUME_SIZE		1052
 #define EWF_SMART_VOLUME_SIZE	94
 
+#define EWF2_FILE_HEADER_SIZE	32
+#define EWF2_SECTION_DESC_SIZE	64
+#define EWF2_TABLE_HEADER_SIZE	32
+#define EWF2_TABLE_ENTRY_SIZE	16
+#define EWF2_TABLE_FOOTER_SIZE	16
+#define EWF2_MAX_METADATA_SIZE	(1u << 20)
+
 #define EWF_MAX_SEGMENTS	4096
 #define EWF_MAX_GROUPS		(1u << 20)
 #define EWF_MAX_CHUNKS		(16u << 20)
@@ -47,6 +54,21 @@ GRUB_MOD_LICENSE ("GPLv3+");
 
 #define EWF_COMPRESSED		0x80000000u
 #define EWF_OFFSET_MASK		0x7fffffffu
+
+#define EWF2_SECTION_DEVICE	1
+#define EWF2_SECTION_CASE	2
+#define EWF2_SECTION_SECTOR_DATA	3
+#define EWF2_SECTION_SECTOR_TABLE 4
+#define EWF2_SECTION_KEYS	11
+#define EWF2_SECTION_NEXT	13
+#define EWF2_SECTION_DONE	15
+
+#define EWF2_DATA_MD5		0x00000001u
+#define EWF2_DATA_ENCRYPTED	0x00000002u
+
+#define EWF2_CHUNK_COMPRESSED	0x00000001u
+#define EWF2_CHUNK_CHECKSUMED	0x00000002u
+#define EWF2_CHUNK_PATTERN_FILL	0x00000004u
 
 static const grub_uint8_t ewf_signature[8] =
 {
@@ -63,9 +85,21 @@ static const grub_uint8_t ewf2_signature[8] =
 	'E', 'V', 'F', '2', 0x0d, 0x0a, 0x81, 0x00
 };
 
+static const grub_uint8_t ewf2_logical_signature[8] =
+{
+	'L', 'E', 'F', '2', 0x0d, 0x0a, 0x81, 0x00
+};
+
 struct ewf_segment
 {
 	grub_file_t file;
+};
+
+struct ewf2_entry
+{
+	grub_uint64_t offset;
+	grub_uint32_t size;
+	grub_uint32_t flags;
 };
 
 struct ewf_group
@@ -77,6 +111,27 @@ struct ewf_group
 	grub_uint64_t base_offset;
 	grub_uint64_t data_end;
 	grub_uint32_t *entries;
+	struct ewf2_entry *entries2;
+};
+
+struct ewf2_section
+{
+	grub_uint32_t type;
+	grub_uint32_t flags;
+	grub_uint64_t data_offset;
+	grub_uint64_t data_size;
+	grub_uint32_t padding_size;
+	grub_uint8_t integrity_hash[16];
+};
+
+struct ewf2_metadata
+{
+	grub_uint64_t sectors;
+	grub_uint64_t chunks;
+	grub_uint32_t sector_size;
+	grub_uint32_t sectors_per_chunk;
+	int device_seen;
+	int case_seen;
 };
 
 struct ewf_image
@@ -94,6 +149,8 @@ struct ewf_image
 	int has_set_id;
 	int volume_seen;
 	int smart;
+	int version2;
+	grub_uint16_t compression_method;
 
 	grub_uint32_t cached_chunk;
 	grub_uint32_t cached_group;
@@ -197,7 +254,10 @@ ewf_free_image (struct ewf_image *image)
 	for (i = 1; i < image->nsegments; i++)
 		grub_file_close (image->segments[i].file);
 	for (i = 0; i < image->ngroups; i++)
+	{
 		grub_free (image->groups[i].entries);
+		grub_free (image->groups[i].entries2);
+	}
 	grub_free (image->segments);
 	grub_free (image->groups);
 	grub_free (image->chunk_buf);
@@ -237,6 +297,7 @@ ewf_add_group (struct ewf_image *image, struct ewf_group *group)
 	image->groups = groups;
 	groups[image->ngroups++] = *group;
 	group->entries = NULL;
+	group->entries2 = NULL;
 	return GRUB_ERR_NONE;
 }
 
@@ -303,6 +364,66 @@ ewf_segment_name (const char *name, grub_uint32_t number, int alternate_case)
 	return out;
 }
 
+static char *
+ewf2_segment_name (const char *name, grub_uint32_t number, int alternate_case)
+{
+	const char *slash;
+	const char *dot;
+	grub_size_t stem;
+	char first;
+	char second;
+	char alpha;
+	char ext[5];
+	char *out;
+	grub_uint32_t n;
+
+	if (!name || number == 0)
+		return NULL;
+	slash = grub_strrchr (name, '/');
+	dot = grub_strrchr (slash ? slash : name, '.');
+	if (!dot || grub_strlen (dot + 1) != 4)
+		return NULL;
+
+	first = dot[1];
+	second = dot[2];
+	if ((first != 'E' && first != 'e')
+		|| (second != 'X' && second != 'x'))
+		return NULL;
+	if (alternate_case)
+	{
+		first = (first >= 'A' && first <= 'Z')
+			? (char) (first - 'A' + 'a') : (char) (first - 'a' + 'A');
+		second = (second >= 'A' && second <= 'Z')
+			? (char) (second - 'A' + 'a') : (char) (second - 'a' + 'A');
+	}
+	alpha = (first >= 'A' && first <= 'Z') ? 'A' : 'a';
+	ext[0] = first;
+	ext[1] = second;
+	if (number <= 99)
+	{
+		ext[2] = (char) ('0' + number / 10);
+		ext[3] = (char) ('0' + number % 10);
+	}
+	else
+	{
+		n = number - 100;
+		if (n / (26 * 26) > 2)
+			return NULL;
+		ext[1] = (char) (second + n / (26 * 26));
+		ext[2] = (char) (alpha + (n / 26) % 26);
+		ext[3] = (char) (alpha + n % 26);
+	}
+	ext[4] = 0;
+
+	stem = (grub_size_t) (dot - name + 1);
+	out = grub_malloc (stem + sizeof (ext));
+	if (!out)
+		return NULL;
+	grub_memcpy (out, name, stem);
+	grub_memcpy (out + stem, ext, sizeof (ext));
+	return out;
+}
+
 static grub_file_t
 ewf_open_segment (struct ewf_image *image, const char *name, grub_uint32_t number)
 {
@@ -312,7 +433,9 @@ ewf_open_segment (struct ewf_image *image, const char *name, grub_uint32_t numbe
 
 	for (attempt = 0; attempt < 2; attempt++)
 	{
-		char *path = ewf_segment_name (name, number, attempt != 0);
+		char *path = image->version2
+			? ewf2_segment_name (name, number, attempt != 0)
+			: ewf_segment_name (name, number, attempt != 0);
 
 		if (!path)
 			return NULL;
@@ -342,6 +465,397 @@ ewf_check_file_header (grub_file_t file, grub_uint32_t expected_segment)
 	if (header[8] != 1 || header[11] != 0 || header[12] != 0
 		|| ewf_get16 (header + 9) != expected_segment)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF segment header");
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+ewf2_check_file_header (struct ewf_image *image, grub_file_t file,
+			grub_uint32_t expected_segment)
+{
+	grub_uint8_t header[EWF2_FILE_HEADER_SIZE];
+	grub_uint16_t compression_method;
+	grub_err_t err;
+
+	err = ewf_pread (file, 0, header, sizeof (header));
+	if (err)
+		return err;
+	if (grub_memcmp (header, ewf2_signature, sizeof (ewf2_signature)) != 0)
+		return grub_error (GRUB_ERR_BAD_SIGNATURE, "bad EWF2 segment signature");
+	compression_method = ewf_get16 (header + 10);
+	if (header[8] != 2 || header[9] != 1
+		|| ewf_get32 (header + 12) != expected_segment)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 segment header");
+	if (compression_method != 1 && compression_method != 2)
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+				   "unsupported EWF2 compression method %u",
+				   compression_method);
+	if (expected_segment == 1)
+	{
+		image->compression_method = compression_method;
+		grub_memcpy (image->set_id, header + 16, sizeof (image->set_id));
+		image->has_set_id = 1;
+	}
+	else if (compression_method != image->compression_method
+		|| grub_memcmp (image->set_id, header + 16, sizeof (image->set_id)) != 0)
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "EWF2 segment belongs to another set");
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+ewf2_add_section (struct ewf2_section **sections, grub_uint32_t *count,
+		  const struct ewf2_section *section)
+{
+	struct ewf2_section *new_sections;
+	grub_size_t size;
+
+	if (*count >= EWF_MAX_SECTIONS
+		|| grub_mul ((grub_size_t) *count + 1, sizeof (*new_sections), &size))
+		return grub_error (GRUB_ERR_OUT_OF_RANGE, "too many EWF2 sections");
+	new_sections = grub_realloc (*sections, size);
+	if (!new_sections)
+		return grub_errno;
+	*sections = new_sections;
+	new_sections[(*count)++] = *section;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+ewf2_check_section_md5 (grub_file_t file, const struct ewf2_section *section)
+{
+	const gcry_md_spec_t *md5 = GRUB_MD_MD5;
+	grub_uint8_t *buffer = NULL;
+	void *context = NULL;
+	grub_uint64_t offset;
+	grub_uint64_t remaining;
+	grub_size_t size;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	if (!(section->flags & EWF2_DATA_MD5))
+		return GRUB_ERR_NONE;
+	buffer = grub_malloc (65536);
+	context = grub_malloc (md5->contextsize);
+	if (!buffer || !context)
+	{
+		err = grub_errno;
+		goto fail;
+	}
+	md5->init (context, 0);
+	offset = section->data_offset;
+	remaining = section->data_size;
+	while (remaining > 0)
+	{
+		size = remaining > 65536 ? 65536 : (grub_size_t) remaining;
+		err = ewf_pread (file, offset, buffer, size);
+		if (err)
+			goto fail;
+		md5->write (context, buffer, size);
+		offset += size;
+		remaining -= size;
+	}
+	md5->final (context);
+	if (grub_memcmp (md5->read (context), section->integrity_hash,
+			 sizeof (section->integrity_hash)) != 0)
+		err = grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 section integrity hash");
+
+fail:
+	grub_free (context);
+	grub_free (buffer);
+	return err;
+}
+
+static grub_err_t
+ewf2_read_metadata (struct ewf_image *image, grub_file_t file,
+		    const struct ewf2_section *section, char **text,
+		    grub_size_t *text_size)
+{
+	grub_uint8_t *compressed = NULL;
+	grub_uint8_t *plain = NULL;
+	char *ascii = NULL;
+	grub_size_t ascii_size;
+	grub_ssize_t zlib_size;
+	unsigned int bzip2_size;
+	grub_size_t i;
+	grub_size_t j;
+	int result;
+	grub_err_t err;
+
+	*text = NULL;
+	*text_size = 0;
+	if (!section->data_size || section->data_size > EWF2_MAX_METADATA_SIZE)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 metadata section size");
+	err = ewf2_check_section_md5 (file, section);
+	if (err)
+		return err;
+	compressed = grub_malloc ((grub_size_t) section->data_size);
+	plain = grub_malloc (EWF2_MAX_METADATA_SIZE);
+	if (!compressed || !plain)
+	{
+		err = grub_errno;
+		goto fail;
+	}
+	err = ewf_pread (file, section->data_offset, compressed,
+			 (grub_size_t) section->data_size);
+	if (err)
+		goto fail;
+	if (image->compression_method == 1)
+	{
+		zlib_size = grub_zlib_decompress ((char *) compressed,
+						 (grub_size_t) section->data_size, 0,
+						 (char *) plain, EWF2_MAX_METADATA_SIZE);
+		if (zlib_size <= 0)
+		{
+			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+					 "corrupt EWF2 metadata");
+			goto fail;
+		}
+		ascii_size = (grub_size_t) zlib_size;
+	}
+	else
+	{
+		bzip2_size = EWF2_MAX_METADATA_SIZE;
+		result = BZ2_bzBuffToBuffDecompress ((char *) plain, &bzip2_size,
+						     (char *) compressed,
+						     (unsigned int) section->data_size,
+						     0, 0);
+		if (result != BZ_OK || bzip2_size == 0)
+		{
+			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+					 "corrupt bzip2 metadata in EWF2 image");
+			goto fail;
+		}
+		ascii_size = bzip2_size;
+	}
+
+	if (ascii_size >= 2 && plain[0] == 0xff && plain[1] == 0xfe)
+	{
+		ascii = grub_malloc ((ascii_size - 2) / 2 + 1);
+		if (!ascii)
+		{
+			err = grub_errno;
+			goto fail;
+		}
+		for (i = 2, j = 0; i + 1 < ascii_size; i += 2)
+		{
+			grub_uint16_t character = ewf_get16 (plain + i);
+
+			if (character == 0)
+				break;
+			ascii[j++] = character <= 0x7f ? (char) character : '?';
+		}
+		ascii[j] = 0;
+		ascii_size = j;
+	}
+	else
+	{
+		ascii = grub_malloc (ascii_size + 1);
+		if (!ascii)
+		{
+			err = grub_errno;
+			goto fail;
+		}
+		grub_memcpy (ascii, plain, ascii_size);
+		ascii[ascii_size] = 0;
+	}
+	*text = ascii;
+	*text_size = ascii_size;
+	grub_free (plain);
+	grub_free (compressed);
+	return GRUB_ERR_NONE;
+
+fail:
+	grub_free (ascii);
+	grub_free (plain);
+	grub_free (compressed);
+	return err;
+}
+
+static int
+ewf2_get_line (const char *text, grub_size_t text_size, unsigned number,
+	       const char **line, grub_size_t *line_size)
+{
+	grub_size_t start = 0;
+	grub_size_t end;
+	unsigned current = 0;
+
+	while (start <= text_size)
+	{
+		end = start;
+		while (end < text_size && text[end] != '\n')
+			end++;
+		if (current == number)
+		{
+			if (end > start && text[end - 1] == '\r')
+				end--;
+			*line = text + start;
+			*line_size = end - start;
+			return 1;
+		}
+		if (end == text_size)
+			break;
+		start = end + 1;
+		current++;
+	}
+	return 0;
+}
+
+static int
+ewf2_find_field (const char *text, grub_size_t text_size, const char *name,
+		 const char **value, grub_size_t *value_size)
+{
+	const char *tags;
+	const char *values;
+	grub_size_t tags_size;
+	grub_size_t values_size;
+	grub_size_t name_size = grub_strlen (name);
+	grub_size_t start;
+	grub_size_t end;
+	grub_size_t value_start;
+	grub_size_t value_end;
+	unsigned column = 0;
+	unsigned value_column;
+
+	if (!ewf2_get_line (text, text_size, 2, &tags, &tags_size)
+		|| !ewf2_get_line (text, text_size, 3, &values, &values_size))
+		return 0;
+	for (start = 0; start <= tags_size; start = end + 1, column++)
+	{
+		end = start;
+		while (end < tags_size && tags[end] != '\t')
+			end++;
+		if (end - start == name_size
+			&& grub_memcmp (tags + start, name, name_size) == 0)
+		{
+			value_start = 0;
+			for (value_column = 0; value_column < column; value_column++)
+			{
+				while (value_start < values_size && values[value_start] != '\t')
+					value_start++;
+				if (value_start == values_size)
+					return 0;
+				value_start++;
+			}
+			value_end = value_start;
+			while (value_end < values_size && values[value_end] != '\t')
+				value_end++;
+			*value = values + value_start;
+			*value_size = value_end - value_start;
+			return 1;
+		}
+		if (end == tags_size)
+			break;
+	}
+	return 0;
+}
+
+static int
+ewf2_parse_uint64 (const char *text, grub_size_t size, grub_uint64_t *value)
+{
+	grub_uint64_t result = 0;
+	grub_size_t i;
+
+	if (!size)
+		return 0;
+	for (i = 0; i < size; i++)
+	{
+		grub_uint64_t digit;
+
+		if (text[i] < '0' || text[i] > '9')
+			return 0;
+		digit = (grub_uint64_t) (text[i] - '0');
+		if (result > (~(grub_uint64_t) 0 - digit) / 10)
+			return 0;
+		result = result * 10 + digit;
+	}
+	*value = result;
+	return 1;
+}
+
+static grub_err_t
+ewf2_parse_device_metadata (struct ewf2_metadata *metadata, const char *text,
+			    grub_size_t text_size)
+{
+	const char *value;
+	grub_size_t value_size;
+	grub_uint64_t number;
+
+	if (!ewf2_find_field (text, text_size, "ts", &value, &value_size)
+		|| !ewf2_parse_uint64 (value, value_size, &metadata->sectors)
+		|| !ewf2_find_field (text, text_size, "bp", &value, &value_size)
+		|| !ewf2_parse_uint64 (value, value_size, &number)
+		|| number > 0xffffffffu)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 device metadata");
+	metadata->sector_size = (grub_uint32_t) number;
+	metadata->device_seen = 1;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+ewf2_parse_case_metadata (struct ewf_image *image,
+			  struct ewf2_metadata *metadata, const char *text,
+			  grub_size_t text_size)
+{
+	const char *value;
+	grub_size_t value_size;
+	grub_uint64_t number;
+
+	if (!ewf2_find_field (text, text_size, "tb", &value, &value_size)
+		|| !ewf2_parse_uint64 (value, value_size, &metadata->chunks)
+		|| !ewf2_find_field (text, text_size, "sb", &value, &value_size)
+		|| !ewf2_parse_uint64 (value, value_size, &number)
+		|| number > 0xffffffffu)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 case metadata");
+	metadata->sectors_per_chunk = (grub_uint32_t) number;
+	if (ewf2_find_field (text, text_size, "cp", &value, &value_size)
+		&& value_size != 0)
+	{
+		if (!ewf2_parse_uint64 (value, value_size, &number)
+			|| number != image->compression_method)
+			return grub_error (GRUB_ERR_BAD_DEVICE,
+					   "inconsistent EWF2 compression metadata");
+	}
+	metadata->case_seen = 1;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+ewf2_apply_metadata (struct ewf_image *image,
+		     const struct ewf2_metadata *metadata)
+{
+	grub_uint64_t chunk_size;
+	grub_uint64_t total;
+	grub_uint64_t expected_chunks;
+
+	if (!metadata->device_seen || !metadata->case_seen)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "missing EWF2 media metadata");
+	if (!metadata->chunks || metadata->chunks > EWF_MAX_CHUNKS
+		|| !metadata->sectors || !metadata->sector_size
+		|| !metadata->sectors_per_chunk
+		|| !ewf_power_of_two (metadata->sector_size)
+		|| metadata->sector_size < 128 || metadata->sector_size > 65536
+		|| grub_mul ((grub_uint64_t) metadata->sectors_per_chunk,
+			     metadata->sector_size, &chunk_size)
+		|| !chunk_size || chunk_size > EWF_MAX_CHUNK_SIZE
+		|| grub_mul (metadata->sectors, metadata->sector_size, &total)
+		|| !total)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF2 media geometry");
+	expected_chunks = total / chunk_size + (total % chunk_size != 0);
+	if (expected_chunks != metadata->chunks)
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "inconsistent EWF2 chunk count");
+	if (!image->volume_seen)
+	{
+		image->nchunks = (grub_uint32_t) metadata->chunks;
+		image->sector_size = metadata->sector_size;
+		image->chunk_size = (grub_uint32_t) chunk_size;
+		image->total_bytes = total;
+		image->volume_seen = 1;
+	}
+	else if (image->nchunks != metadata->chunks
+		|| image->sector_size != metadata->sector_size
+		|| image->chunk_size != chunk_size || image->total_bytes != total)
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "inconsistent EWF2 segment geometry");
 	return GRUB_ERR_NONE;
 }
 
@@ -592,6 +1106,373 @@ fail:
 	return err;
 }
 
+static grub_err_t
+ewf2_parse_table (struct ewf_image *image, grub_file_t file,
+		  grub_uint32_t segment, const struct ewf2_section *section,
+		  grub_uint64_t data_start, grub_uint64_t data_end)
+{
+	grub_uint8_t header[EWF2_TABLE_HEADER_SIZE];
+	grub_uint8_t footer[EWF2_TABLE_FOOTER_SIZE];
+	struct ewf_group group = { 0 };
+	grub_uint64_t first_chunk;
+	grub_uint64_t entries_bytes;
+	grub_uint64_t expected_size;
+	grub_uint64_t entries_offset;
+	grub_uint64_t footer_offset;
+	grub_uint64_t max_stored;
+	grub_size_t allocation_size;
+	grub_uint32_t count;
+	grub_uint32_t i;
+	grub_err_t err;
+
+	if (!image->volume_seen)
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "EWF2 table precedes media metadata");
+	if (section->data_size < EWF2_TABLE_HEADER_SIZE + EWF2_TABLE_FOOTER_SIZE)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "short EWF2 sector table");
+	err = ewf2_check_section_md5 (file, section);
+	if (err)
+		return err;
+	err = ewf_pread (file, section->data_offset, header, sizeof (header));
+	if (err)
+		return err;
+	if (ewf_get32 (header + 16) != ewf_adler32 (header, 16))
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "bad EWF2 table header checksum");
+	first_chunk = ewf_get64 (header);
+	count = ewf_get32 (header + 8);
+	if (!count || count > EWF_MAX_CHUNKS
+		|| first_chunk != image->indexed_chunks
+		|| count > image->nchunks - image->indexed_chunks)
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "bad EWF2 table chunk range");
+	entries_bytes = (grub_uint64_t) count * EWF2_TABLE_ENTRY_SIZE;
+	expected_size = EWF2_TABLE_HEADER_SIZE + entries_bytes
+		+ EWF2_TABLE_FOOTER_SIZE;
+	if (section->data_size != expected_size
+		|| grub_mul ((grub_size_t) count, sizeof (*group.entries2),
+			     &allocation_size))
+		return grub_error (GRUB_ERR_BAD_DEVICE,
+				   "invalid EWF2 sector table size");
+	group.entries2 = grub_malloc (allocation_size);
+	if (!group.entries2)
+		return grub_errno;
+	if (grub_add (section->data_offset, EWF2_TABLE_HEADER_SIZE,
+		      &entries_offset)
+		|| grub_add (entries_offset, entries_bytes, &footer_offset))
+	{
+		err = grub_error (GRUB_ERR_OUT_OF_RANGE,
+				  "EWF2 table offset overflow");
+		goto fail;
+	}
+	err = ewf_pread (file, entries_offset, group.entries2, allocation_size);
+	if (err)
+		goto fail;
+	err = ewf_pread (file, footer_offset, footer, sizeof (footer));
+	if (err)
+		goto fail;
+	if (ewf_get32 (footer) != ewf_adler32 (group.entries2, allocation_size))
+	{
+		err = grub_error (GRUB_ERR_BAD_DEVICE,
+				  "bad EWF2 table entries checksum");
+		goto fail;
+	}
+
+	group.first_chunk = (grub_uint32_t) first_chunk;
+	group.count = count;
+	group.segment = segment;
+	max_stored = (grub_uint64_t) image->chunk_size
+		+ image->chunk_size / 100 + 65536;
+	for (i = 0; i < count; i++)
+	{
+		struct ewf2_entry *entry = &group.entries2[i];
+
+		entry->offset = grub_le_to_cpu64 (entry->offset);
+		entry->size = grub_le_to_cpu32 (entry->size);
+		entry->flags = grub_le_to_cpu32 (entry->flags);
+		if (entry->flags & ~(EWF2_CHUNK_COMPRESSED
+				     | EWF2_CHUNK_CHECKSUMED
+				     | EWF2_CHUNK_PATTERN_FILL))
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "unsupported EWF2 chunk flags");
+			goto fail;
+		}
+		if (entry->flags & EWF2_CHUNK_PATTERN_FILL)
+		{
+			if ((entry->flags & (EWF2_CHUNK_COMPRESSED
+					 | EWF2_CHUNK_CHECKSUMED))
+				!= EWF2_CHUNK_COMPRESSED
+				|| (entry->size != 0 && entry->size != 8))
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "invalid EWF2 pattern-fill chunk");
+				goto fail;
+			}
+			continue;
+		}
+		if (entry->flags & EWF2_CHUNK_COMPRESSED)
+		{
+			if ((entry->flags & EWF2_CHUNK_CHECKSUMED)
+				|| !entry->size || entry->size > max_stored)
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "invalid compressed EWF2 chunk");
+				goto fail;
+			}
+			if (entry->size > image->comp_capacity)
+				image->comp_capacity = entry->size;
+		}
+		else if (!(entry->flags & EWF2_CHUNK_CHECKSUMED)
+			|| entry->size < 4 || entry->size > image->chunk_size + 4)
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "invalid uncompressed EWF2 chunk");
+			goto fail;
+		}
+		if (entry->offset < data_start || entry->offset > data_end
+			|| entry->size > data_end - entry->offset)
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "EWF2 chunk outside sector data section");
+			goto fail;
+		}
+	}
+	err = ewf_add_group (image, &group);
+	if (err)
+		goto fail;
+	image->indexed_chunks += count;
+	return GRUB_ERR_NONE;
+
+fail:
+	grub_free (group.entries2);
+	return err;
+}
+
+static grub_err_t
+ewf2_scan_segment (struct ewf_image *image, grub_uint32_t segment,
+		   int *has_next)
+{
+	grub_file_t file = image->segments[segment].file;
+	grub_uint64_t file_size = grub_file_size (file);
+	struct ewf2_section *sections = NULL;
+	struct ewf2_metadata metadata = { 0 };
+	grub_uint32_t nsections = 0;
+	grub_uint32_t i;
+	grub_uint64_t descriptor_offset;
+	grub_uint64_t previous_offset;
+	grub_uint64_t data_offset;
+	grub_uint64_t sector_data_start = 0;
+	grub_uint64_t sector_data_end = 0;
+	grub_uint8_t descriptor[EWF2_SECTION_DESC_SIZE];
+	char *text = NULL;
+	grub_size_t text_size;
+	int chain_complete = 0;
+	int geometry_applied = 0;
+	grub_err_t err;
+
+	*has_next = 0;
+	err = ewf2_check_file_header (image, file, segment + 1);
+	if (err)
+		return err;
+	if (file_size == GRUB_FILE_SIZE_UNKNOWN
+		|| file_size < EWF2_FILE_HEADER_SIZE + EWF2_SECTION_DESC_SIZE)
+		return grub_error (GRUB_ERR_BAD_DEVICE, "short EWF2 segment");
+	descriptor_offset = file_size - EWF2_SECTION_DESC_SIZE;
+	for (i = 0; i < EWF_MAX_SECTIONS; i++)
+	{
+		struct ewf2_section section = { 0 };
+
+		err = ewf_pread (file, descriptor_offset, descriptor,
+				 sizeof (descriptor));
+		if (err)
+			goto fail;
+		if (ewf_get32 (descriptor + 60) != ewf_adler32 (descriptor, 60))
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "bad EWF2 section descriptor checksum");
+			goto fail;
+		}
+		section.type = ewf_get32 (descriptor);
+		section.flags = ewf_get32 (descriptor + 4);
+		previous_offset = ewf_get64 (descriptor + 8);
+		section.data_size = ewf_get64 (descriptor + 16);
+		section.padding_size = ewf_get32 (descriptor + 28);
+		grub_memcpy (section.integrity_hash, descriptor + 32,
+			     sizeof (section.integrity_hash));
+		if (ewf_get32 (descriptor + 24) != EWF2_SECTION_DESC_SIZE
+			|| (section.flags & ~(EWF2_DATA_MD5 | EWF2_DATA_ENCRYPTED)))
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "invalid EWF2 section descriptor");
+			goto fail;
+		}
+		if ((section.flags & EWF2_DATA_ENCRYPTED)
+			|| section.type == EWF2_SECTION_KEYS)
+		{
+			err = grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+					  "encrypted EWF2 images are not supported");
+			goto fail;
+		}
+		if (previous_offset == 0)
+			data_offset = EWF2_FILE_HEADER_SIZE;
+		else
+		{
+			if (previous_offset < EWF2_FILE_HEADER_SIZE
+				|| previous_offset >= descriptor_offset
+				|| grub_add (previous_offset, EWF2_SECTION_DESC_SIZE,
+					     &data_offset)
+				|| data_offset > descriptor_offset)
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "invalid EWF2 section chain");
+				goto fail;
+			}
+		}
+		if (section.data_size > descriptor_offset - data_offset
+			|| section.padding_size > section.data_size)
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "invalid EWF2 section layout");
+			goto fail;
+		}
+		section.data_offset = data_offset;
+		err = ewf2_add_section (&sections, &nsections, &section);
+		if (err)
+			goto fail;
+		if (nsections == 1
+			&& section.type != EWF2_SECTION_NEXT
+			&& section.type != EWF2_SECTION_DONE)
+		{
+			err = grub_error (GRUB_ERR_BAD_DEVICE,
+					  "missing EWF2 end section");
+			goto fail;
+		}
+		if (previous_offset == 0)
+		{
+			chain_complete = 1;
+			break;
+		}
+		descriptor_offset = previous_offset;
+	}
+	if (!chain_complete)
+	{
+		err = grub_error (GRUB_ERR_OUT_OF_RANGE, "too many EWF2 sections");
+		goto fail;
+	}
+	*has_next = sections[0].type == EWF2_SECTION_NEXT;
+	if (sections[0].data_size != 0)
+	{
+		err = grub_error (GRUB_ERR_BAD_DEVICE, "invalid EWF2 end section");
+		goto fail;
+	}
+
+	for (i = nsections; i > 0; i--)
+	{
+		struct ewf2_section *section = &sections[i - 1];
+
+		switch (section->type)
+		{
+		case EWF2_SECTION_DEVICE:
+			if (metadata.device_seen)
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "duplicate EWF2 device metadata");
+				goto fail;
+			}
+			err = ewf2_read_metadata (image, file, section, &text,
+						  &text_size);
+			if (err)
+				goto fail;
+			err = ewf2_parse_device_metadata (&metadata, text, text_size);
+			grub_free (text);
+			text = NULL;
+			if (err)
+				goto fail;
+			break;
+
+		case EWF2_SECTION_CASE:
+			if (metadata.case_seen)
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "duplicate EWF2 case metadata");
+				goto fail;
+			}
+			err = ewf2_read_metadata (image, file, section, &text,
+						  &text_size);
+			if (err)
+				goto fail;
+			err = ewf2_parse_case_metadata (image, &metadata, text,
+						       text_size);
+			grub_free (text);
+			text = NULL;
+			if (err)
+				goto fail;
+			break;
+
+		case EWF2_SECTION_SECTOR_DATA:
+			if (!geometry_applied)
+			{
+				err = ewf2_apply_metadata (image, &metadata);
+				if (err)
+					goto fail;
+				geometry_applied = 1;
+			}
+			if (sector_data_start || !section->data_size
+				|| grub_add (section->data_offset, section->data_size,
+					     &sector_data_end))
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "invalid EWF2 sector data section");
+				goto fail;
+			}
+			sector_data_start = section->data_offset;
+			break;
+
+		case EWF2_SECTION_SECTOR_TABLE:
+			if (!geometry_applied)
+			{
+				err = ewf2_apply_metadata (image, &metadata);
+				if (err)
+					goto fail;
+				geometry_applied = 1;
+			}
+			if (!sector_data_start)
+			{
+				err = grub_error (GRUB_ERR_BAD_DEVICE,
+						  "EWF2 table without sector data");
+				goto fail;
+			}
+			err = ewf2_parse_table (image, file, segment, section,
+						sector_data_start, sector_data_end);
+			if (err)
+				goto fail;
+			sector_data_start = 0;
+			sector_data_end = 0;
+			break;
+		}
+	}
+	if (!geometry_applied)
+	{
+		err = ewf2_apply_metadata (image, &metadata);
+		if (err)
+			goto fail;
+	}
+	if (sector_data_start)
+	{
+		err = grub_error (GRUB_ERR_BAD_DEVICE,
+				  "EWF2 sector data without a table");
+		goto fail;
+	}
+	grub_free (sections);
+	return GRUB_ERR_NONE;
+
+fail:
+	grub_free (text);
+	grub_free (sections);
+	return err;
+}
+
 static int
 ewf_type_is (const grub_uint8_t *type, const char *name)
 {
@@ -678,7 +1559,9 @@ ewf_open_image (struct ewf_image *image, grub_file_t first)
 		return err;
 	for (segment = 0; segment < EWF_MAX_SEGMENTS; segment++)
 	{
-		err = ewf_scan_segment (image, segment, &has_next);
+		err = image->version2
+			? ewf2_scan_segment (image, segment, &has_next)
+			: ewf_scan_segment (image, segment, &has_next);
 		if (err)
 			return err;
 		if (!has_next)
@@ -698,8 +1581,9 @@ ewf_open_image (struct ewf_image *image, grub_file_t first)
 	if (!image->volume_seen || image->indexed_chunks != image->nchunks)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "incomplete EWF chunk index");
 	image->chunk_buf = grub_malloc (image->chunk_size);
-	image->comp_buf = grub_malloc (image->comp_capacity);
-	if (!image->chunk_buf || !image->comp_buf)
+	if (image->comp_capacity)
+		image->comp_buf = grub_malloc (image->comp_capacity);
+	if (!image->chunk_buf || (image->comp_capacity && !image->comp_buf))
 		return grub_errno;
 	image->cached_chunk = EWF_CACHE_NONE;
 	image->cached_group = EWF_CACHE_NONE;
@@ -739,9 +1623,12 @@ ewf_find_group (struct ewf_image *image, grub_uint32_t chunk)
 
 static grub_err_t
 ewf_chunk_location (struct ewf_image *image, grub_uint32_t chunk,
-	grub_file_t *file, grub_uint64_t *off, grub_uint32_t *stored_size, int *compressed)
+	grub_file_t *file, grub_uint64_t *off, grub_uint32_t *stored_size,
+	int *compressed, int *checksummed, int *pattern_fill,
+	grub_uint64_t *pattern)
 {
 	struct ewf_group *group = ewf_find_group (image, chunk);
+	struct ewf2_entry *entry;
 	grub_uint32_t index;
 	grub_uint32_t current;
 	grub_uint32_t next;
@@ -751,9 +1638,24 @@ ewf_chunk_location (struct ewf_image *image, grub_uint32_t chunk,
 	if (!group)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "missing EWF chunk table");
 	index = chunk - group->first_chunk;
+	if (group->entries2)
+	{
+		entry = &group->entries2[index];
+		*compressed = (entry->flags & EWF2_CHUNK_COMPRESSED) != 0;
+		*checksummed = (entry->flags & EWF2_CHUNK_CHECKSUMED) != 0;
+		*pattern_fill = (entry->flags & EWF2_CHUNK_PATTERN_FILL) != 0;
+		*pattern = entry->offset;
+		*file = image->segments[group->segment].file;
+		*off = entry->offset;
+		*stored_size = entry->size;
+		return GRUB_ERR_NONE;
+	}
 	current = group->entries[index];
 	*compressed = index < group->overflow_at
 		&& (current & EWF_COMPRESSED) != 0;
+	*checksummed = !*compressed;
+	*pattern_fill = 0;
+	*pattern = 0;
 	if (index < group->overflow_at)
 		current &= EWF_OFFSET_MASK;
 	if (grub_add (group->base_offset, current, &phys))
@@ -789,13 +1691,21 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 	grub_uint32_t expected;
 	grub_uint8_t checksum[4];
 	grub_ssize_t out_size;
+	grub_uint64_t pattern;
+	grub_uint32_t i;
+	unsigned int bzip2_size;
+	int bzip2_result;
 	int compressed;
+	int checksummed;
+	int pattern_fill;
 	grub_err_t err;
 
 	if (image->cached_chunk == chunk)
 		return GRUB_ERR_NONE;
 	image->cached_chunk = EWF_CACHE_NONE;
-	err = ewf_chunk_location (image, chunk, &file, &off, &stored_size, &compressed);
+	err = ewf_chunk_location (image, chunk, &file, &off, &stored_size,
+				  &compressed, &checksummed, &pattern_fill,
+				  &pattern);
 	if (err)
 		return err;
 	logical = (grub_uint64_t) chunk * image->chunk_size;
@@ -803,18 +1713,43 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 	if (expected > image->total_bytes - logical)
 		expected = (grub_uint32_t) (image->total_bytes - logical);
 
-	if (compressed)
+	if (pattern_fill)
+	{
+		for (i = 0; i < image->chunk_size; i++)
+			image->chunk_buf[i] = (grub_uint8_t)
+				(pattern >> ((i & 7) * 8));
+	}
+	else if (compressed)
 	{
 		err = ewf_pread (file, off, image->comp_buf, stored_size);
 		if (err)
 			return err;
-		out_size = grub_zlib_decompress ((char *) image->comp_buf, stored_size, 0, (char *) image->chunk_buf, image->chunk_size);
-		if (out_size < 0 || (grub_uint32_t) out_size < expected || (grub_uint32_t) out_size > image->chunk_size)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "corrupt zlib chunk in EWF image");
+		if (!image->version2 || image->compression_method == 1)
+		{
+			out_size = grub_zlib_decompress ((char *) image->comp_buf,
+						 stored_size, 0,
+						 (char *) image->chunk_buf,
+						 image->chunk_size);
+			if (out_size < 0 || (grub_uint32_t) out_size < expected
+				|| (grub_uint32_t) out_size > image->chunk_size)
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+						   "corrupt zlib chunk in EWF image");
+		}
+		else
+		{
+			bzip2_size = image->chunk_size;
+			bzip2_result = BZ2_bzBuffToBuffDecompress (
+				(char *) image->chunk_buf, &bzip2_size,
+				(char *) image->comp_buf, stored_size, 0, 0);
+			if (bzip2_result != BZ_OK || bzip2_size < expected
+				|| bzip2_size > image->chunk_size)
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+						   "corrupt bzip2 chunk in EWF2 image");
+		}
 	}
 	else
 	{
-		if (stored_size < 4)
+		if (!checksummed || stored_size < 4)
 			return grub_error (GRUB_ERR_BAD_DEVICE, "short EWF data chunk");
 		plain_size = stored_size - 4;
 		if (plain_size < expected || plain_size > image->chunk_size)
@@ -895,18 +1830,17 @@ grub_ewf_open (grub_file_t io, enum grub_file_type type)
 		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted ADCRYPT images are not supported");
 		return NULL;
 	}
-	if (grub_memcmp (signature, ewf2_signature, sizeof (signature)) == 0)
-	{
-		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "EWF2-Ex01 images are not supported");
-		return NULL;
-	}
 	if (grub_memcmp (signature, ewf_logical_signature,
-			 sizeof (signature)) == 0)
+			 sizeof (signature)) == 0
+		|| grub_memcmp (signature, ewf2_logical_signature,
+			       sizeof (signature)) == 0)
 	{
-		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "logical EWF-L01 images are not disk images");
+		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+			    "logical EWF-L01/Lx01 images are not disk images");
 		return NULL;
 	}
-	if (grub_memcmp (signature, ewf_signature, sizeof (signature)) != 0)
+	if (grub_memcmp (signature, ewf_signature, sizeof (signature)) != 0
+		&& grub_memcmp (signature, ewf2_signature, sizeof (signature)) != 0)
 	{
 		grub_file_seek (io, 0);
 		grub_errno = GRUB_ERR_NONE;
@@ -916,6 +1850,8 @@ grub_ewf_open (grub_file_t io, enum grub_file_type type)
 	image = grub_zalloc (sizeof (*image));
 	if (!image)
 		return NULL;
+	image->version2 = grub_memcmp (signature, ewf2_signature,
+				       sizeof (signature)) == 0;
 	err = ewf_open_image (image, io);
 	if (err)
 	{
