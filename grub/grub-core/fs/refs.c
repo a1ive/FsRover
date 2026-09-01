@@ -19,32 +19,6 @@
 /*
  * ReFS (Resilient File System) 1.x / 3.x read-only driver.
  *
- * On-disk layout follows refsprogs (librefs\node.c):
- * boot sector -> superblock ("SUPB", block 30) -> checkpoint ("CHKP",
- * primary/secondary copy) -> level 2 tree roots.  The container table
- * (object id 0xB) maps virtual cluster numbers to physical ones (all
- * metadata below a version-dependent limit is identity mapped); the
- * object table (object id 0x2) maps directory object ids to the roots
- * of their B-trees.  Directory trees are "MSB+" nodes holding dirents
- * (key type 0x30; type 1 = file record with embedded attributes,
- * type 2 = directory / hard link), hard link target records (key type
- * 0x40) and the volume label (key type 0x510, in the 0x500 tree).
- * File data comes from the $DATA attribute: resident bytes or an
- * extent list that may overflow into subtree nodes or a separate
- * non-resident attribute list node.
- *
- * ReFS 3.14 compacted containers are reconstructed through the
- * Container Index (object id 0xE): its type-3 bitmap maps original
- * container clusters into a packed stream and type-7 rows split that
- * stream into independently checksummed LZ4/ZSTD compression units.
- *
- * Version 1 volumes use the same tree machinery with a smaller
- * metadata block header (no signature), a single block number per node
- * reference, one less field in the node allocation entry and wider
- * extent records.  Everything is addressed in fixed 16 KiB blocks
- * independent of the cluster size and there is no container table, so
- * block numbers are always physical.  Data is never resident.
- *
  * Limitations: alternate data streams, reparse point targets and the
  * rare short-form file records are not supported.
  */
@@ -250,8 +224,7 @@ struct grub_refs_stream
 static grub_int64_t
 grub_refs_filetime_to_unix(grub_uint64_t ft)
 {
-	return (grub_int64_t) grub_divmod64(ft, 10000000, 0)
-		- (grub_int64_t) REFS_EPOCH_BIAS;
+	return (grub_int64_t) grub_divmod64(ft, 10000000, 0) - (grub_int64_t) REFS_EPOCH_BIAS;
 }
 
 /* convert an UTF-16LE name (LEN 16-bit units, not NUL-terminated) to
@@ -306,8 +279,7 @@ grub_refs_lookup_map(struct grub_refs_data *data, grub_uint64_t block,
 		if (id == data->map[i].id)
 		{
 			*entry = &data->map[i];
-			*physical = data->map[i].start
-				| (block & data->bpc_mask);
+			*physical = data->map[i].start | (block & data->bpc_mask);
 			return 1;
 		}
 	}
@@ -337,8 +309,7 @@ grub_refs_find_compression(struct grub_refs_data *data,
 
 	for (i = 0; i < data->compression_len; i++)
 	{
-		struct grub_refs_compression_range *range =
-			&data->compression[i];
+		struct grub_refs_compression_range *range = &data->compression[i];
 
 		if (range->container_id == container_id
 			&& offset >= range->plain_start
@@ -382,20 +353,15 @@ grub_refs_read_compressed_backing(struct grub_refs_data *data,
 		grub_size_t step;
 
 		if (!grub_refs_lookup_map(data, block, &entry, &physical))
-			return grub_error(GRUB_ERR_BAD_FS,
-				"refs: unmapped compressed backing");
+			return grub_error(GRUB_ERR_BAD_FS, "refs: unmapped compressed backing");
 		if (entry && grub_refs_container_is_compressed(data, entry->id))
-			return grub_error(GRUB_ERR_BAD_FS,
-				"refs: recursive compressed backing");
-		container_left = ((data->bpc_mask + 1
-			- (block & data->bpc_mask)) << data->cluster_shift)
-			- offset;
+			return grub_error(GRUB_ERR_BAD_FS, "refs: recursive compressed backing");
+		container_left = ((data->bpc_mask + 1 - (block & data->bpc_mask)) << data->cluster_shift) - offset;
 		step = len;
 		if (container_left < step)
 			step = (grub_size_t) container_left;
 		if (grub_disk_read(data->disk, 0,
-			(physical << data->cluster_shift) + offset,
-			step, buf))
+			(physical << data->cluster_shift) + offset, step, buf))
 			return grub_errno;
 		byte += step;
 		buf += step;
@@ -413,8 +379,7 @@ grub_refs_load_compression_unit(struct grub_refs_data *data,
 	grub_uint32_t stored_start = unit ? range->ends[unit - 1] : 0;
 	grub_uint32_t stored_end = range->ends[unit];
 	grub_uint32_t stored_size = stored_end - stored_start;
-	grub_uint64_t plain_done =
-		(grub_uint64_t) unit * data->compression_unit_size;
+	grub_uint64_t plain_done = (grub_uint64_t) unit * data->compression_unit_size;
 	grub_uint32_t plain_size;
 	size_t got;
 
@@ -423,25 +388,20 @@ grub_refs_load_compression_unit(struct grub_refs_data *data,
 	else
 		plain_size = data->compression_unit_size;
 	if (!stored_size || stored_size > data->compression_unit_size)
-		return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
-			"refs: invalid compressed unit size");
+		return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA, "refs: invalid compressed unit size");
 	if (grub_refs_read_compressed_backing(data,
-		(entry->start << data->cluster_shift) + range->stored_start
-			+ stored_start,
+		(entry->start << data->cluster_shift) + range->stored_start + stored_start,
 		stored_size, data->compressed_buf))
 		return grub_errno;
 	if ((range->flags & REFS_COMPRESSION_CHECKSUMS)
-		&& grub_getcrc32c(0, data->compressed_buf,
-			(int) stored_size) != range->checksums[unit])
-		return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
-			"refs: compressed unit checksum mismatch");
+		&& grub_getcrc32c(0, data->compressed_buf, (int) stored_size) != range->checksums[unit])
+		return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA, "refs: compressed unit checksum mismatch");
 
 	if (unit + 1 == range->unit_count
 		&& (range->flags & REFS_COMPRESSION_LAST_RAW))
 	{
 		if (stored_size != plain_size)
-			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
-				"refs: invalid raw compression unit");
+			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA, "refs: invalid raw compression unit");
 		grub_memcpy(data->plain_buf, data->compressed_buf, plain_size);
 	}
 	else if (data->compression_format == REFS_COMPRESSION_LZ4
@@ -450,21 +410,16 @@ grub_refs_load_compression_unit(struct grub_refs_data *data,
 		if (LZ4_decompress_safe((const char *) data->compressed_buf,
 			(char *) data->plain_buf, (int) stored_size,
 			(int) plain_size) != (int) plain_size)
-			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
-				"refs: invalid LZ4 compressed unit");
+			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA, "refs: invalid LZ4 compressed unit");
 	}
 	else if (data->compression_format == REFS_COMPRESSION_ZSTD)
 	{
-		got = ZSTD_decompress(data->plain_buf, plain_size,
-			data->compressed_buf, stored_size);
+		got = ZSTD_decompress(data->plain_buf, plain_size, data->compressed_buf, stored_size);
 		if (got != plain_size)
-			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
-				"refs: invalid ZSTD compressed unit");
+			return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA, "refs: invalid ZSTD compressed unit");
 	}
 	else
-		return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET,
-			"refs: unsupported compression format %u",
-			data->compression_format);
+		return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "refs: unsupported compression format %u", data->compression_format);
 
 	data->cache_range = range_index;
 	data->cache_unit = unit;
@@ -490,32 +445,25 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 		block += offset >> data->cluster_shift;
 		offset &= data->cluster_size - 1;
 		if (!grub_refs_lookup_map(data, block, &entry, &physical))
-			return grub_error(GRUB_ERR_BAD_FS,
-				"refs: unmapped file extent");
-		container_offset = ((block & data->bpc_mask)
-			<< data->cluster_shift) + offset;
+			return grub_error(GRUB_ERR_BAD_FS, "refs: unmapped file extent");
+		container_offset = ((block & data->bpc_mask) << data->cluster_shift) + offset;
 		compacted_offset = container_offset;
 		if (entry && grub_refs_container_is_compressed(data, entry->id))
 		{
-			grub_uint32_t cluster =
-				(grub_uint32_t) (block & data->bpc_mask);
+			grub_uint32_t cluster = (grub_uint32_t) (block & data->bpc_mask);
 			grub_uint32_t byte_index = cluster >> 3;
 			grub_uint32_t bit = cluster & 7;
 			grub_uint8_t byte;
 			grub_uint32_t rank;
 
 			if (!entry->compact_bitmap || !entry->compact_rank)
-				return grub_error(GRUB_ERR_BAD_FS,
-					"refs: missing compacted cluster map");
+				return grub_error(GRUB_ERR_BAD_FS, "refs: missing compacted cluster map");
 			byte = entry->compact_bitmap[byte_index];
 			if (!(byte & (1U << bit)))
-				return grub_error(GRUB_ERR_BAD_FS,
-					"refs: unallocated compressed cluster");
+				return grub_error(GRUB_ERR_BAD_FS, "refs: unallocated compressed cluster");
 			rank = entry->compact_rank[byte_index]
-				+ grub_refs_popcount8((grub_uint8_t)
-					(byte & ((1U << bit) - 1)));
-			compacted_offset = ((grub_uint64_t) rank
-				<< data->cluster_shift) + offset;
+				+ grub_refs_popcount8((grub_uint8_t) (byte & ((1U << bit) - 1)));
+			compacted_offset = ((grub_uint64_t) rank << data->cluster_shift) + offset;
 		}
 		range = entry ? grub_refs_find_compression(data, entry->id,
 			compacted_offset, &range_index) : NULL;
@@ -530,8 +478,7 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 
 			if (!data->cache_valid || data->cache_range != range_index
 				|| data->cache_unit != unit)
-				if (grub_refs_load_compression_unit(data, entry,
-					range, range_index, unit))
+				if (grub_refs_load_compression_unit(data, entry, range, range_index, unit))
 					return grub_errno;
 			step = data->compression_unit_size - in_unit;
 			if (range->plain_size - in_range < step)
@@ -542,10 +489,8 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 		}
 		else
 		{
-			if (entry && grub_refs_container_is_compressed(data,
-				entry->id))
-				return grub_error(GRUB_ERR_BAD_FS,
-					"refs: missing compressed range");
+			if (entry && grub_refs_container_is_compressed(data, entry->id))
+				return grub_error(GRUB_ERR_BAD_FS, "refs: missing compressed range");
 			container_left = ((data->bpc_mask + 1
 				- (block & data->bpc_mask)) << data->cluster_shift)
 				- offset;
@@ -553,8 +498,7 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 			if (container_left < step)
 				step = (grub_size_t) container_left;
 			if (grub_disk_read(data->disk, 0,
-				(physical << data->cluster_shift) + offset,
-				step, buf))
+				(physical << data->cluster_shift) + offset, step, buf))
 				return grub_errno;
 		}
 		buf += step;
@@ -592,8 +536,7 @@ grub_refs_read_node(struct grub_refs_data *data, const grub_uint64_t *blocks,
 			b[i] = refs_get64(buf + REFS_NODE_SELF_BLOCKS + 8 * i);
 		phys = identity ? b[i] : grub_refs_map_block(data, b[i]);
 		if (!phys)
-			return grub_error(GRUB_ERR_BAD_FS,
-				"refs: unmapped metadata block");
+			return grub_error(GRUB_ERR_BAD_FS, "refs: unmapped metadata block");
 		if (grub_disk_read(data->disk, 0,
 			phys << data->cluster_shift, data->cluster_size,
 			buf + (grub_size_t) i * data->cluster_size))
@@ -602,8 +545,7 @@ grub_refs_read_node(struct grub_refs_data *data, const grub_uint64_t *blocks,
 
 	/* v1 headers carry no signature, only the self block number */
 	if (data->v1 ? (refs_get64(buf) != blocks[0])
-		: (grub_memcmp(buf, sig, 4) != 0
-			|| refs_get64(buf + REFS_NODE_SELF_BLOCKS) != blocks[0]))
+		: (grub_memcmp(buf, sig, 4) != 0 || refs_get64(buf + REFS_NODE_SELF_BLOCKS) != blocks[0]))
 		return grub_error(GRUB_ERR_BAD_FS, "refs: bad metadata node");
 	return GRUB_ERR_NONE;
 }
@@ -702,8 +644,7 @@ grub_refs_iter_table(struct grub_refs_data *data, const grub_uint8_t *table,
 		val_size = refs_get16(entry + 0xC);
 		if (key_size)
 		{
-			if (key_off < 0x10
-				|| (grub_uint32_t) key_off + key_size > esize)
+			if (key_off < 0x10 || (grub_uint32_t) key_off + key_size > esize)
 				continue;
 			key = entry + key_off;
 		}
@@ -714,8 +655,7 @@ grub_refs_iter_table(struct grub_refs_data *data, const grub_uint8_t *table,
 				continue;
 			value = entry + val_off;
 		}
-		ret = hook(data, is_index, key, key ? key_size : 0,
-			value, value ? val_size : 0, ctx);
+		ret = hook(data, is_index, key, key ? key_size : 0, value, value ? val_size : 0, ctx);
 		if (ret)
 			return ret;
 	}
@@ -749,8 +689,7 @@ grub_refs_walk_push(struct grub_refs_walk_ctx *w, const grub_uint64_t *b)
 		grub_uint32_t ncap = w->cap ? w->cap * 2 : 16;
 		grub_uint64_t (*n)[4];
 
-		n = grub_realloc(w->queue, (grub_size_t) ncap
-			* sizeof(w->queue[0]));
+		n = grub_realloc(w->queue, (grub_size_t) ncap * sizeof(w->queue[0]));
 		if (!n)
 			return -1;
 		w->queue = n;
@@ -777,8 +716,7 @@ grub_refs_walk_entry(struct grub_refs_data *data, int is_index,
 		return grub_refs_walk_push(w, b) ? -1 : 0;
 	}
 
-	return w->hook(data, 0, key, key_size, value, value_size,
-		w->hook_ctx);
+	return w->hook(data, 0, key, key_size, value, value_size, w->hook_ctx);
 }
 
 static int
@@ -813,8 +751,7 @@ grub_refs_walk_tree(struct grub_refs_data *data, const grub_uint64_t *root,
 		if (grub_refs_read_node(data, w.queue[head], 0, "MSB+", buf))
 			goto out;
 		hsize = refs_get32(buf + data->header_size);
-		if (hsize < 4 || hsize > data->block_size
-			- data->header_size - data->table_min - 4)
+		if (hsize < 4 || hsize > data->block_size - data->header_size - data->table_min - 4)
 		{
 			grub_error(GRUB_ERR_BAD_FS, "refs: corrupt node");
 			goto out;
@@ -859,28 +796,23 @@ grub_refs_oid_hook(struct grub_refs_data *data,
 		return 0;
 	if (refs_get16(key) != 0 || refs_get64(key + 8) != c->oid)
 		return 0;
-	if (!grub_refs_get_ref(data, value + off,
-		(grub_uint16_t) (value_size - off), c->root))
+	if (!grub_refs_get_ref(data, value + off, (grub_uint16_t) (value_size - off), c->root))
 		return 0;
 	c->found = 1;
 	return 1;
 }
 
 static grub_err_t
-grub_refs_find_tree(struct grub_refs_data *data, grub_uint64_t oid,
-	grub_uint64_t *root)
+grub_refs_find_tree(struct grub_refs_data *data, grub_uint64_t oid, grub_uint64_t *root)
 {
 	struct grub_refs_oid_ctx c;
 
 	grub_memset(&c, 0, sizeof(c));
 	c.oid = oid;
-	if (grub_refs_walk_tree(data, data->obj_table, 0, grub_refs_oid_hook,
-		&c) < 0)
+	if (grub_refs_walk_tree(data, data->obj_table, 0, grub_refs_oid_hook, &c) < 0)
 		return grub_errno;
 	if (!c.found || !c.root[0])
-		return grub_error(GRUB_ERR_BAD_FS,
-			"refs: object 0x%" PRIxGRUB_UINT64_T " not found",
-			oid);
+		return grub_error(GRUB_ERR_BAD_FS, "refs: object 0x%" PRIxGRUB_UINT64_T " not found", oid);
 	grub_memcpy(root, c.root, sizeof(c.root));
 	return GRUB_ERR_NONE;
 }
@@ -905,17 +837,14 @@ grub_refs_map_hook(struct grub_refs_data *data,
 	if (!count)
 		return 0;
 
-	n = grub_realloc(data->map, ((grub_size_t) data->map_len + 1)
-		* sizeof(data->map[0]));
+	n = grub_realloc(data->map, ((grub_size_t) data->map_len + 1) * sizeof(data->map[0]));
 	if (!n)
 		return -1;
 	data->map = n;
-	data->map[data->map_len].id = (key_size >= 8)
-		? refs_get64(key) : data->map_len;
+	data->map[data->map_len].id = (key_size >= 8) ? refs_get64(key) : data->map_len;
 	data->map[data->map_len].start = start;
 	data->map[data->map_len].count = count;
-	data->map[data->map_len].flags = (value_size >= 0x18)
-		? refs_get32(value + 0x14) : 0;
+	data->map[data->map_len].flags = (value_size >= 0x18) ? refs_get32(value + 0x14) : 0;
 	data->map[data->map_len].compact_bitmap = NULL;
 	data->map[data->map_len].compact_rank = NULL;
 	data->map_len++;
@@ -973,21 +902,17 @@ grub_refs_compression_hook(struct grub_refs_data *data,
 
 		if (entry->compact_bitmap || entry->compact_rank
 			|| value_size < 0x30 + bitmap_bytes
-			|| refs_get64(value + 0x18)
-				!= (entry->id << (data->bpc_shift + 1))
+			|| refs_get64(value + 0x18) != (entry->id << (data->bpc_shift + 1))
 			|| refs_get64(value + 0x20) != data->bpc_mask + 1)
 			goto corrupt;
 		entry->compact_bitmap = grub_malloc(bitmap_bytes);
-		entry->compact_rank = grub_malloc(((grub_size_t) bitmap_bytes + 1)
-			* sizeof(entry->compact_rank[0]));
+		entry->compact_rank = grub_malloc(((grub_size_t) bitmap_bytes + 1) * sizeof(entry->compact_rank[0]));
 		if (!entry->compact_bitmap || !entry->compact_rank)
 			return -1;
 		grub_memcpy(entry->compact_bitmap, value + 0x30, bitmap_bytes);
 		entry->compact_rank[0] = 0;
 		for (i = 0; i < bitmap_bytes; i++)
-			entry->compact_rank[i + 1] =
-				(grub_uint16_t) (entry->compact_rank[i]
-				+ grub_refs_popcount8(entry->compact_bitmap[i]));
+			entry->compact_rank[i + 1] = (grub_uint16_t) (entry->compact_rank[i] + grub_refs_popcount8(entry->compact_bitmap[i]));
 		return 0;
 	}
 	if (value_size < 0x40)
@@ -1007,15 +932,12 @@ grub_refs_compression_hook(struct grub_refs_data *data,
 	container_size = (data->bpc_mask + 1) << data->cluster_shift;
 	if (!data->compression_unit_size
 		|| !range.plain_size || !range.stored_size
-		|| range.flags & ~(REFS_COMPRESSION_LAST_RAW
-			| REFS_COMPRESSION_CHECKSUMS)
+		|| range.flags & ~(REFS_COMPRESSION_LAST_RAW | REFS_COMPRESSION_CHECKSUMS)
 		|| !range.unit_count || range.unit_count > 0x10000
 		|| range.plain_start > container_size
 		|| range.plain_size > container_size - range.plain_start
 		|| range.plain_start % data->compression_unit_size
-		|| range.unit_count != (range.plain_size
-			+ data->compression_unit_size - 1)
-			/ data->compression_unit_size
+		|| range.unit_count != (range.plain_size + data->compression_unit_size - 1) / data->compression_unit_size
 		|| array_offset < 0x40 || array_offset > value_size
 		|| range.unit_count > (value_size - array_offset) / 4)
 		goto corrupt;
@@ -1038,8 +960,7 @@ grub_refs_compression_hook(struct grub_refs_data *data,
 		return -1;
 	if (range.flags & REFS_COMPRESSION_CHECKSUMS)
 	{
-		range.checksums = grub_malloc((grub_size_t) range.unit_count
-			* sizeof(range.checksums[0]));
+		range.checksums = grub_malloc((grub_size_t) range.unit_count * sizeof(range.checksums[0]));
 		if (!range.checksums)
 			goto fail;
 	}
@@ -1050,15 +971,13 @@ grub_refs_compression_hook(struct grub_refs_data *data,
 			|| (i && range.ends[i] <= range.ends[i - 1]))
 			goto corrupt_range;
 		if (range.checksums)
-			range.checksums[i] = refs_get32(value + array_offset
-				+ 4 * range.unit_count + 4 * i);
+			range.checksums[i] = refs_get32(value + array_offset + 4 * range.unit_count + 4 * i);
 	}
 	if (range.ends[range.unit_count - 1] != range.stored_size)
 		goto corrupt_range;
 
 	n = grub_realloc(data->compression,
-		((grub_size_t) data->compression_len + 1)
-		* sizeof(data->compression[0]));
+		((grub_size_t) data->compression_len + 1) * sizeof(data->compression[0]));
 	if (!n)
 		goto fail;
 	data->compression = n;
@@ -1136,8 +1055,7 @@ grub_refs_mount(grub_disk_t disk)
 
 	if (bs[0x28] != 1 && bs[0x28] != 3)
 	{
-		grub_error(GRUB_ERR_BAD_FS, "unsupported ReFS version %u.%u",
-			bs[0x28], bs[0x29]);
+		grub_error(GRUB_ERR_BAD_FS, "unsupported ReFS version %u.%u", bs[0x28], bs[0x29]);
 		goto fail;
 	}
 
@@ -1148,8 +1066,7 @@ grub_refs_mount(grub_disk_t disk)
 	data->version_major = bs[0x28];
 	data->version_minor = bs[0x29];
 	data->v1 = (bs[0x28] == 1);
-	data->header_size = data->v1 ? REFS_V1_NODE_HEADER_SIZE
-		: REFS_NODE_HEADER_SIZE;
+	data->header_size = data->v1 ? REFS_V1_NODE_HEADER_SIZE : REFS_NODE_HEADER_SIZE;
 	data->table_min = data->v1 ? 0x1C : 0x24;
 	data->ref_size = data->v1 ? 0x18 : 0x20;
 	data->extent_size = data->v1 ? 48 : 24;
@@ -1213,8 +1130,7 @@ grub_refs_mount(grub_disk_t disk)
 			continue;
 		for (j = 0; j < 4; j++)
 			cb[j] = l1[i] + j;
-		if (grub_refs_read_node(data, cb, 1, "CHKP", node)
-			== GRUB_ERR_NONE)
+		if (grub_refs_read_node(data, cb, 1, "CHKP", node) == GRUB_ERR_NONE)
 		{
 			have_chkp = 1;
 			break;
@@ -1261,45 +1177,35 @@ grub_refs_mount(grub_disk_t disk)
 	{
 		for (i = 0; i < ref_count; i++)
 		{
-			grub_uint32_t roff =
-				refs_get32(node + ref_base + 4 * i);
+			grub_uint32_t roff = refs_get32(node + ref_base + 4 * i);
 			grub_uint64_t b[4];
 			grub_uint64_t oid;
 
 			if (roff > data->block_size
 				|| data->block_size - roff < data->ref_size)
 				continue;
-			if (!grub_refs_get_ref(data, node + roff,
-				data->ref_size, b))
+			if (!grub_refs_get_ref(data, node + roff, data->ref_size, b))
 				continue;
 			if (grub_refs_read_node(data, b, 0, "MSB+", tmp))
 			{
 				grub_errno = GRUB_ERR_NONE;
 				continue;
 			}
-			oid = refs_get64(tmp + (data->v1
-				? REFS_V1_NODE_OBJECT_ID
-				: REFS_NODE_OBJECT_ID));
+			oid = refs_get64(tmp + (data->v1 ? REFS_V1_NODE_OBJECT_ID : REFS_NODE_OBJECT_ID));
 			if (pass == 0 && oid == REFS_OID_CONTAINERS)
 			{
-				grub_memcpy(containers, b,
-					sizeof(containers));
-				if (data->block_size >= 0xAC
-					&& refs_get32(tmp + 0xA0) == 0x0F)
+				grub_memcpy(containers, b, sizeof(containers));
+				if (data->block_size >= 0xAC && refs_get32(tmp + 0xA0) == 0x0F)
 				{
-					data->compression_format =
-						refs_get16(tmp + 0xA4);
-					data->compression_unit_size =
-						refs_get32(tmp + 0xA8);
+					data->compression_format = refs_get16(tmp + 0xA4);
+					data->compression_unit_size = refs_get32(tmp + 0xA8);
 				}
 				break;
 			}
 			if (pass == 1 && oid == REFS_OID_OBJECT_TABLE)
-				grub_memcpy(data->obj_table, b,
-					sizeof(data->obj_table));
+				grub_memcpy(data->obj_table, b, sizeof(data->obj_table));
 			else if (pass == 1 && oid == REFS_OID_CONTAINER_INDEX)
-				grub_memcpy(container_index, b,
-					sizeof(container_index));
+				grub_memcpy(container_index, b, sizeof(container_index));
 		}
 		if (pass == 0 && containers[0]
 			&& grub_refs_walk_tree(data, containers, 0,
@@ -1325,46 +1231,37 @@ grub_refs_mount(grub_disk_t disk)
 			|| (data->compression_unit_size
 				& (data->compression_unit_size - 1)))
 		{
-			grub_error(GRUB_ERR_BAD_FS,
-				"refs: invalid compression policy");
+			grub_error(GRUB_ERR_BAD_FS, "refs: invalid compression policy");
 			goto fail;
 		}
 		for (i = 0; i < data->map_len; i++)
-			if (grub_refs_container_is_compressed(data,
-				data->map[i].id))
+			if (grub_refs_container_is_compressed(data, data->map[i].id))
 			{
 				grub_uint64_t packed_size;
 				grub_uint64_t range_size = 0;
 				grub_uint32_t j;
 				grub_uint32_t k;
 
-				if (!data->map[i].compact_bitmap
-					|| !data->map[i].compact_rank)
+				if (!data->map[i].compact_bitmap || !data->map[i].compact_rank)
 					goto bad_compression_map;
 				packed_size = (grub_uint64_t)
-					data->map[i].compact_rank[bitmap_bytes]
-					<< data->cluster_shift;
+					data->map[i].compact_rank[bitmap_bytes] << data->cluster_shift;
 				for (j = 0; j < data->compression_len; j++)
 				{
-					struct grub_refs_compression_range *a =
-						&data->compression[j];
+					struct grub_refs_compression_range *a = &data->compression[j];
 
 					if (a->container_id != data->map[i].id)
 						continue;
 					if (a->plain_start > packed_size
-						|| a->plain_size > packed_size
-							- a->plain_start)
+						|| a->plain_size > packed_size - a->plain_start)
 						goto bad_compression_map;
 					for (k = j + 1; k < data->compression_len; k++)
 					{
-						struct grub_refs_compression_range *b =
-							&data->compression[k];
+						struct grub_refs_compression_range *b = &data->compression[k];
 
 						if (b->container_id == a->container_id
-							&& a->plain_start
-								< b->plain_start + b->plain_size
-							&& b->plain_start
-								< a->plain_start + a->plain_size)
+							&& a->plain_start < b->plain_start + b->plain_size
+							&& b->plain_start < a->plain_start + a->plain_size)
 							goto bad_compression_map;
 					}
 					range_size += a->plain_size;
@@ -1465,8 +1362,7 @@ grub_refs_extent_hook(struct grub_refs_data *data, int is_index,
 			grub_error(GRUB_ERR_BAD_FS, "refs: too many extents");
 			return -1;
 		}
-		n = grub_realloc(st->ext, (grub_size_t) ncap
-			* sizeof(st->ext[0]));
+		n = grub_realloc(st->ext, (grub_size_t) ncap * sizeof(st->ext[0]));
 		if (!n)
 			return -1;
 		st->ext = n;
@@ -1563,8 +1459,7 @@ grub_refs_attr_hook(struct grub_refs_data *data, int is_index,
 			return 0;
 		sub.st = c->st;
 		sub.depth = 1;
-		return grub_refs_walk_tree(data, b, 0, grub_refs_attr_hook,
-			&sub);
+		return grub_refs_walk_tree(data, b, 0, grub_refs_attr_hook, &sub);
 	}
 
 	return 0;
@@ -1653,8 +1548,7 @@ grub_refs_reparse_hook(struct grub_refs_data *data, int is_index,
 
 		if (!grub_refs_get_ref(data, value, value_size, b))
 			return 0;
-		ret = grub_refs_walk_tree(data, b, 0,
-			grub_refs_reparse_hook, &sub);
+		ret = grub_refs_walk_tree(data, b, 0, grub_refs_reparse_hook, &sub);
 		if (ret < 0)
 			return ret;
 		if (sub.is_link)
@@ -1734,12 +1628,10 @@ grub_refs_resolve_hardlink(struct grub_refs_stream *st)
 
 	if (grub_refs_find_tree(st->data, st->node->oid, root))
 		return grub_errno;
-	if (grub_refs_walk_tree(st->data, root, 0, grub_refs_hl_hook,
-		&ctx) < 0)
+	if (grub_refs_walk_tree(st->data, root, 0, grub_refs_hl_hook, &ctx) < 0)
 		return grub_errno;
 	if (!ctx.record)
-		return grub_error(GRUB_ERR_BAD_FS,
-			"refs: hard link target not found");
+		return grub_error(GRUB_ERR_BAD_FS, "refs: hard link target not found");
 	st->hl_record = ctx.record;
 	st->hl_record_size = ctx.record_size;
 	return GRUB_ERR_NONE;
@@ -1798,7 +1690,8 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		if (!node)
 			return -1;
 		flags = refs_get32(value + 72);
-		ft = refs_get64(value + 56);
+		/* the timestamps are in the Write/Change/Access order. */
+		ft = refs_get64(value + 48);
 		node->type = REFS_NODE_REG;
 		node->size = refs_get64(value + szoff);
 		node->record_size = value_size;
@@ -1837,8 +1730,7 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		{
 			node->hardlink_id = data->v1 ? 0 : refs_get64(value);
 			node->size = refs_get64(value + 56);
-			node->type = node->hardlink_id ?
-				REFS_NODE_HARDLINK : REFS_NODE_SHORT;
+			node->type = node->hardlink_id ? REFS_NODE_HARDLINK : REFS_NODE_SHORT;
 		}
 	}
 	else
@@ -1855,8 +1747,7 @@ grub_refs_dirent_hook(struct grub_refs_data *data,
 		return -1;
 	}
 
-	ret = c->hook(name, ftype | GRUB_FSHELP_CASE_INSENSITIVE, node,
-		c->hook_data);
+	ret = c->hook(name, ftype | GRUB_FSHELP_CASE_INSENSITIVE, node, c->hook_data);
 	grub_free(name);
 	return ret;
 }
@@ -1872,8 +1763,7 @@ grub_refs_iterate_dir(grub_fshelp_node_t dir,
 		return 0;
 	if (grub_refs_find_tree(dir->data, dir->oid, root))
 		return 0;
-	return grub_refs_walk_tree(dir->data, root, 0,
-		grub_refs_dirent_hook, &ctx) > 0;
+	return grub_refs_walk_tree(dir->data, root, 0, grub_refs_dirent_hook, &ctx) > 0;
 }
 
 /* context + hook adapter for directory listing */
@@ -1970,8 +1860,7 @@ grub_refs_open(struct grub_file *file, const char *name)
 
 	if (fdiro->type == REFS_NODE_REG)
 	{
-		if (grub_refs_stream_setup(st, fdiro->record,
-			fdiro->record_size))
+		if (grub_refs_stream_setup(st, fdiro->record, fdiro->record_size))
 			goto fail;
 	}
 	else if (fdiro->type == REFS_NODE_HARDLINK)
@@ -1988,23 +1877,20 @@ grub_refs_open(struct grub_file *file, const char *name)
 			fdiro->sparse = (flags & REFS_FLAG_SPARSE) ? 1 : 0;
 			if (flags & REFS_FLAG_REPARSE)
 			{
-				is_link = grub_refs_record_is_link(data,
-					st->hl_record, st->hl_record_size);
+				is_link = grub_refs_record_is_link(data, st->hl_record, st->hl_record_size);
 				if (is_link < 0)
 					goto fail;
 				fdiro->reparse = is_link;
 			}
 		}
-		if (grub_refs_stream_setup(st, st->hl_record,
-			st->hl_record_size))
+		if (grub_refs_stream_setup(st, st->hl_record, st->hl_record_size))
 			goto fail;
 	}
 	else if (fdiro->type == REFS_NODE_SHORT)
 	{
 		if (fdiro->size)
 		{
-			grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET,
-				"refs: short-form file record not supported");
+			grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET, "refs: short-form file record not supported");
 			goto fail;
 		}
 	}
@@ -2055,8 +1941,7 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 		}
 		if (remaining && !st->node->sparse)
 		{
-			grub_error(GRUB_ERR_BAD_FS,
-				"refs: resident data shorter than file");
+			grub_error(GRUB_ERR_BAD_FS, "refs: resident data shorter than file");
 			return -1;
 		}
 		grub_memset(p, 0, remaining);
@@ -2076,11 +1961,9 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 		   finds the next extent past a sparse hole) */
 		for (i = 0; i < 2 && st->hint + i < st->ext_len; i++)
 		{
-			const struct grub_refs_extent *e =
-				&st->ext[st->hint + i];
+			const struct grub_refs_extent *e = &st->ext[st->hint + i];
 			grub_uint64_t start = e->vcn << data->cluster_shift;
-			grub_uint64_t end = start
-				+ (e->count << data->cluster_shift);
+			grub_uint64_t end = start + (e->count << data->cluster_shift);
 
 			if (pos >= start && pos < end)
 			{
@@ -2093,10 +1976,8 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 			for (i = 0; i < st->ext_len; i++)
 			{
 				const struct grub_refs_extent *e = &st->ext[i];
-				grub_uint64_t start =
-					e->vcn << data->cluster_shift;
-				grub_uint64_t end = start
-					+ (e->count << data->cluster_shift);
+				grub_uint64_t start = e->vcn << data->cluster_shift;
+				grub_uint64_t end = start + (e->count << data->cluster_shift);
 
 				if (pos >= start && pos < end)
 				{
@@ -2111,15 +1992,13 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 		if (hit)
 		{
 			grub_uint64_t start = hit->vcn << data->cluster_shift;
-			grub_uint64_t end = start
-				+ (hit->count << data->cluster_shift);
+			grub_uint64_t end = start + (hit->count << data->cluster_shift);
 
 			chunk = end - pos;
 			if (chunk > remaining)
 				chunk = remaining;
 			step = (grub_size_t) chunk;
-			if (grub_refs_read_data(data, hit->block,
-				pos - start, step, p))
+			if (grub_refs_read_data(data, hit->block, pos - start, step, p))
 				return -1;
 		}
 		else
@@ -2128,13 +2007,11 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 			   size): zero-fill up to the next extent */
 			if (!st->node->sparse)
 			{
-				grub_error(GRUB_ERR_BAD_FS,
-					"refs: missing file extent");
+				grub_error(GRUB_ERR_BAD_FS, "refs: missing file extent");
 				return -1;
 			}
 			chunk = remaining;
-			if (next_start != ~(grub_uint64_t) 0
-				&& next_start - pos < chunk)
+			if (next_start != ~(grub_uint64_t) 0 && next_start - pos < chunk)
 				chunk = next_start - pos;
 			step = (grub_size_t) chunk;
 			grub_memset(p, 0, step);
@@ -2171,8 +2048,7 @@ grub_refs_label_hook(struct grub_refs_data *data __attribute__((unused)),
 {
 	char **label = ctx;
 
-	if (key_size < 2 || refs_get16(key) != REFS_KEY_LABEL
-		|| !value || value_size < 2)
+	if (key_size < 2 || refs_get16(key) != REFS_KEY_LABEL || !value || value_size < 2)
 		return 0;
 	*label = grub_refs_get_utf8(value, value_size / 2);
 	return 1;
@@ -2189,10 +2065,8 @@ grub_refs_label(grub_device_t device, char **label)
 	if (!data)
 		return grub_errno;
 
-	if (grub_refs_find_tree(data, REFS_OID_VOLUME_INFO, root)
-		== GRUB_ERR_NONE)
-		grub_refs_walk_tree(data, root, 0, grub_refs_label_hook,
-			label);
+	if (grub_refs_find_tree(data, REFS_OID_VOLUME_INFO, root) == GRUB_ERR_NONE)
+		grub_refs_walk_tree(data, root, 0, grub_refs_label_hook, label);
 
 	/* a missing label is not an error */
 	grub_errno = GRUB_ERR_NONE;
@@ -2212,8 +2086,7 @@ grub_refs_uuid(grub_device_t device, char **uuid)
 		|| grub_memcmp(bs + 0x10, "FSRS", 4) != 0)
 		return grub_error(GRUB_ERR_BAD_FS, "not a ReFS filesystem");
 
-	*uuid = grub_xasprintf("%016llx",
-		(unsigned long long) refs_get64(bs + 0x38));
+	*uuid = grub_xasprintf("%016llx", (unsigned long long) refs_get64(bs + 0x38));
 	return grub_errno;
 }
 
