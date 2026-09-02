@@ -7,7 +7,7 @@
 </div>
 <br />
 
-FsRover is a read-only multi-filesystem explorer for Windows, powered by GNU GRUB.
+FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered by GNU GRUB.
 
 ## Features
 
@@ -42,6 +42,29 @@ File-level or filesystem-native encryption is not supported.
 - **Dynamic disks and RAID:** Android LP (dynamic partitions), Windows LDM, Linux LVM, mdraid, RAID5/6, NVIDIA dmraid
 - **Partition tables:** MBR, GPT, Apple, BSD, DragonFly BSD, Acorn, Amiga, DVH, Plan 9, Sun, UnixWare
 - **Backups:** Acronis True Image TIB/TIBX, TeraByte Image for Windows TBI, DiskGenius PMF/PMFX, Drive Snapshot SNA, Norton Ghost GHO/GHS, ntfsclone, Partclone
+
+## Linux build
+
+```sh
+sudo apt install cmake g++ pkg-config libfuse3-dev
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux --parallel
+```
+
+List an image and mount its filesystem read-only:
+
+```sh
+build/linux/LinuxRover --file=disk.img --list
+build/linux/LinuxRover --file=disk.img --list='(img0)/'
+mkdir -p /tmp/rover
+build/linux/LinuxRover --file=disk.img --mount=img0 --foreground /tmp/rover
+fusermount3 -u /tmp/rover
+```
+
+For partitioned images, pass the GRUB device name reported by `--list`, for
+example `--mount='(img0,gpt1)'`. Running `LinuxRover --list` as a user that can
+read the corresponding `/dev` nodes exposes native disks as `hdN` and optical
+drives as `cdN`; root is commonly required for raw block devices.
 
 ## Credits
 

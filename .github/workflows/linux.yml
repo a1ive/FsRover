@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Linux Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    tags:
+      - "*"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux x64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes \
+            cmake \
+            g++ \
+            libfuse3-dev \
+            pkg-config
+
+      - name: Configure
+        run: cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/linux --parallel
+
+      - name: Smoke test
+        run: build/linux/LinuxRover --help
