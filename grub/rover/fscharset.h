@@ -14,6 +14,10 @@
 #include <grub/types.h>
 
 #define GRUB_FS_CHAR_ENCODING_UTF8	65001U
+#define GRUB_FS_CHAR_ENCODING_GBK	936U
+#define GRUB_FS_CHAR_ENCODING_BIG5	950U
+#define GRUB_FS_CHAR_ENCODING_SHIFT_JIS	932U
+#define GRUB_FS_CHAR_ENCODING_EUC_KR	51949U
 
 /* Source encoding for byte-oriented filesystem names.  Unicode-native
    names, such as FAT long names and exFAT names, do not use this setting. */

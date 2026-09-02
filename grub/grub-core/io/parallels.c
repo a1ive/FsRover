@@ -53,7 +53,7 @@ struct parallels_header
 	grub_uint32_t data_off;			/* first data sector, may be 0 */
 	grub_uint32_t flags;
 	grub_uint64_t ext_off;			/* format extension, ignored */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct parallels_image

@@ -8,7 +8,13 @@
  *  (at your option) any later version.
  */
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <errno.h>
+#include <iconv.h>
+#include <stdint.h>
+#endif
 
 #include <limits.h>
 
@@ -24,6 +30,7 @@ char *
 grub_fs_bytes_to_utf8 (const char *src, grub_size_t size,
 	grub_uint32_t encoding)
 {
+#if defined(_WIN32)
 	wchar_t *wide = NULL;
 	char *utf8 = NULL;
 	int wide_size;
@@ -82,4 +89,67 @@ fail:
 	grub_free (wide);
 	grub_free (utf8);
 	return NULL;
+#else
+	const char *charset;
+	iconv_t converter;
+	char *utf8;
+	char *out;
+	char *in;
+	size_t input_left;
+	size_t output_left;
+	size_t capacity;
+
+	if (size == 0)
+		return grub_strdup ("");
+	if (encoding == GRUB_FS_CHAR_ENCODING_UTF8)
+		return grub_strndup (src, size);
+	switch (encoding)
+	{
+	case GRUB_FS_CHAR_ENCODING_GBK:
+		charset = "GBK";
+		break;
+	case GRUB_FS_CHAR_ENCODING_BIG5:
+		charset = "BIG5";
+		break;
+	case GRUB_FS_CHAR_ENCODING_SHIFT_JIS:
+		charset = "SHIFT-JIS";
+		break;
+	case GRUB_FS_CHAR_ENCODING_EUC_KR:
+		charset = "EUC-KR";
+		break;
+	default:
+		return grub_error (GRUB_ERR_BAD_ARGUMENT,
+			"unsupported filesystem name encoding"), NULL;
+	}
+	if (size > (SIZE_MAX - 1) / 4)
+		return grub_error (GRUB_ERR_OUT_OF_RANGE,
+			"filesystem name is too long"), NULL;
+	capacity = size * 4 + 1;
+	utf8 = grub_malloc (capacity);
+	if (!utf8)
+		return NULL;
+	converter = iconv_open ("UTF-8", charset);
+	if (converter == (iconv_t) -1)
+	{
+		grub_free (utf8);
+		return grub_error (GRUB_ERR_BAD_ARGUMENT,
+			"filesystem name encoding is unavailable"), NULL;
+	}
+	in = (char *) src;
+	out = utf8;
+	input_left = size;
+	output_left = capacity - 1;
+	errno = 0;
+	if (iconv (converter, &in, &input_left, &out, &output_left)
+		== (size_t) -1 || input_left != 0)
+	{
+		iconv_close (converter);
+		grub_free (utf8);
+		return grub_error (GRUB_ERR_BAD_FILENAME,
+			"invalid filesystem name encoding"), NULL;
+	}
+	*out = '\0';
+	iconv_close (converter);
+	return utf8;
+#endif
 }

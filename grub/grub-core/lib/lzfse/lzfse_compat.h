@@ -62,6 +62,12 @@ lzfse_clz32 (uint32_t x)
 #ifndef __always_inline
 #define __always_inline	inline __attribute__ ((always_inline))
 #endif
+#ifndef __packed
+#define __packed	__attribute__ ((packed))
+#endif
+#ifndef __aligned
+#define __aligned(x)	__attribute__ ((aligned (x)))
+#endif
 
 #endif /* ! _MSC_VER */
 

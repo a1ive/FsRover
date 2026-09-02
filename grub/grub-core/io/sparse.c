@@ -63,7 +63,7 @@ struct sparse_header
 	grub_uint32_t total_blks;	/* blocks in the expanded image */
 	grub_uint32_t total_chunks;	/* chunks in the sparse image */
 	grub_uint32_t image_checksum;	/* CRC32 of the expanded image */
-};
+} GRUB_PACKED;
 
 struct sparse_chunk_header
 {
@@ -71,7 +71,7 @@ struct sparse_chunk_header
 	grub_uint16_t reserved;
 	grub_uint32_t chunk_sz;		/* output blocks covered */
 	grub_uint32_t total_sz;		/* stored bytes, chunk header included */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 /* phy_off holds the file offset of the stored data of a raw chunk.  Chunk

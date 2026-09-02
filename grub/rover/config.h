@@ -25,6 +25,10 @@
 #ifndef ROVER_GRUB_CONFIG_H
 #define ROVER_GRUB_CONFIG_H	1
 
+#if !defined(_WIN32)
+#include <stddef.h>
+#endif
+
 #if defined(_MSC_VER)
 /* GNU extensions used throughout grub that MSVC does not know.  */
 #define __attribute__(x)
@@ -85,7 +89,13 @@ __rover_clzll (unsigned __int64 x)
 #error "unsupported architecture"
 #endif
 
+#if defined(_WIN32)
 #define GRUB_PLATFORM "windows"
+#elif defined(__linux__)
+#define GRUB_PLATFORM "linux"
+#else
+#error "unsupported host platform"
+#endif
 
 /*
  * GRUB_KERNEL selects the GRUB_MOD_INIT(x) flavour that emits a public

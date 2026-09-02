@@ -77,7 +77,7 @@ struct isz_header
 	grub_uint32_t seg_offs;		/* segment table offset, 0 = single file */
 	grub_uint32_t data_offs;	/* chunk data offset */
 	grub_uint8_t reserved;
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct isz_chunk

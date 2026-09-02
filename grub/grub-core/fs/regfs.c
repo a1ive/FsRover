@@ -87,7 +87,7 @@ struct grub_regfs_header
 	grub_uint16_t name[32];		/* tail of the hive's path, if any */
 	grub_uint8_t reserved[396];
 	grub_uint32_t checksum;		/* XOR-32 of the 508 bytes before */
-};
+} GRUB_PACKED;
 
 struct grub_regfs_nk
 {
@@ -112,7 +112,7 @@ struct grub_regfs_nk
 	grub_uint16_t name_size;
 	grub_uint16_t class_size;
 	/* name follows */
-};
+} GRUB_PACKED;
 
 struct grub_regfs_vk
 {
@@ -124,7 +124,7 @@ struct grub_regfs_vk
 	grub_uint16_t flags;
 	grub_uint16_t unknown;
 	/* name follows */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct grub_regfs_data

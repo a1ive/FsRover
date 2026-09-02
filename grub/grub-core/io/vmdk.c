@@ -77,13 +77,13 @@ struct vmdk4_header
 	grub_uint8_t filler[1];
 	grub_uint8_t check_bytes[4];
 	grub_uint16_t compress_algorithm;
-};
+} GRUB_PACKED;
 
 struct vmdk_grain_marker
 {
 	grub_uint64_t lba;
 	grub_uint32_t size;
-};
+} GRUB_PACKED;
 
 struct vmdk_footer
 {
@@ -95,7 +95,7 @@ struct vmdk_footer
 	/* footer sector: header copy with the real gd_offset */
 	grub_uint8_t magic[4];
 	struct vmdk4_header header;
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 enum vmdk_extent_type

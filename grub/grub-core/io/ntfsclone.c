@@ -76,7 +76,7 @@ struct ntfsclone_header
 	grub_int64_t nr_clusters;	/* clusters in the NTFS volume */
 	grub_uint64_t inuse;		/* clusters actually stored */
 	grub_uint32_t offset_to_image_data;
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 /* Clusters LCN .. LCN + COUNT - 1 stored back to back from OFF, each one

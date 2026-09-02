@@ -17,6 +17,8 @@
  * License along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <stdint.h>
+
 #ifndef GCRY_CONST_TIME_H
 #define GCRY_CONST_TIME_H
 

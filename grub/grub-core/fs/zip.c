@@ -45,7 +45,7 @@ struct grub_zip_header
 	grub_uint32_t usize;
 	grub_uint16_t name_len;
 	grub_uint16_t field_len;
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct grub_zip_data

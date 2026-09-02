@@ -108,7 +108,7 @@ struct ffu_security_header
 	grub_uint32_t algorithm_id;		/* hash algorithm */
 	grub_uint32_t catalog_size;
 	grub_uint32_t hash_table_size;
-};
+} GRUB_PACKED;
 
 struct ffu_image_header
 {
@@ -116,7 +116,7 @@ struct ffu_image_header
 	char signature[FFU_MAGIC_SIZE];		/* FFU_IMG_MAGIC */
 	grub_uint32_t manifest_length;		/* in bytes */
 	grub_uint32_t chunk_size_kb;
-};
+} GRUB_PACKED;
 
 struct ffu_store_header
 {
@@ -137,7 +137,7 @@ struct ffu_store_header
 	grub_uint32_t flash_only_table_count;
 	grub_uint32_t final_table_index;	/* the real GPT */
 	grub_uint32_t final_table_count;
-};
+} GRUB_PACKED;
 
 struct ffu_store_header_v2
 {
@@ -145,7 +145,7 @@ struct ffu_store_header_v2
 	grub_uint16_t store_index;		/* 1 based */
 	grub_uint64_t store_payload_size;	/* payload only, no padding */
 	grub_uint16_t device_path_length;	/* in UTF-16 code units */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct ffu_image

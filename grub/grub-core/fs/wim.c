@@ -74,7 +74,7 @@ struct wim_resource_header
 	grub_uint64_t zlen__flags;
 	grub_uint64_t offset;
 	grub_uint64_t len;
-};
+} GRUB_PACKED;
 
 struct wim_header
 {
@@ -93,13 +93,13 @@ struct wim_header
 	grub_uint32_t boot_index;
 	struct wim_resource_header integrity;
 	grub_uint8_t reserved[60];
-};
+} GRUB_PACKED;
 
 struct wim_security_header
 {
 	grub_uint32_t len;
 	grub_uint32_t count;
-};
+} GRUB_PACKED;
 
 struct wim_directory_entry
 {
@@ -117,7 +117,7 @@ struct wim_directory_entry
 	grub_uint16_t short_name_len;
 	grub_uint16_t name_len;
 	/* UTF-16LE name follows */
-};
+} GRUB_PACKED;
 
 struct wim_stream_entry
 {
@@ -126,7 +126,7 @@ struct wim_stream_entry
 	grub_uint8_t hash[WIM_HASH_LEN];
 	grub_uint16_t name_len;
 	/* UTF-16LE stream name follows */
-};
+} GRUB_PACKED;
 
 struct wim_lookup_entry
 {
@@ -134,7 +134,7 @@ struct wim_lookup_entry
 	grub_uint16_t part;
 	grub_uint32_t refcnt;
 	grub_uint8_t hash[WIM_HASH_LEN];
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 struct grub_wim_data

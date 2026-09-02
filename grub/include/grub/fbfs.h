@@ -41,7 +41,7 @@ struct fb_mbr
 	grub_uint32_t fb_magic;			/* 0x1b4  */
 	grub_uint8_t mbr_table[0x46];	/* 0x1b8  */
 	grub_uint16_t end_magic;		/* 0x1fe  */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 PRAGMA_BEGIN_PACKED
@@ -55,7 +55,7 @@ struct fb_data
 	grub_uint16_t list_size;		/* 0x208  */
 	grub_uint16_t pri_size;			/* 0x20a  */
 	grub_uint32_t ext_size;			/* 0x20c  */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 PRAGMA_BEGIN_PACKED
@@ -68,7 +68,7 @@ struct fb_ar_data
 	grub_uint16_t list_size;	/* 0x208  */
 	grub_uint16_t pri_size;		/* 0x20a  */
 	grub_uint32_t ext_size;		/* 0x20c  */
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 PRAGMA_BEGIN_PACKED
@@ -80,7 +80,7 @@ struct fbm_file
 	grub_uint32_t data_size;
 	grub_uint32_t data_time;
 	char name[1];
-};
+} GRUB_PACKED;
 PRAGMA_END_PACKED
 
 #endif
