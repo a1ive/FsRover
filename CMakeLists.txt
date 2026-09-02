@@ -45,6 +45,7 @@ target_include_directories(rover-grub
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib"
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/7z"
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/brotli/include"
+		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/bzip2"
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/json"
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/libzbitmap"
 		"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/lzfse"
