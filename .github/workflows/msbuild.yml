@@ -29,12 +29,15 @@ jobs:
           - architecture: x64
             platform: x64
             output_directory: x64
+            libcdi_dll: libcdi.dll
           - architecture: x86
             platform: x86
             output_directory: Win32
+            libcdi_dll: libcdix86.dll
           - architecture: ARM64
             platform: ARM64
             output_directory: ARM64
+            libcdi_dll: libcdiaa64.dll
 
     steps:
       - name: Check out repository
@@ -72,6 +75,10 @@ jobs:
           New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
           Copy-Item -LiteralPath "build\${{ matrix.output_directory }}\FsRover.exe" -Destination $artifactDirectory
           Copy-Item -LiteralPath "build\${{ matrix.output_directory }}\CliRover.exe" -Destination $artifactDirectory
+          $libcdiPath = "build\${{ matrix.output_directory }}\${{ matrix.libcdi_dll }}"
+          if (Test-Path -LiteralPath $libcdiPath) {
+            Copy-Item -LiteralPath $libcdiPath -Destination $artifactDirectory
+          }
           Copy-Item -LiteralPath LICENSE -Destination $artifactDirectory
 
       - name: Upload artifact

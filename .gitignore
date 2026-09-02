@@ -405,4 +405,8 @@ FodyWeavers.xsd
 !FsRover/dokan/prebuilt/x64/
 !FsRover/dokan/prebuilt/x86/
 !FsRover/dokan/prebuilt/ARM64/
+# Optional libcdi runtime DLLs copied beside FsRover.exe when present.
+!FsRover/libcdi/prebuilt/x64/
+!FsRover/libcdi/prebuilt/x86/
+!FsRover/libcdi/prebuilt/ARM64/
 !grub/include/grub/arm64/

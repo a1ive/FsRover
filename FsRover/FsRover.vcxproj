@@ -78,6 +78,11 @@
     <OutDir>$(SolutionDir)build\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\$(Platform)\$(ProjectName)\</IntDir>
   </PropertyGroup>
+  <PropertyGroup>
+    <LibcdiRuntimeSource Condition="'$(Platform)'=='Win32'">$(ProjectDir)libcdi\prebuilt\x86\libcdix86.dll</LibcdiRuntimeSource>
+    <LibcdiRuntimeSource Condition="'$(Platform)'=='x64'">$(ProjectDir)libcdi\prebuilt\x64\libcdi.dll</LibcdiRuntimeSource>
+    <LibcdiRuntimeSource Condition="'$(Platform)'=='ARM64'">$(ProjectDir)libcdi\prebuilt\ARM64\libcdiaa64.dll</LibcdiRuntimeSource>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ResourceCompile>
       <PreprocessorDefinitions>ROVER_ARCH_X86;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -235,6 +240,14 @@
     <Import Project="..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets" Condition="Exists('..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets')" />
     <Import Project="..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets" Condition="Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets')" />
   </ImportGroup>
+  <Target Name="CopyLibcdi" AfterTargets="Build" Condition="Exists('$(LibcdiRuntimeSource)')">
+    <Copy SourceFiles="$(LibcdiRuntimeSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true">
+      <Output TaskParameter="CopiedFiles" ItemName="LibcdiRuntimeCopiedFiles" />
+    </Copy>
+    <ItemGroup>
+      <FileWrites Include="@(LibcdiRuntimeCopiedFiles)" />
+    </ItemGroup>
+  </Target>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>
