@@ -48,6 +48,16 @@
 #define GRUB_GHOST_PART_SECTOR		0x02	/* raw sector chain */
 #define GRUB_GHOST_PART_FAT		0x03	/* FAT catalogue */
 #define GRUB_GHOST_PART_NTFS		0x04	/* NTFS filesystem packets */
+#define GRUB_GHOST_PART_EXT2		0x05	/* ext2/ext3 inode catalogue */
+
+/* Filesystem-aware ext2/ext3 record types.  Unlike the older FAT
+   catalogue, these use the whole low 16-bit record type.  */
+#define GRUB_GHOST_EXT_INFO_FIRST	0x061b
+#define GRUB_GHOST_EXT_INFO_LAST	0x061c
+#define GRUB_GHOST_EXT_INODE		0x001d
+#define GRUB_GHOST_EXT_DATA		0x001e
+#define GRUB_GHOST_EXT_END		0x001f
+#define GRUB_GHOST_EXT_CHECKSUM		0x0803
 
 /* File header byte 3.  */
 #define GRUB_GHOST_COMP_NONE		0

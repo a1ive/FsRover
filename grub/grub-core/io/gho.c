@@ -1326,7 +1326,9 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	err = gho_pread (image, image->data_start, hdr, 8);
 	if (err)
 		goto fail;
-	if (grub_ghost_get32 (hdr + 4) == GRUB_GHOST_REC_MAGIC || subtype != GRUB_GHOST_PART_SECTOR)
+	if (grub_ghost_get32 (hdr + 4) == GRUB_GHOST_REC_MAGIC
+		|| subtype == GRUB_GHOST_PART_FAT
+		|| subtype == GRUB_GHOST_PART_EXT2)
 	{
 		if (image->nspans < 2)
 		{
@@ -1337,6 +1339,12 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 		image->total_bytes = image->stream_size;
 		grub_free (scan);
 		return GRUB_ERR_NONE;
+	}
+	if (subtype != GRUB_GHOST_PART_SECTOR)
+	{
+		err = grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+				  "unsupported Ghost partition subtype %u", subtype);
+		goto fail;
 	}
 
 	/* The first block fixes the block size.  */

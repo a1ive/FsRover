@@ -35,11 +35,17 @@
  * same end-of-list convention FAT itself uses.  A file's data records
  * follow its entry directly.
  *
+ * Ghost's Linux-aware format (partition subtype 0x05) is a second
+ * catalogue form.  Kind 0x1d expands to an inode number, parent inode,
+ * the 128-byte ext inode and an absolute path.  The following kind 0x1e
+ * records expand to the regular file's contents.  Their decoded sizes
+ * vary with the source ext block runs, so they are indexed lazily as a
+ * file is read rather than assuming fixed 32 KiB blocks.
+ *
  * The image is presented as one directory per partition, numbered from
- * one.  A partition Ghost imaged sector by sector (which is what it
- * does for anything that is not FAT) holds a single disk.img instead of
- * a tree; that one is indexed only when it is opened, because indexing
- * means walking its whole block chain.
+ * one.  A partition Ghost imaged sector by sector holds a single
+ * disk.img instead of a tree; that one is indexed only when it is
+ * opened, because indexing means walking its whole block chain.
  */
 
 #include <grub/types.h>
@@ -78,6 +84,16 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GHO_LFN_CHARS		13
 #define GHO_LFN_MAX_SEQ		20
 
+/* ext2/ext3 catalogue metadata: two leading inode numbers followed by
+   the original 128-byte ext inode and the absolute path.  */
+#define GHO_EXT_META_SIZE	136
+#define GHO_EXT_INODE_DATA	48
+#define GHO_EXT_INLINE_MAX	60
+#define GHO_EXT_MODE_MASK	0170000
+#define GHO_EXT_MODE_DIR	0040000
+#define GHO_EXT_MODE_REG	0100000
+#define GHO_EXT_MODE_SYMLINK	0120000
+
 #define GHO_CACHE_NONE		0xffffffffu
 
 enum gho_node_kind
@@ -85,6 +101,7 @@ enum gho_node_kind
 	GHO_NODE_DIR,
 	/* consecutive kind 0x02 records; payload at record + 10 */
 	GHO_NODE_FILE,
+	GHO_NODE_SYMLINK,
 	/* an explicit list of block payloads */
 	GHO_NODE_BLOBS
 };
@@ -99,16 +116,22 @@ struct gho_node
 {
 	struct gho_node *next;
 	struct gho_node *child;
+	struct gho_node *last_child;
 	char *name;
 	grub_uint64_t size;
 	grub_int64_t mtime;
+	grub_uint64_t inode;
 	int kind;
 	int mtimeset;
+	int case_insensitive;
+	int variable;			/* ext records have variable decoded sizes */
+	grub_uint8_t *inline_data;	/* short ext symlink */
 
 	/* GHO_NODE_FILE: records run back to back from FIRST, so only
 	   their body lengths need keeping.  */
 	grub_uint64_t first;
 	grub_uint16_t *lens;
+	grub_uint32_t *outs;		/* decoded sizes, learned lazily */
 	grub_uint32_t nblk;
 	grub_uint32_t cap;
 
@@ -148,8 +171,11 @@ struct gho_file
 	grub_uint8_t *cmp;		/* GRUB_GHOST_STORED_MAX bytes */
 	grub_int32_t *hash;
 	grub_uint32_t cached_nr;
+	grub_uint32_t cached_len;
 	grub_uint32_t walk_idx;		/* memo for the GHO_NODE_FILE offset walk */
 	grub_uint64_t walk_off;
+	grub_uint32_t data_idx;		/* memo for variable-size ext records */
+	grub_uint64_t data_off;
 };
 
 /* ------------------------------------------------------------------ */
@@ -208,6 +234,8 @@ gho_free_node (struct gho_node *n)
 		gho_free_node (n->child);
 		grub_free (n->name);
 		grub_free (n->lens);
+		grub_free (n->outs);
+		grub_free (n->inline_data);
 		grub_free (n->blobs);
 		grub_free (n);
 		n = next;
@@ -242,7 +270,6 @@ gho_new_node (struct gho_data *data, struct gho_node *parent, const char *name,
 	      int kind)
 {
 	struct gho_node *n;
-	struct gho_node **tail;
 
 	if (data->nnodes >= GHO_MAX_NODES)
 		return NULL;
@@ -256,11 +283,14 @@ gho_new_node (struct gho_data *data, struct gho_node *parent, const char *name,
 		return NULL;
 	}
 	n->kind = kind;
+	n->case_insensitive = parent->case_insensitive;
 	data->nnodes++;
 
-	for (tail = &parent->child; *tail; tail = &(*tail)->next)
-		;
-	*tail = n;
+	if (parent->last_child)
+		parent->last_child->next = n;
+	else
+		parent->child = n;
+	parent->last_child = n;
 	return n;
 }
 
@@ -290,6 +320,30 @@ gho_add_len (struct gho_node *n, grub_uint16_t len)
 }
 
 static grub_err_t
+gho_add_ext_len (struct gho_node *n, grub_uint16_t len)
+{
+	grub_uint32_t oldcap = n->cap;
+	grub_uint32_t *outs;
+	grub_size_t sz;
+	grub_err_t err;
+
+	err = gho_add_len (n, len);
+	if (err)
+		return err;
+	if (n->cap != oldcap)
+	{
+		if (grub_mul ((grub_size_t) n->cap, sizeof (*outs), &sz))
+			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost file too large");
+		outs = grub_realloc (n->outs, sz);
+		if (!outs)
+			return grub_errno;
+		n->outs = outs;
+	}
+	n->outs[n->nblk - 1] = 0;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
 gho_add_blob (struct gho_node *n, grub_uint32_t *capacity, grub_uint64_t off,
 	      grub_uint32_t len)
 {
@@ -315,6 +369,36 @@ gho_add_blob (struct gho_node *n, grub_uint32_t *capacity, grub_uint64_t off,
 	n->blobs[n->nblobs].len = len;
 	n->nblobs++;
 	return GRUB_ERR_NONE;
+}
+
+static struct gho_node *
+gho_lookup_node (struct gho_node *n, const char *path)
+{
+	while (*path)
+	{
+		const char *end;
+		grub_size_t len;
+		struct gho_node *c;
+
+		while (*path == '/')
+			path++;
+		if (!*path)
+			break;
+		end = grub_strchr (path, '/');
+		len = end ? (grub_size_t) (end - path) : grub_strlen (path);
+
+		for (c = n->child; c; c = c->next)
+			if (grub_strlen (c->name) == len
+			    && (n->case_insensitive
+				? grub_strncasecmp (c->name, path, len)
+				: grub_strncmp (c->name, path, len)) == 0)
+				break;
+		if (!c)
+			return NULL;
+		n = c;
+		path += len;
+	}
+	return n;
 }
 
 /* ------------------------------------------------------------------ */
@@ -550,6 +634,220 @@ gho_find_start (struct gho_data *data, struct gho_cur *cur, grub_uint64_t *start
 }
 
 static grub_err_t
+gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
+			   const grub_uint8_t *meta, grub_size_t metalen,
+			   struct gho_node **file)
+{
+	grub_uint32_t ino;
+	grub_uint32_t parent_ino;
+	grub_uint16_t mode;
+	grub_uint64_t size;
+	grub_size_t pathlen;
+	grub_size_t i;
+	char *path;
+	char *base;
+	struct gho_node *parent;
+	struct gho_node *n;
+	int kind;
+
+	*file = NULL;
+	if (metalen <= GHO_EXT_META_SIZE)
+		return grub_error (GRUB_ERR_BAD_FS, "short Ghost ext inode record");
+	ino = grub_ghost_get32 (meta);
+	parent_ino = grub_ghost_get32 (meta + 4);
+	mode = grub_ghost_get16 (meta + 8);
+	pathlen = metalen - GHO_EXT_META_SIZE;
+	for (i = 0; i < pathlen; i++)
+		if (meta[GHO_EXT_META_SIZE + i] == 0)
+			return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext path");
+
+	/* Inode 8 is the private ext3 journal.  Ghost names it '.', but it
+	   is not a directory entry and must not be exposed in the tree.  */
+	if (parent_ino == 0 && pathlen == 1
+	    && meta[GHO_EXT_META_SIZE] == '.')
+		return GRUB_ERR_NONE;
+
+	path = grub_fs_bytes_to_utf8 ((const char *) meta + GHO_EXT_META_SIZE,
+				     pathlen, data->encoding);
+	if (!path)
+		return grub_errno;
+	if (ino == 2 && grub_strcmp (path, "/") == 0)
+	{
+		part->inode = ino;
+		part->mtime = (grub_int64_t) grub_ghost_get32 (meta + 24);
+		part->mtimeset = 1;
+		grub_free (path);
+		return GRUB_ERR_NONE;
+	}
+	if (path[0] != '/')
+	{
+		grub_free (path);
+		return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext path");
+	}
+
+	base = grub_strrchr (path, '/');
+	if (!base || base[1] == 0)
+	{
+		grub_free (path);
+		return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext path");
+	}
+	*base = 0;
+	parent = gho_lookup_node (part, path);
+	*base++ = '/';
+	if (!parent || parent->kind != GHO_NODE_DIR
+	    || (parent_ino != 0 && parent->inode != parent_ino))
+	{
+		grub_free (path);
+		return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext parent inode");
+	}
+
+	switch (mode & GHO_EXT_MODE_MASK)
+	{
+	case GHO_EXT_MODE_DIR:
+		kind = GHO_NODE_DIR;
+		break;
+	case GHO_EXT_MODE_SYMLINK:
+		kind = GHO_NODE_SYMLINK;
+		break;
+	default:
+		kind = GHO_NODE_FILE;
+		break;
+	}
+	n = gho_new_node (data, parent, base, kind);
+	grub_free (path);
+	if (!n)
+		return grub_errno ? grub_errno : GRUB_ERR_OUT_OF_MEMORY;
+	n->inode = ino;
+	n->mtime = (grub_int64_t) grub_ghost_get32 (meta + 24);
+	n->mtimeset = 1;
+	size = grub_ghost_get32 (meta + 12);
+	if ((mode & GHO_EXT_MODE_MASK) == GHO_EXT_MODE_REG)
+		size |= (grub_uint64_t) grub_ghost_get32 (meta + 116) << 32;
+	n->size = size;
+
+	if (kind == GHO_NODE_SYMLINK && size < GHO_EXT_INLINE_MAX)
+	{
+		if (size != 0)
+		{
+			n->inline_data = grub_malloc ((grub_size_t) size);
+			if (!n->inline_data)
+				return grub_errno;
+			grub_memcpy (n->inline_data, meta + GHO_EXT_INODE_DATA,
+				     (grub_size_t) size);
+		}
+	}
+	else if ((mode & GHO_EXT_MODE_MASK) == GHO_EXT_MODE_REG
+		 || kind == GHO_NODE_SYMLINK)
+	{
+		n->variable = 1;
+		*file = n;
+	}
+	else
+		n->size = 0;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
+	      struct gho_node *part, grub_uint64_t pos)
+{
+	struct gho_node *file = NULL;
+	grub_uint8_t *meta;
+	grub_int32_t *hash;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	meta = grub_malloc (GRUB_GHOST_BLOCK_MAX);
+	hash = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE, sizeof (*hash));
+	if (!meta || !hash)
+	{
+		err = grub_errno;
+		goto out;
+	}
+	part->case_insensitive = 0;
+
+	while (pos + GRUB_GHOST_REC_HDR_SIZE <= cur->size)
+	{
+		const grub_uint8_t *p;
+		grub_size_t avail;
+		grub_size_t outlen;
+		grub_uint16_t type;
+		grub_uint16_t len;
+
+		p = gho_peek (cur, pos, GRUB_GHOST_REC_HDR_SIZE, &avail);
+		if (!p || grub_ghost_get32 (p + 4) != GRUB_GHOST_REC_MAGIC)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext record");
+			goto out;
+		}
+		type = grub_ghost_get16 (p);
+		len = grub_ghost_get16 (p + 8);
+		if (len > cur->size - pos - GRUB_GHOST_REC_HDR_SIZE)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "truncated Ghost ext record");
+			goto out;
+		}
+		p = gho_peek (cur, pos, GRUB_GHOST_REC_HDR_SIZE + len, &avail);
+		if (!p)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "truncated Ghost ext record");
+			goto out;
+		}
+
+		switch (type)
+		{
+		case GRUB_GHOST_EXT_INFO_FIRST:
+		case GRUB_GHOST_EXT_INFO_LAST:
+			file = NULL;
+			break;
+
+		case GRUB_GHOST_EXT_INODE:
+			err = grub_ghost_decode (data->comp, hash,
+					 p + GRUB_GHOST_REC_HDR_SIZE, len,
+					 meta, GRUB_GHOST_BLOCK_MAX, &outlen);
+			if (err)
+				goto out;
+			err = gho_ext_add_inode (data, part, meta, outlen, &file);
+			if (err)
+				goto out;
+			break;
+
+		case GRUB_GHOST_EXT_DATA:
+			if (file)
+			{
+				if (file->nblk == 0)
+					file->first = pos;
+				err = gho_add_ext_len (file, len);
+				if (err)
+					goto out;
+			}
+			break;
+
+		case GRUB_GHOST_EXT_CHECKSUM:
+			file = NULL;
+			break;
+
+		case GRUB_GHOST_EXT_END:
+			if (part->inode != 2)
+				err = grub_error (GRUB_ERR_BAD_FS,
+						  "Ghost ext root inode missing");
+			goto out;
+
+		default:
+			err = grub_error (GRUB_ERR_BAD_FS,
+					  "unsupported Ghost ext record 0x%x", type);
+			goto out;
+		}
+		pos += GRUB_GHOST_REC_HDR_SIZE + len;
+	}
+	err = grub_error (GRUB_ERR_BAD_FS, "unterminated Ghost ext catalogue");
+
+out:
+	grub_free (meta);
+	grub_free (hash);
+	return err;
+}
+
+static grub_err_t
 gho_scan (struct gho_data *data, struct gho_cur *cur)
 {
 	struct gho_node *stack[GHO_MAX_DEPTH];
@@ -598,6 +896,13 @@ gho_scan (struct gho_data *data, struct gho_cur *cur)
 			file = NULL;
 			gho_lfn_reset (&lfn);
 			pos += GRUB_GHOST_HEADER_SIZE;
+			if (subtype == GRUB_GHOST_PART_EXT2)
+			{
+				err = gho_scan_ext (data, cur, part, pos);
+				if (err)
+					return err;
+				break;
+			}
 
 			/* Anything Ghost could not walk as files is stored as
 			   a raw block chain, which is indexed only when the
@@ -825,6 +1130,7 @@ gho_mount (grub_disk_t disk)
 	if (!data->root)
 		goto fail;
 	data->root->kind = GHO_NODE_DIR;
+	data->root->case_insensitive = 1;
 
 	cur.disk = disk;
 	cur.size = data->size;
@@ -862,31 +1168,7 @@ fail:
 static struct gho_node *
 gho_lookup (struct gho_data *data, const char *path)
 {
-	struct gho_node *n = data->root;
-
-	while (*path)
-	{
-		const char *end;
-		grub_size_t len;
-		struct gho_node *c;
-
-		while (*path == '/')
-			path++;
-		if (!*path)
-			break;
-		end = grub_strchr (path, '/');
-		len = end ? (grub_size_t) (end - path) : grub_strlen (path);
-
-		for (c = n->child; c; c = c->next)
-			if (grub_strlen (c->name) == len
-			    && grub_strncasecmp (c->name, path, len) == 0)
-				break;
-		if (!c)
-			return NULL;
-		n = c;
-		path += len;
-	}
-	return n;
+	return gho_lookup_node (data->root, path);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1008,7 +1290,7 @@ gho_load (struct gho_file *f, grub_disk_t disk, grub_uint32_t nr)
 		return GRUB_ERR_NONE;
 	f->cached_nr = GHO_CACHE_NONE;
 
-	if (n->kind == GHO_NODE_FILE)
+	if (n->kind == GHO_NODE_FILE || n->variable)
 	{
 		off = gho_file_block (f, nr) + GRUB_GHOST_REC_HDR_SIZE;
 		clen = n->lens[nr];
@@ -1028,13 +1310,69 @@ gho_load (struct gho_file *f, grub_disk_t disk, grub_uint32_t nr)
 				 GRUB_GHOST_BLOCK_MAX, &out);
 	if (err)
 		return err;
-	if (out > n->bs)
-		return grub_error (GRUB_ERR_BAD_FS, "oversized Ghost block");
-	if (out < n->bs)
-		grub_memset (f->blk + out, 0, n->bs - out);
+	if (n->variable)
+	{
+		if (out == 0 || out > GRUB_GHOST_BLOCK_MAX)
+			return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext data block");
+		if (n->outs[nr] != 0 && n->outs[nr] != out)
+			return grub_error (GRUB_ERR_BAD_FS, "Ghost ext block size changed");
+		n->outs[nr] = (grub_uint32_t) out;
+		f->cached_len = (grub_uint32_t) out;
+	}
+	else
+	{
+		if (out > n->bs)
+			return grub_error (GRUB_ERR_BAD_FS, "oversized Ghost block");
+		if (out < n->bs)
+			grub_memset (f->blk + out, 0, n->bs - out);
+		f->cached_len = n->bs;
+	}
 
 	f->cached_nr = nr;
 	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+gho_ext_locate (struct gho_file *f, grub_disk_t disk, grub_uint64_t off,
+		grub_uint32_t *nr, grub_uint32_t *in)
+{
+	struct gho_node *n = f->node;
+	grub_uint32_t i = 0;
+	grub_uint64_t base = 0;
+
+	if (f->data_idx < n->nblk && f->data_off <= off)
+	{
+		i = f->data_idx;
+		base = f->data_off;
+	}
+	while (i < n->nblk)
+	{
+		grub_uint32_t len = n->outs[i];
+		grub_uint64_t end;
+
+		if (len == 0)
+		{
+			grub_err_t err = gho_load (f, disk, i);
+
+			if (err)
+				return err;
+			len = f->cached_len;
+		}
+		if (base > ~((grub_uint64_t) 0) - len)
+			return grub_error (GRUB_ERR_BAD_FS, "oversized Ghost ext file");
+		end = base + len;
+		if (off < end)
+		{
+			f->data_idx = i;
+			f->data_off = base;
+			*nr = i;
+			*in = (grub_uint32_t) (off - base);
+			return GRUB_ERR_NONE;
+		}
+		base = end;
+		i++;
+	}
+	return grub_error (GRUB_ERR_BAD_FS, "Ghost ext file truncated");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1063,9 +1401,12 @@ grub_gho_dir (grub_device_t device, const char *path,
 
 		grub_memset (&info, 0, sizeof (info));
 		info.dir = (c->kind == GHO_NODE_DIR);
+		info.symlink = (c->kind == GHO_NODE_SYMLINK);
 		info.mtimeset = c->mtimeset;
 		info.mtime = c->mtime;
-		info.case_insensitive = 1;
+		info.case_insensitive = dir->case_insensitive;
+		info.inodeset = c->inode != 0;
+		info.inode = c->inode;
 		if (hook (c->name, &info, hook_data))
 			break;
 	}
@@ -1119,7 +1460,7 @@ grub_gho_open (grub_file_t file, const char *name)
 
 	/* A catalogue file is stored as whole blocks; trust whichever of
 	   the directory entry and the block run is smaller.  */
-	if (node->kind == GHO_NODE_FILE)
+	if (node->kind == GHO_NODE_FILE && !node->variable)
 	{
 		grub_uint64_t held = (grub_uint64_t) node->nblk * node->bs;
 
@@ -1153,20 +1494,40 @@ grub_gho_read (grub_file_t file, char *buf, grub_size_t len)
 		grub_error (GRUB_ERR_OUT_OF_RANGE, "read past end of Ghost file");
 		return -1;
 	}
+	if (n->inline_data)
+	{
+		grub_memcpy (buf, n->inline_data + off, len);
+		return (grub_ssize_t) len;
+	}
 	while (len > 0)
 	{
-		grub_uint32_t nr = (grub_uint32_t) (off / n->bs);
-		grub_uint32_t in = (grub_uint32_t) (off % n->bs);
+		grub_uint32_t nr;
+		grub_uint32_t in;
 		grub_size_t take = len;
-		grub_uint32_t have = (n->kind == GHO_NODE_FILE) ? n->nblk : n->nblobs;
 
-		if (nr >= have)
+		if (n->variable)
 		{
-			grub_error (GRUB_ERR_BAD_FS, "Ghost file truncated");
-			return -1;
+			if (gho_ext_locate (f, file->device->disk, off, &nr, &in)
+			    != GRUB_ERR_NONE)
+				return -1;
+			if (take > n->outs[nr] - in)
+				take = n->outs[nr] - in;
 		}
-		if (take > n->bs - in)
-			take = n->bs - in;
+		else
+		{
+			grub_uint32_t have = (n->kind == GHO_NODE_FILE)
+				? n->nblk : n->nblobs;
+
+			nr = (grub_uint32_t) (off / n->bs);
+			in = (grub_uint32_t) (off % n->bs);
+			if (nr >= have)
+			{
+				grub_error (GRUB_ERR_BAD_FS, "Ghost file truncated");
+				return -1;
+			}
+			if (take > n->bs - in)
+				take = n->bs - in;
+		}
 		if (gho_load (f, file->device->disk, nr) != GRUB_ERR_NONE)
 			return -1;
 		grub_memcpy (buf, f->blk + in, take);
