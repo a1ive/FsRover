@@ -18,7 +18,11 @@
 
 #include <time.h>
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <errno.h>
+#endif
 
 #include <grub/time.h>
 #include <grub/datetime.h>
@@ -27,13 +31,31 @@
 void
 grub_millisleep (grub_uint32_t ms)
 {
+#if defined(_WIN32)
 	Sleep (ms);
+#else
+	struct timespec delay;
+
+	delay.tv_sec = ms / 1000;
+	delay.tv_nsec = (long) (ms % 1000) * 1000000L;
+	while (nanosleep (&delay, &delay) != 0 && errno == EINTR)
+		;
+#endif
 }
 
 grub_uint64_t
 grub_get_time_ms (void)
 {
+#if defined(_WIN32)
 	return GetTickCount64 ();
+#else
+	struct timespec now;
+
+	if (clock_gettime (CLOCK_MONOTONIC, &now) != 0)
+		return 0;
+	return (grub_uint64_t) now.tv_sec * 1000
+		+ (grub_uint64_t) now.tv_nsec / 1000000;
+#endif
 }
 
 grub_err_t
@@ -43,8 +65,13 @@ grub_get_datetime (struct grub_datetime *datetime)
 	time_t now;
 
 	time (&now);
+#if defined(_WIN32)
 	if (gmtime_s (&tm, &now) != 0)
 		return grub_error (GRUB_ERR_BUG, "gmtime_s failed");
+#else
+	if (!gmtime_r (&now, &tm))
+		return grub_error (GRUB_ERR_BUG, "gmtime_r failed");
+#endif
 
 	datetime->year = tm.tm_year + 1900;
 	datetime->month = tm.tm_mon + 1;

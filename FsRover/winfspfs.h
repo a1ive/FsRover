@@ -23,7 +23,7 @@
 
 #include <string>
 
-#include "fusefs.h"
+#include "../common/fusefs.h"
 
 struct winfsp_mount;
 

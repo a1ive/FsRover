@@ -20,11 +20,11 @@
 #include <grub/dl.h>
 #include <grub/file.h>
 #include <grub/fs.h>
+#include <grub/hostfile.h>
 #include <grub/misc.h>
 #include <grub/mm.h>
 #include <grub/safemath.h>
 #include <grub/types.h>
-#include <grub/winfile.h>
 
 #include <windows.h>
 
@@ -181,7 +181,7 @@ fail:
 
 /* The same, decoded through the io filter chain.  */
 grub_file_t
-grub_winfile_open (const char *path, enum grub_file_type type)
+grub_hostfile_open (const char *path, enum grub_file_type type)
 {
 	grub_file_t file;
 	grub_file_t last = NULL;
@@ -221,7 +221,7 @@ host_open (const char *path, int decompress)
 
 	if (!decompress)
 		type |= GRUB_FILE_TYPE_NO_DECOMPRESS;
-	return grub_winfile_open (path, type);
+	return grub_hostfile_open (path, type);
 }
 
 int

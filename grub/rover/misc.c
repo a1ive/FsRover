@@ -22,7 +22,12 @@
  * debugger; grub never reads keys.
  */
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 #include <grub/misc.h>
 #include <grub/term.h>
@@ -33,7 +38,11 @@
 static void
 rover_xputs (const char *str)
 {
+#if defined(_WIN32)
 	OutputDebugStringA (str);
+#else
+	fputs (str, stderr);
+#endif
 }
 
 void (*grub_xputs) (const char *str) = rover_xputs;
@@ -57,7 +66,11 @@ grub_refresh (void)
 void
 grub_exit (void)
 {
+#if defined(_WIN32)
 	ExitProcess (1);
+#else
+	exit (1);
+#endif
 }
 
 /*

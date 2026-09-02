@@ -1,5 +1,5 @@
 /*
- *  Rover -- Filesystem browser for Windows
+ *  Rover -- Filesystem browser
  *  Copyright (C) 2026  A1ive
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <functional>
 #include <string>
 
 /* Host-neutral, FUSE-shaped view of a mounted Rover filesystem.  Platform
@@ -35,6 +36,7 @@ struct fusefs
 	std::string fs_name;
 	unsigned long long size;
 	uint32_t serial;
+	std::function<bool (const std::function<void ()> &)> dispatch;
 };
 
 struct fusefs_stat
@@ -56,13 +58,14 @@ typedef int (*fusefs_fill_dir) (void *data, const char *name,
 	const fusefs_stat *st);
 
 void fusefs_init (fusefs *fs, const std::string &device,
-	const std::string &fs_name, unsigned long long size);
+	const std::string &fs_name, unsigned long long size,
+	std::function<bool (const std::function<void ()> &)> dispatch);
 
 int fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st);
 int fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle);
 int fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 	long long offset, uint64_t *handle);
-int fusefs_release (uint64_t *handle);
+int fusefs_release (fusefs *fs, uint64_t *handle);
 int fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	void *data);
 int fusefs_statfs (fusefs *fs, fusefs_statvfs *st);

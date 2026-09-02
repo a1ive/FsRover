@@ -158,6 +158,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\common\extract_core.cpp" />
+    <ClCompile Include="..\common\fusefs.cpp" />
     <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="..\common\optparse.c" />
     <ClCompile Include="backend.cpp" />
@@ -165,7 +166,6 @@
     <ClCompile Include="cryptodlg.cpp" />
     <ClCompile Include="diskprops.cpp" />
     <ClCompile Include="dokanfs.cpp" />
-    <ClCompile Include="fusefs.cpp" />
     <ClCompile Include="game.cpp" />
     <ClCompile Include="helpdlg.cpp" />
     <ClCompile Include="hexview.cpp" />
@@ -184,6 +184,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
+    <ClInclude Include="..\common\fusefs.h" />
     <ClInclude Include="..\common\fs_encoding.h" />
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
@@ -192,7 +193,6 @@
     <ClInclude Include="dokan\fileinfo.h" />
     <ClInclude Include="dokan\public.h" />
     <ClInclude Include="dokanfs.h" />
-    <ClInclude Include="fusefs.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="libcdi\libcdi.h" />
     <ClInclude Include="md4c\entity.h" />

@@ -30,11 +30,9 @@
  *   - a grub path like "(loop0)/dir/child.vhd", when the image was
  *     mounted off a browsed volume.  Resolution is textual and the
  *     result goes back through grub_file_open.
- *   - a Windows path like "F:\images\child.vhd", when the GUI opened
- *     the image straight off the host filesystem (File > Open Image, or
- *     --file).  grub_file_open has no device to resolve against there,
- *     so the join is done in Windows terms and the result opened with
- *     the Win32 API through grub_winfile_open.
+ *   - a host path, when a frontend opened the image straight off the host
+ *     filesystem.  grub_file_open has no device to resolve against there,
+ *     so the join uses host-path rules and grub_hostfile_open reopens it.
  *
  * An absolute path recorded by whoever made the image usually names a
  * directory that only existed on that machine; both namespaces fall
@@ -46,7 +44,7 @@
 #include <grub/file.h>
 #include <grub/misc.h>
 #include <grub/mm.h>
-#include <grub/winfile.h>
+#include <grub/hostfile.h>
 
 #include "vbox.h"
 
@@ -257,7 +255,7 @@ vdisk_open_host (const char *image, const char *member,
 
 	if (vdisk_host_absolute (member))
 	{
-		file = grub_winfile_open (member, type);
+		file = grub_hostfile_open (member, type);
 		if (file)
 			return file;
 		grub_errno = GRUB_ERR_NONE;
@@ -267,7 +265,7 @@ vdisk_open_host (const char *image, const char *member,
 	path = vdisk_host_path (image, member);
 	if (!path)
 		return NULL;
-	file = grub_winfile_open (path, type);
+	file = grub_hostfile_open (path, type);
 	grub_free (path);
 	return file;
 }

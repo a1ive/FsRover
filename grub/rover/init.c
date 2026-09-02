@@ -27,6 +27,18 @@
 #include "proc.h"
 #include "rover.h"
 
+#if defined(_WIN32)
+#define ROVER_HOSTFILE_MODULE(mod)	mod (winfile)
+#define ROVER_HOSTDISK_DECLARE	ROVER_MOD_DECLARE (windisk)
+#define ROVER_HOSTDISK_INIT(flags)	do { if (!((flags) & ROVER_INIT_NO_HOSTDISK)) grub_windisk_init (); } while (0)
+#define ROVER_HOSTDISK_FINI()	grub_windisk_fini ()
+#else
+#define ROVER_HOSTFILE_MODULE(mod)	mod (posixfile)
+#define ROVER_HOSTDISK_DECLARE	ROVER_MOD_DECLARE (posixdisk)
+#define ROVER_HOSTDISK_INIT(flags)	do { if (!((flags) & ROVER_INIT_NO_HOSTDISK)) grub_posixdisk_init (); } while (0)
+#define ROVER_HOSTDISK_FINI()	grub_posixdisk_fini ()
+#endif
+
 #define ROVER_MODULE_LIST(mod)	\
 	/* message digests (io modules look them up at open time) */	\
 	mod (adler32)	\
@@ -49,10 +61,10 @@
 	mod (gcry_stribog)	\
 	mod (gcry_twofish)	\
 	mod (gcry_whirlpool)	\
-	/* disks: physical (windisk) is optional and rover_init calls it */	\
+	/* disks: the platform host disk is optional and rover_init calls it */	\
 	/* itself; here come the rest, then volume managers / RAID */	\
 	mod (loopdisk)	\
-	mod (winfile)	\
+	ROVER_HOSTFILE_MODULE (mod)	\
 	mod (diskfilter)	\
 	mod (ldm)	\
 	mod (lvm)	\
@@ -207,11 +219,9 @@
 
 ROVER_MODULE_LIST (ROVER_MOD_DECLARE)
 
-/* The one module outside the list: see ROVER_INIT_NO_WINDISK.  Its
-   _fini is unconditional -- the module remembers whether it registered
-   (it also declines without an elevated token) and does nothing here
-   when it did not.  */
-ROVER_MOD_DECLARE (windisk)
+/* The platform host-disk module lives outside the list so callers may skip
+   native block-device discovery when they only need host image files. */
+ROVER_HOSTDISK_DECLARE
 
 #define ROVER_MOD_INIT(name)	grub_##name##_init ();
 #define ROVER_MOD_FINI(name)	grub_##name##_fini ();
@@ -219,8 +229,7 @@ ROVER_MOD_DECLARE (windisk)
 void
 rover_init (int flags)
 {
-	if (!(flags & ROVER_INIT_NO_WINDISK))
-		grub_windisk_init ();
+	ROVER_HOSTDISK_INIT (flags);
 	ROVER_MODULE_LIST (ROVER_MOD_INIT)
 	rover_proc_init ();
 }
@@ -229,6 +238,6 @@ void
 rover_fini (void)
 {
 	rover_proc_fini ();
-	grub_windisk_fini ();
+	ROVER_HOSTDISK_FINI ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)
 }

@@ -1,6 +1,5 @@
-/* winfile.h - host file access for io filters */
 /*
- *  Rover -- GRUB 2 filesystem browser for Windows
+ *  Rover -- Filesystem browser for Windows
  *  Copyright (C) 2026  A1ive
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -17,11 +16,11 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef GRUB_WINFILE_HEADER
-#define GRUB_WINFILE_HEADER	1
+#ifndef GRUB_HOSTFILE_HEADER
+#define GRUB_HOSTFILE_HEADER	1
 
 #include <grub/file.h>
 
-grub_file_t grub_winfile_open (const char *path, enum grub_file_type type);
+grub_file_t grub_hostfile_open (const char *path, enum grub_file_type type);
 
-#endif /* ! GRUB_WINFILE_HEADER */
+#endif

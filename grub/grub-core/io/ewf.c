@@ -25,7 +25,7 @@
 #include <grub/deflate.h>
 #include <grub/crypto.h>
 #include <grub/safemath.h>
-#include <grub/winfile.h>
+#include <grub/hostfile.h>
 
 #include <bzlib.h>
 
@@ -440,7 +440,7 @@ ewf_open_segment (struct ewf_image *image, const char *name, grub_uint32_t numbe
 		if (!path)
 			return NULL;
 		if (first->fs && grub_strcmp (first->fs->name, "winfile") == 0)
-			file = grub_winfile_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
+			file = grub_hostfile_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		else
 			file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		grub_free (path);

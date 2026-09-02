@@ -23,7 +23,7 @@
 #include <string>
 #include <thread>
 
-#include "fusefs.h"
+#include "../common/fusefs.h"
 #include "gui.h"
 #include "winfsp_fuse.h"
 #include "winfspfs.h"
@@ -164,7 +164,8 @@ fs_read (const char *path, char *buf, size_t size, fuse_off_t offset,
 int
 fs_release (const char *, fuse_file_info *info)
 {
-	return fusefs_release (&info->fh);
+	fusefs *fs = current_fs ();
+	return fs ? fusefs_release (fs, &info->fh) : -EIO;
 }
 
 struct fill_context

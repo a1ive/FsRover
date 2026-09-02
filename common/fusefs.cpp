@@ -1,5 +1,5 @@
 /*
- *  Rover -- Filesystem browser for Windows
+ *  Rover -- Filesystem browser
  *  Copyright (C) 2026  A1ive
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -17,8 +17,8 @@
  */
 
 /*
- * FUSE-shaped read-only filesystem core shared by the Dokan and WinFsp
- * adapters.  Every Rover call is marshalled onto the single backend thread.
+ * FUSE-shaped read-only filesystem core shared by the Linux, Dokan, and
+ * WinFsp adapters.  The injected dispatcher keeps Rover calls serialized.
  */
 
 #include <errno.h>
@@ -30,7 +30,6 @@
 
 #include <rover.h>
 
-#include "backend.h"
 #include "fusefs.h"
 
 namespace
@@ -68,12 +67,14 @@ struct dir_entry
 
 void
 fusefs_init (fusefs *fs, const std::string &device,
-	const std::string &fs_name, unsigned long long size)
+	const std::string &fs_name, unsigned long long size,
+	std::function<bool (const std::function<void ()> &)> dispatch)
 {
 	fs->device = device;
 	fs->root = "(" + device + ")";
 	fs->fs_name = fs_name;
 	fs->size = size;
+	fs->dispatch = std::move (dispatch);
 	uint32_t hash = 2166136261u;
 	for (char c : device)
 		hash = (hash ^ (unsigned char) c) * 16777619u;
@@ -87,7 +88,7 @@ fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st)
 	int err = 0;
 	std::string full = rover_path (fs, path);
 
-	if (!backend_call ([&] { err = rover_stat (full.c_str (), &rover_st); }))
+	if (!fs->dispatch ([&] { err = rover_stat (full.c_str (), &rover_st); }))
 		return -EIO;
 	if (err)
 		return -ENOENT;
@@ -104,7 +105,7 @@ fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle)
 
 	std::string full = rover_path (fs, path);
 	rover_file *file = nullptr;
-	if (!backend_call ([&] { file = rover_file_open (full.c_str ()); }))
+	if (!fs->dispatch ([&] { file = rover_file_open (full.c_str ()); }))
 		return -EIO;
 	if (!file)
 		return -ENOENT;
@@ -123,7 +124,7 @@ fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 
 	std::string full = rover_path (fs, path);
 	int result = 0;
-	if (!backend_call ([&]
+	if (!fs->dispatch ([&]
 	{
 		rover_file *file = (rover_file *) (uintptr_t) *handle;
 		if (!file)
@@ -154,13 +155,13 @@ fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 }
 
 int
-fusefs_release (uint64_t *handle)
+fusefs_release (fusefs *fs, uint64_t *handle)
 {
 	rover_file *file = (rover_file *) (uintptr_t) *handle;
 	if (!file)
 		return 0;
 	*handle = 0;
-	return backend_call ([&] { rover_file_close (file); }) ? 0 : -EIO;
+	return fs->dispatch ([&] { rover_file_close (file); }) ? 0 : -EIO;
 }
 
 int
@@ -171,7 +172,7 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	std::vector<dir_entry> entries;
 	int err = 0;
 
-	if (!backend_call ([&]
+	if (!fs->dispatch ([&]
 	{
 		err = rover_dir_list (full.c_str (),
 			[] (const rover_dirent *ent, void *opaque) -> int

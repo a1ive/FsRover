@@ -45,7 +45,7 @@
 #include <grub/dl.h>
 #include <grub/ghost.h>
 #include <grub/safemath.h>
-#include <grub/winfile.h>
+#include <grub/hostfile.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -446,7 +446,7 @@ gho_open_span (struct gho_image *image, const char *name, unsigned nr)
 			return NULL;
 		if (image->spans[0].file->fs
 			&& grub_strcmp (image->spans[0].file->fs->name, "winfile") == 0)
-			file = grub_winfile_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
+			file = grub_hostfile_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		else
 			file = grub_file_open (path, GRUB_FILE_TYPE_LOOPBACK | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		grub_free (path);

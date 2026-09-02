@@ -40,11 +40,10 @@ extern "C" {
    and GRUB_DISK_SIZE_UNKNOWN).  */
 #define ROVER_SIZE_UNKNOWN	0xffffffffffffffffULL
 
-/* Leave the windisk backend (physical drives and optical discs)
-   unregistered.  It is the only module that wants an elevated token,
-   so a caller that came to browse one image file can drop it and never
-   touch a device it has no business opening.  */
-#define ROVER_INIT_NO_WINDISK	0x1
+/* Leave the platform raw-disk backend unregistered when only host images are
+   needed, avoiding Windows elevation prompts or Linux device permissions. */
+#define ROVER_INIT_NO_HOSTDISK	0x1
+#define ROVER_INIT_NO_WINDISK	ROVER_INIT_NO_HOSTDISK
 
 /* Byte-oriented filesystem name encodings.  Unicode-native names are not
    affected.  Values are Windows code-page identifiers. */
@@ -86,6 +85,7 @@ const char *rover_last_error (void);
 #define ROVER_DEV_CRYPTODISK	4	/* unlocked crypto volume */
 #define ROVER_DEV_PROCFS	5	/* (proc) pseudo-device */
 #define ROVER_DEV_WINFILE	6	/* winfile host image mount */
+#define ROVER_DEV_POSIXFILE	ROVER_DEV_WINFILE
 
 struct rover_disk_info
 {
@@ -244,6 +244,12 @@ const char *rover_loopback_get_file (const char *devname);
 int rover_winfile_add (const char *devname, const char *path, int decompress);
 int rover_winfile_del (const char *devname);
 const char *rover_winfile_get_path (const char *devname);
+
+/* Linux host-image counterpart of winfile.  PATH is a native UTF-8 POSIX
+   path.  These entry points are available in Linux builds. */
+int rover_posixfile_add (const char *devname, const char *path, int decompress);
+int rover_posixfile_del (const char *devname);
+const char *rover_posixfile_get_path (const char *devname);
 
 /*
  * Unlock the LUKS/LUKS2 volume on grub device DEVICE ("hd0,gpt2") using

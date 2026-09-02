@@ -41,7 +41,7 @@
 
 #include "backend.h"
 #include "dokanfs.h"
-#include "fusefs.h"
+#include "../common/fusefs.h"
 #include "gui.h"
 #include "resource.h"
 #include "strconv.h"
@@ -151,8 +151,9 @@ fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 void DOKAN_CALLBACK
 fs_cleanup (LPCWSTR, PDOKAN_FILE_INFO info)
 {
+	dokan_mount *m = mount_of (info);
 	uint64_t handle = info->Context;
-	fusefs_release (&handle);
+	fusefs_release (&m->core, &handle);
 	info->Context = handle;
 }
 
@@ -542,7 +543,8 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 	}
 
 	dokan_mount *m = new dokan_mount;
-	fusefs_init (&m->core, device, fs, size);
+	fusefs_init (&m->core, device, fs, size,
+		[] (const std::function<void ()> &fn) { return backend_call (fn); });
 	m->mountpoint = std::wstring (1, letter) + L":\\";
 	m->open_explorer = open_explorer;
 	m->winfsp = false;

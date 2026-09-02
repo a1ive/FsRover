@@ -388,7 +388,11 @@ enum_disk_shim (const char *name, void *data)
 			break;
 		case GRUB_DISK_DEVICE_HOST_ID:
 			info.dev_id = ROVER_DEV_WINFILE;
+#if defined(_WIN32)
 			info.parent_file = rover_winfile_get_path (name);
+#else
+			info.parent_file = rover_posixfile_get_path (name);
+#endif
 			break;
 		default:
 			break;
