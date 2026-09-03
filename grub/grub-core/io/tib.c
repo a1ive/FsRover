@@ -48,6 +48,14 @@
  * True Image 2014-2016 archives, which spread the chunk map through the
  * block stream as inline records instead, are passed through untouched,
  * as are encrypted and multi-volume archives.
+ *
+ * Classic 0x44686EB4 containers use a 12-byte header and 0x179631B4 footer.
+ * Their sector trailer points directly to length-prefixed descriptors for
+ * the disk and each partition.  These supply the map locations, source
+ * offsets, geometry and MD5 tables; no scan of the block stream is needed.
+ * The verified disk map contains track zero, with the partition maps
+ * overlaid at their original LBAs.  File-mode containers with the same
+ * header magic are distinguished by the sector trailer.
  */
 
 #include <grub/types.h>
@@ -56,12 +64,19 @@
 #include <grub/mm.h>
 #include <grub/dl.h>
 #include <grub/safemath.h>
+#include <grub/crypto.h>
 
 #include <miniz.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define TIB_VOLUME_MAGIC	0xa2b924ceU
+#define TIB_CLASSIC_MAGIC	0x44686eb4U
+#define TIB_CLASSIC_FOOTER	0x179631b4U
+#define TIB_CLASSIC_HEADER	12
+#define TIB_CLASSIC_META_MAX	(1u << 20)
+#define TIB_CLASSIC_MAP_MAX	(64u << 20)
+#define TIB_PREAMBLE_MAX	32
 #define TIB_TRAILER_SECTOR	0x94e18a2bU
 
 #define TIB_HDR_LEN		0x04	/* u16, where the block stream starts */
@@ -104,7 +119,7 @@ struct tib_block
 	grub_uint32_t nr;		/* block this holds, or TIB_NO_BLOCK */
 	grub_uint32_t age;
 	grub_uint32_t len;		/* plaintext bytes */
-	grub_uint8_t preamble[TIB_PREAMBLE_MODERN];
+	grub_uint8_t preamble[TIB_PREAMBLE_MAX];
 	grub_uint8_t *data;
 };
 
@@ -122,6 +137,18 @@ struct tib_image
 
 	grub_uint32_t clusters;		/* clusters covered by one block */
 	grub_uint32_t preamble;		/* bytes of bitmap in front of a block */
+	grub_uint32_t cluster_size;
+
+	/* Classic containers hold separate partition maps and a sparse track
+	   stream.  A child uses the same block reader as a modern volume.  */
+	struct tib_image *parts, *next;
+	grub_uint64_t start;
+	grub_uint8_t *track;
+	grub_uint32_t track_len;		/* records: u32 sector number + 512 bytes */
+	grub_uint32_t *hash_index;
+	grub_uint64_t hash_offset;
+	void *hash_context;
+	int classic;
 
 	struct tib_block cache[TIB_BLOCK_CACHE];
 	grub_uint32_t clock;
@@ -182,7 +209,7 @@ tib_inflate (struct tib_image *img, grub_uint64_t off, grub_uint64_t in_len,
 	}
 	if (grow)
 	{
-		out_cap = TIB_IN_WINDOW;
+		out_cap = cap < TIB_IN_WINDOW ? cap : TIB_IN_WINDOW;
 		out = grub_malloc (out_cap);
 		if (!out)
 		{
@@ -242,6 +269,11 @@ tib_inflate (struct tib_image *img, grub_uint64_t off, grub_uint64_t in_len,
 			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad tib stream at 0x%llx", (unsigned long long) off);
 			goto fail;
 		}
+	}
+	if (img->classic && in_total != in_len)
+	{
+		err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "trailing data in tib stream");
+		goto fail;
 	}
 
 	grub_free (dec);
@@ -430,7 +462,8 @@ out:
    record I sits at J * BLOCKS + I.  Each record's offset is a zigzag
    delta from the end of the previous block.  */
 static grub_err_t
-tib_decode_chunk_map (struct tib_image *img, grub_uint64_t map_off, grub_uint32_t map_len)
+tib_decode_chunk_map (struct tib_image *img, grub_uint64_t map_off, grub_uint32_t map_len,
+	grub_uint32_t expected)
 {
 	grub_uint8_t *plain = NULL;
 	grub_size_t plain_len = 0;
@@ -438,10 +471,12 @@ tib_decode_chunk_map (struct tib_image *img, grub_uint64_t map_off, grub_uint32_
 	grub_uint32_t blocks, i;
 	grub_err_t err;
 
-	err = tib_inflate (img, map_off, map_len, &plain, (grub_size_t) TIB_BLOCKS_MAX * TIB_RECORD_SIZE, &plain_len);
+	err = tib_inflate (img, map_off, map_len, &plain,
+		(grub_size_t) (expected ? expected : TIB_BLOCKS_MAX) * TIB_RECORD_SIZE, &plain_len);
 	if (err)
 		return err;
-	if (plain_len == 0 || plain_len % TIB_RECORD_SIZE != 0)
+	if (plain_len == 0 || plain_len % TIB_RECORD_SIZE != 0
+		|| (expected && plain_len / TIB_RECORD_SIZE != expected))
 	{
 		grub_free (plain);
 		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad tib chunk-map size");
@@ -471,7 +506,19 @@ tib_decode_chunk_map (struct tib_image *img, grub_uint64_t map_off, grub_uint32_
 		len = grub_le_to_cpu32 (grub_get_unaligned32 (rec + 8));
 		mag = ((grub_uint64_t) (hi >> 1) << 32) | ((grub_uint64_t) (lo >> 1) | ((grub_uint64_t) (hi & 1) << 31));
 		delta = (lo & 1) ? ~mag + 1 : mag;
+		if (((lo & 1) && mag > running)
+			|| (!(lo & 1) && mag > ~(grub_uint64_t) 0 - running))
+		{
+			grub_free (plain);
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad tib block offset");
+		}
 		running += delta;
+		if (running > grub_file_size (img->file) - img->data_start
+			|| len > grub_file_size (img->file) - img->data_start - running)
+		{
+			grub_free (plain);
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "tib block outside archive");
+		}
 		img->off[i] = running;
 		img->len[i] = len;
 		running += len;
@@ -530,23 +577,39 @@ tib_load_block (struct tib_image *img, grub_uint32_t nr,
 	err = tib_pread (img, off, slot->preamble, img->preamble);
 	if (err)
 		return err;
-	want = tib_popcount (slot->preamble, img->clusters) * TIB_CLUSTER_SIZE;
+	want = tib_popcount (slot->preamble, img->clusters) * img->cluster_size;
 	if (want == 0)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "empty tib block %u", nr);
 
 	if (!slot->data)
 	{
-		slot->data = grub_calloc ((grub_size_t) img->clusters, TIB_CLUSTER_SIZE);
+		slot->data = grub_calloc ((grub_size_t) img->clusters, img->cluster_size);
 		if (!slot->data)
 			return grub_errno;
 	}
 	data = slot->data;
 	err = tib_inflate (img, off + img->preamble, img->len[nr] - img->preamble,
-		&data, (grub_size_t) img->clusters * TIB_CLUSTER_SIZE, &len);
+		&data, (grub_size_t) img->clusters * img->cluster_size, &len);
 	if (err)
 		return err;
 	if (len != want)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "tib block %u holds %llu bytes, expected %u", nr, (unsigned long long) len, want);
+	if (img->hash_index)
+	{
+		grub_uint8_t expected[16];
+		const gcry_md_spec_t *md5 = GRUB_MD_MD5;
+
+		err = tib_pread (img, img->hash_offset + (grub_uint64_t) img->hash_index[nr] * 16,
+			expected, sizeof (expected));
+		if (err)
+			return err;
+		md5->init (img->hash_context, 0);
+		md5->write (img->hash_context, slot->preamble, img->preamble);
+		md5->write (img->hash_context, data, len);
+		md5->final (img->hash_context);
+		if (grub_memcmp (expected, md5->read (img->hash_context), sizeof (expected)))
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "tib block %u checksum mismatch", nr);
+	}
 	slot->nr = nr;
 	slot->len = (grub_uint32_t) len;
 	slot->age = ++img->clock;
@@ -569,6 +632,7 @@ tib_probe_geometry (struct tib_image *img)
 	if (nr == img->blocks)
 		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "tib archive is empty");
 
+	img->cluster_size = TIB_CLUSTER_SIZE;
 	img->clusters = TIB_CLUSTERS_MODERN;
 	img->preamble = TIB_PREAMBLE_MODERN;
 	if (tib_load_block (img, nr, &blk) == GRUB_ERR_NONE)
@@ -586,6 +650,18 @@ static void
 tib_free_image (struct tib_image *img)
 {
 	grub_uint32_t i;
+	struct tib_image *part = img->parts;
+
+	while (part)
+	{
+		struct tib_image *next = part->next;
+		tib_free_image (part);
+		grub_free (part);
+		part = next;
+	}
+	grub_free (img->track);
+	grub_free (img->hash_index);
+	grub_free (img->hash_context);
 
 	for (i = 0; i < TIB_BLOCK_CACHE; i++)
 	{
@@ -597,6 +673,345 @@ tib_free_image (struct tib_image *img)
 	grub_free (img->len);
 	img->off = NULL;
 	img->len = NULL;
+}
+
+/* ---------------- classic 12-byte containers ---------------- */
+
+enum tib_classic_field
+{
+	TC_MAP, TC_LENGTH, TC_SECTOR, TC_CLUSTER, TC_BLOCK, TC_COUNT,
+	TC_START, TC_SECTORS, TC_HASH, TC_HASH_LENGTH, TC_DISK, TC_FIELDS
+};
+
+struct tib_classic_desc
+{
+	grub_uint64_t value[TC_FIELDS];
+	unsigned present;
+};
+
+#define TC_HAS(d, f)	((d)->present & (1u << (f)))
+
+/* Both descriptor headers and their nested maps use the same TLV grammar.
+   The descriptor itself has an inclusive u16 size; a map has a u8 size.  */
+static grub_err_t
+tib_classic_tlv (const grub_uint8_t *buf, grub_size_t len,
+	struct tib_classic_desc *desc)
+{
+	grub_size_t pos = 0;
+
+	grub_memset (desc, 0, sizeof (*desc));
+	while (pos < len)
+	{
+		unsigned tag, n, field = TC_FIELDS;
+
+		if (len - pos < 3)
+			goto bad;
+		tag = grub_le_to_cpu16 (grub_get_unaligned16 (buf + pos));
+		n = buf[pos + 2];
+		pos += 3;
+		if (n & 0x80)
+		{
+			if (pos == len)
+				goto bad;
+			n = ((n & 0x7f) << 8) | buf[pos++];
+		}
+		if (n > len - pos)
+			goto bad;
+		switch (tag)
+		{
+		case 0: field = TC_MAP; break;
+		case 1: field = TC_LENGTH; break;
+		case 2: field = TC_SECTOR; break;
+		case 3: field = TC_CLUSTER; break;
+		case 4: field = TC_BLOCK; break;
+		case 6: field = TC_COUNT; break;
+		case 0x11: field = TC_START; break;
+		case 0x12: field = TC_SECTORS; break;
+		case 0x5d: field = TC_HASH; break;
+		case 0x5e: field = TC_HASH_LENGTH; break;
+		case 0xc7:
+			if (n != 0)
+				goto bad;
+			field = TC_DISK;
+			break;
+		case 0x63:
+		case 0xd4:
+			return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported classic tib map encoding");
+		default:
+			break;
+		}
+		if (field != TC_FIELDS)
+		{
+			if (n > 8 || TC_HAS (desc, field))
+				goto bad;
+			desc->value[field] = tib_le (buf + pos, n);
+			desc->present |= 1u << field;
+		}
+		pos += n;
+	}
+	return GRUB_ERR_NONE;
+bad:
+	return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib descriptor");
+}
+
+static grub_err_t
+tib_classic_map_header (struct tib_image *img, const struct tib_classic_desc *desc,
+	grub_uint64_t limit, struct tib_classic_desc *map,
+	grub_uint64_t *offset, grub_uint32_t *length)
+{
+	grub_uint8_t head[256];
+	grub_uint64_t off = desc->value[TC_MAP], len = desc->value[TC_LENGTH];
+	grub_err_t err;
+
+	if (!TC_HAS (desc, TC_MAP) || !TC_HAS (desc, TC_LENGTH)
+		|| off >= limit - TIB_CLASSIC_HEADER || len > limit - TIB_CLASSIC_HEADER - off
+		|| len < 4 || len > TIB_CLASSIC_MAP_MAX)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "classic tib map outside data");
+	off += TIB_CLASSIC_HEADER;
+	err = tib_pread (img, off, head, 1);
+	if (err)
+		return err;
+	if (head[0] == 0 || 1u + head[0] >= len)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib map header");
+	err = tib_pread (img, off + 1, head + 1, head[0]);
+	if (err)
+		return err;
+	err = tib_classic_tlv (head + 1, head[0], map);
+	if (err)
+		return err;
+	if (map->value[TC_SECTOR] != 512 || !map->value[TC_COUNT])
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported classic tib sector geometry");
+	*offset = off + 1 + head[0];
+	*length = (grub_uint32_t) (len - 1 - head[0]);
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+tib_classic_partition (struct tib_image *img, const struct tib_classic_desc *desc,
+	grub_uint64_t meta_off)
+{
+	struct tib_classic_desc map;
+	struct tib_image *part;
+	grub_uint64_t off, block_size, hash_size;
+	grub_uint32_t len, i, hashes = 0;
+	grub_err_t err;
+
+	part = grub_zalloc (sizeof (*part));
+	if (!part)
+		return grub_errno;
+	part->next = img->parts;
+	img->parts = part;
+	part->file = img->file;
+	part->classic = 1;
+	part->data_start = TIB_CLASSIC_HEADER;
+	for (i = 0; i < TIB_BLOCK_CACHE; i++)
+		part->cache[i].nr = TIB_NO_BLOCK;
+	if (desc->value[TC_SECTOR] != 512 || !desc->value[TC_SECTORS]
+		|| grub_mul (desc->value[TC_START], 512ULL, &part->start)
+		|| grub_mul (desc->value[TC_SECTORS], 512ULL, &part->size))
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib partition size");
+	err = tib_classic_map_header (img, desc, meta_off, &map, &off, &len);
+	if (err)
+		return err;
+	if (TC_HAS (&map, TC_DISK) || !map.value[TC_CLUSTER] || map.value[TC_CLUSTER] > 128
+		|| !map.value[TC_BLOCK] || map.value[TC_BLOCK] > TIB_PREAMBLE_MAX * 8
+		|| map.value[TC_BLOCK] % 8 || map.value[TC_COUNT] > TIB_CLASSIC_MAP_MAX / TIB_RECORD_SIZE)
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported classic tib cluster geometry");
+	part->cluster_size = (grub_uint32_t) map.value[TC_CLUSTER] * 512;
+	part->clusters = (grub_uint32_t) map.value[TC_BLOCK];
+	part->preamble = part->clusters / 8;
+	block_size = (grub_uint64_t) part->clusters * part->cluster_size;
+	if (block_size > (1u << 20)
+		|| map.value[TC_COUNT] > (part->size - 1) / block_size + 1)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "classic tib map exceeds partition");
+	err = tib_decode_chunk_map (part, off, len, (grub_uint32_t) map.value[TC_COUNT]);
+	if (err)
+		return err;
+	part->hash_index = grub_calloc (part->blocks, sizeof (*part->hash_index));
+	part->hash_context = grub_malloc (GRUB_MD_MD5->contextsize);
+	if (!part->hash_index || !part->hash_context)
+		return grub_errno;
+	for (i = 0; i < part->blocks; i++)
+	{
+		part->hash_index[i] = hashes;
+		if (!part->len[i])
+			continue;
+		if (part->off[i] >= desc->value[TC_MAP]
+			|| part->len[i] > desc->value[TC_MAP] - part->off[i]
+			|| part->len[i] <= part->preamble)
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "classic tib block overlaps map");
+		hashes++;
+	}
+	hash_size = (grub_uint64_t) hashes * 16;
+	if (!TC_HAS (desc, TC_HASH) || !TC_HAS (desc, TC_HASH_LENGTH)
+		|| hash_size != desc->value[TC_HASH_LENGTH]
+		|| desc->value[TC_HASH] < desc->value[TC_MAP] + desc->value[TC_LENGTH]
+		|| desc->value[TC_HASH] >= meta_off - TIB_CLASSIC_HEADER
+		|| hash_size > meta_off - TIB_CLASSIC_HEADER - desc->value[TC_HASH])
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib checksum table");
+	part->hash_offset = desc->value[TC_HASH] + TIB_CLASSIC_HEADER;
+	return GRUB_ERR_NONE;
+}
+
+/* A DiskChunkMap record adds an extra u64 to the usual 12-byte map.
+   The verified classic form stores track zero in one record with extra=0.
+   Its plaintext is a list of {u32 sector index, u8 data[512]}, not a bitmap. */
+static grub_err_t
+tib_classic_track (struct tib_image *img, const struct tib_classic_desc *desc,
+	grub_uint64_t meta_off)
+{
+	struct tib_classic_desc map;
+	grub_uint8_t *plain = NULL;
+	grub_uint64_t off, delta;
+	grub_uint32_t len, stored, i, previous = 0;
+	grub_size_t plain_len;
+	grub_err_t err;
+
+	err = tib_classic_map_header (img, desc, meta_off, &map, &off, &len);
+	if (err)
+		return err;
+	if (!TC_HAS (&map, TC_DISK) || TC_HAS (&map, TC_CLUSTER)
+		|| map.value[TC_BLOCK] != 512 || map.value[TC_COUNT] != 1)
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported classic tib disk map");
+	err = tib_inflate (img, off, len, &plain, 20, &plain_len);
+	if (err)
+		return err;
+	if (plain_len != 20 || tib_le (plain + 12, 8) != 0)
+	{
+		err = grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib disk record");
+		goto out;
+	}
+	delta = tib_le (plain, 8);
+	stored = (grub_uint32_t) tib_le (plain + 8, 4);
+	if ((delta & 1) || (delta >> 1) >= desc->value[TC_MAP]
+		|| stored > desc->value[TC_MAP] - (delta >> 1) || !stored)
+	{
+		err = grub_error (GRUB_ERR_BAD_FILE_TYPE, "classic tib track outside data");
+		goto out;
+	}
+	err = tib_inflate (img, (delta >> 1) + TIB_CLASSIC_HEADER, stored,
+		&img->track, 512u * 516, &plain_len);
+	if (err)
+		goto out;
+	if (!plain_len || plain_len % 516)
+	{
+		err = grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib track size");
+		goto out;
+	}
+	img->track_len = (grub_uint32_t) plain_len;
+	for (i = 0; i < img->track_len; i += 516)
+	{
+		grub_uint32_t sector = (grub_uint32_t) tib_le (img->track + i, 4);
+		if (sector >= 512 || (i && sector <= previous))
+		{
+			err = grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib track sector");
+			goto out;
+		}
+		previous = sector;
+	}
+out:
+	grub_free (plain);
+	return err;
+}
+
+static grub_err_t
+tib_open_classic (struct tib_image *img)
+{
+	grub_uint8_t head[12], footer[12], tail[8];
+	grub_uint8_t *buf = NULL;
+	struct tib_classic_desc desc;
+	struct tib_image *part, *other;
+	grub_uint64_t size = grub_file_size (img->file), end, meta_off, meta_len;
+	grub_uint32_t trailer, pos, records = 0, disks = 0;
+	grub_err_t err;
+
+	img->classic = 1;
+	err = tib_pread (img, 0, head, sizeof (head));
+	if (err)
+		return err;
+	err = tib_pread (img, size - sizeof (footer), footer, sizeof (footer));
+	if (err)
+		return err;
+	if (tib_le (head + 8, 4) != 1 || tib_le (footer + 8, 4) != TIB_CLASSIC_FOOTER)
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported classic tib volume");
+	end = tib_le (footer, 8);
+	if (end < 8 || end > size - 24 || size - 24 - end > 511)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib footer");
+	end += TIB_CLASSIC_HEADER;
+	err = tib_pread (img, end - 8, tail, sizeof (tail));
+	if (err)
+		return err;
+	trailer = (grub_uint32_t) tib_le (tail, 4);
+	if (tib_le (tail + 4, 4) != TIB_TRAILER_SECTOR || trailer < 4
+		|| trailer > 4096 || trailer > end - 8 - TIB_CLASSIC_HEADER)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a classic sector tib archive");
+	buf = grub_malloc (trailer);
+	if (!buf)
+		return grub_errno;
+	err = tib_pread (img, end - 8 - trailer, buf, trailer);
+	if (err)
+		goto out;
+	err = tib_classic_tlv (buf, trailer, &desc);
+	if (err)
+		goto out;
+	if (!TC_HAS (&desc, TC_MAP) || !TC_HAS (&desc, TC_LENGTH)
+		|| desc.value[TC_MAP] >= end - 8 - trailer - TIB_CLASSIC_HEADER)
+		goto bad;
+	meta_off = desc.value[TC_MAP] + TIB_CLASSIC_HEADER;
+	meta_len = end - 8 - trailer - meta_off;
+	if (meta_len != desc.value[TC_LENGTH] || meta_len > TIB_CLASSIC_META_MAX)
+		goto bad;
+	grub_free (buf);
+	buf = grub_malloc ((grub_size_t) meta_len);
+	if (!buf)
+		return grub_errno;
+	err = tib_pread (img, meta_off, buf, (grub_size_t) meta_len);
+	if (err)
+		goto out;
+	for (pos = 0; pos < meta_len; )
+	{
+		unsigned n;
+		if (meta_len - pos < 2 || ++records > 129)
+			goto bad;
+		n = (unsigned) tib_le (buf + pos, 2);
+		if (n < 2 || n > meta_len - pos)
+			goto bad;
+		err = tib_classic_tlv (buf + pos + 2, n - 2, &desc);
+		if (err)
+			goto out;
+		if (TC_HAS (&desc, TC_START))
+			err = tib_classic_partition (img, &desc, meta_off);
+		else if (TC_HAS (&desc, TC_MAP))
+		{
+			if (++disks > 1 || desc.value[TC_SECTOR] != 512
+				|| !desc.value[TC_SECTORS] || grub_mul (desc.value[TC_SECTORS], 512ULL, &img->size))
+				goto bad;
+			err = tib_classic_track (img, &desc, meta_off);
+		}
+		if (err)
+			goto out;
+		pos += n;
+	}
+	if (disks != 1 || !img->parts)
+		goto bad;
+	for (part = img->parts; part; part = part->next)
+	{
+		if (part->start >= img->size || part->size > img->size - part->start)
+			goto bad;
+	}
+	for (part = img->parts; part; part = part->next)
+	{
+		for (other = part->next; other; other = other->next)
+			if (part->start < other->start + other->size && other->start < part->start + part->size)
+				goto bad;
+	}
+	err = GRUB_ERR_NONE;
+	goto out;
+bad:
+	err = grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad classic tib disk metadata");
+out:
+	grub_free (buf);
+	return err;
 }
 
 static grub_err_t
@@ -612,7 +1027,7 @@ tib_open_image (struct tib_image *img)
 	err = tib_find_chunk_map (img, &map_off, &map_len);
 	if (err)
 		return err;
-	err = tib_decode_chunk_map (img, map_off, map_len);
+	err = tib_decode_chunk_map (img, map_off, map_len, 0);
 	if (err)
 		return err;
 	err = tib_probe_geometry (img);
@@ -625,11 +1040,12 @@ tib_open_image (struct tib_image *img)
 /* ---------------- reads ---------------- */
 
 static grub_err_t
-tib_read (struct tib_image *img, grub_uint64_t off, void *buf, grub_size_t len,
+tib_read_volume (struct tib_image *img, grub_uint64_t off, void *buf, grub_size_t len,
 	  grub_size_t *actually_read)
 {
 	struct tib_block *blk;
-	grub_uint64_t block_size = (grub_uint64_t) img->clusters * TIB_CLUSTER_SIZE;
+	grub_uint64_t block_size = (grub_uint64_t) img->clusters * img->cluster_size;
+	grub_uint64_t index;
 	grub_uint32_t nr, local, in_cluster, at;
 	grub_size_t n;
 	grub_err_t err;
@@ -642,14 +1058,15 @@ tib_read (struct tib_image *img, grub_uint64_t off, void *buf, grub_size_t len,
 	if (len == 0)
 		return GRUB_ERR_NONE;
 
-	nr = (grub_uint32_t) (off / block_size);
-	local = (grub_uint32_t) ((off % block_size) / TIB_CLUSTER_SIZE);
-	in_cluster = (grub_uint32_t) (off % TIB_CLUSTER_SIZE);
-	n = TIB_CLUSTER_SIZE - in_cluster;
+	index = off / block_size;
+	nr = (grub_uint32_t) index;
+	local = (grub_uint32_t) ((off % block_size) / img->cluster_size);
+	in_cluster = (grub_uint32_t) (off % img->cluster_size);
+	n = img->cluster_size - in_cluster;
 	if (n > len)
 		n = len;
 
-	if (img->len[nr] == 0)
+	if (index >= img->blocks || img->len[nr] == 0)
 	{
 		/* Whole block omitted: zero to the end of it in one go.  */
 		n = (grub_size_t) (block_size - (off % block_size));
@@ -676,17 +1093,60 @@ tib_read (struct tib_image *img, grub_uint64_t off, void *buf, grub_size_t len,
 	{
 		if (!(blk->preamble[at >> 3] & (1 << (at & 7))))
 			break;
-		n += TIB_CLUSTER_SIZE;
+		n += img->cluster_size;
 	}
 	if (n > len)
 		n = len;
-	at = tib_popcount (blk->preamble, local) * TIB_CLUSTER_SIZE + in_cluster;
+	at = tib_popcount (blk->preamble, local) * img->cluster_size + in_cluster;
 	if (at >= blk->len)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "bad tib block %u", nr);
 	if (n > blk->len - at)
 		n = blk->len - at;
 	grub_memcpy (buf, blk->data + at, n);
 	*actually_read = n;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+tib_read (struct tib_image *img, grub_uint64_t off, void *buf, grub_size_t len,
+	grub_size_t *actually_read)
+{
+	struct tib_image *part;
+	grub_uint64_t limit;
+	grub_uint32_t i;
+
+	if (!img->parts)
+		return tib_read_volume (img, off, buf, len, actually_read);
+	*actually_read = 0;
+	if (off >= img->size)
+		return grub_error (GRUB_ERR_OUT_OF_RANGE, "read past the end of the tib disk");
+	limit = img->size;
+	for (part = img->parts; part; part = part->next)
+	{
+		if (off >= part->start && off - part->start < part->size)
+			return tib_read_volume (part, off - part->start, buf, len, actually_read);
+		if (part->start > off && part->start < limit)
+			limit = part->start;
+	}
+	for (i = 0; i < img->track_len; i += 516)
+	{
+		grub_uint64_t start = tib_le (img->track + i, 4) * 512;
+		if (off >= start && off - start < 512)
+		{
+			grub_size_t n = 512 - (grub_size_t) (off - start);
+			if (n > len)
+				n = len;
+			grub_memcpy (buf, img->track + i + 4 + (grub_size_t) (off - start), n);
+			*actually_read = n;
+			return GRUB_ERR_NONE;
+		}
+		if (start > off && start < limit)
+			limit = start;
+	}
+	if (len > limit - off)
+		len = (grub_size_t) (limit - off);
+	grub_memset (buf, 0, len);
+	*actually_read = len;
 	return GRUB_ERR_NONE;
 }
 
@@ -730,7 +1190,8 @@ grub_tib_open (grub_file_t io, enum grub_file_type type)
 		return io;
 	if (grub_file_seek (io, 0) == (grub_off_t) -1
 		|| grub_file_read (io, probe, sizeof (probe)) != (grub_ssize_t) sizeof (probe)
-		|| grub_le_to_cpu32 (grub_get_unaligned32 (probe)) != TIB_VOLUME_MAGIC)
+		|| (grub_le_to_cpu32 (grub_get_unaligned32 (probe)) != TIB_VOLUME_MAGIC
+			&& grub_le_to_cpu32 (grub_get_unaligned32 (probe)) != TIB_CLASSIC_MAGIC))
 	{
 		grub_file_seek (io, 0);
 		grub_errno = GRUB_ERR_NONE;
@@ -742,7 +1203,8 @@ grub_tib_open (grub_file_t io, enum grub_file_type type)
 		return 0;
 	image->file = io;
 
-	if (tib_open_image (image) != GRUB_ERR_NONE)
+	if ((grub_le_to_cpu32 (grub_get_unaligned32 (probe)) == TIB_CLASSIC_MAGIC
+		? tib_open_classic (image) : tib_open_image (image)) != GRUB_ERR_NONE)
 	{
 		tib_free_image (image);
 		grub_free (image);

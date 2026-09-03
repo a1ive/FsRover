@@ -1088,7 +1088,7 @@ subchannel data and audio track extraction are all ignored.
 
 > Origin: FsRover
 
-**`.tib`, sector mode — I/O filter `tib`.** A partition image. Layout: a 32-byte
+**`.tib`, sector mode — I/O filter `tib`.** Modern partition images use a 32-byte
 volume header (36 on Mac), a block stream, a post-data region, a metadata blob,
 the trailer, and a volume footer at EOF−48 that mirrors the header byte-reversed.
 A block covers a fixed run of 4 KiB clusters — 128 of them in True Image 2018 and
