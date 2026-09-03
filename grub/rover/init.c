@@ -210,7 +210,7 @@
 	mod (sna)	\
 	mod (cdimage)	\
 	mod (gho)	\
-	mod (ifw)	\
+	mod (tbi)	\
 	mod (ewf)
 
 #define ROVER_MOD_DECLARE(name)	\

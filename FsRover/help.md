@@ -1235,11 +1235,11 @@ Ghost writes several different payload shapes, all of which are recognised:
 Track-zero data saved outside a partition is exposed as `track0.bin` when it is
 present. Password-protected images are not decoded.
 
-#### TeraByte Image for Windows — `ifw`
+#### TeraByte Image — `tbi`
 
 > Origin: FsRover
 
-Image for Windows v3 and v4 `IMG2` `.tbi` full backups are decoded into the
+TeraByte Image v3 and v4 `IMG2` `.tbi` full backups are decoded into the
 sector image they contain. A backup containing one partition is presented as
 that partition. For a backup containing several partitions, FsRover rebuilds a
 GPT from the recorded source LBA ranges and partition GUIDs, so every saved

@@ -17,7 +17,7 @@
  */
 
 /*
- * TeraByte Image for Windows v3/v4 IMG2 container and block format.
+ * TeraByte Image v3/v4 IMG2 container and block format.
  *
  * Only full, unencrypted backups are supported.  A single backed-up partition
  * is exposed as a volume.  Several partitions are placed at their original
@@ -99,7 +99,7 @@
  * A decoded size divisible by 512 is ordinary sector data and advances the
  * current logical position by plain_size bytes.  Otherwise it is a sparse
  * control block.  Its decoded payload is a little-endian u32 command array
- * followed by the rotating-add checksum implemented by ifw_checksum():
+ * followed by the rotating-add checksum implemented by tbi_checksum():
  *
  *   kind  = command >> 28;
  *   count = command & 0x0fffffff;       // number of 512-byte sectors
@@ -152,42 +152,42 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
-#define IFW_MIN_IMAGE_SIZE	4096
-#define IFW_META_RECORDS_MAX	4096
-#define IFW_REC_HEADER		12
-#define IFW_STREAM_HEADER	16
-#define IFW_BLOCK_HEADER_LONG	8
-#define IFW_BLOCK_HEADER_SHORT	4
-#define IFW_BLOCK_MAX		65536
-#define IFW_SECTOR		512
+#define TBI_MIN_IMAGE_SIZE	4096
+#define TBI_META_RECORDS_MAX	4096
+#define TBI_REC_HEADER		12
+#define TBI_STREAM_HEADER	16
+#define TBI_BLOCK_HEADER_LONG	8
+#define TBI_BLOCK_HEADER_SHORT	4
+#define TBI_BLOCK_MAX		65536
+#define TBI_SECTOR		512
 
-#define IFW_PART_PAYLOAD_MIN	0xfc
-#define IFW_PART_FIRST_LBA	0x6c
-#define IFW_PART_LAST_LBA	0x74
-#define IFW_PART_TYPE_GUID	0x7c
-#define IFW_PART_GUID		0x8c
-#define IFW_PART_MBR_TYPE	0xa4
-#define IFW_PART_STREAM_BASE	0xec
-#define IFW_PART_FOOTER_END	0xf4
+#define TBI_PART_PAYLOAD_MIN	0xfc
+#define TBI_PART_FIRST_LBA	0x6c
+#define TBI_PART_LAST_LBA	0x74
+#define TBI_PART_TYPE_GUID	0x7c
+#define TBI_PART_GUID		0x8c
+#define TBI_PART_MBR_TYPE	0xa4
+#define TBI_PART_STREAM_BASE	0xec
+#define TBI_PART_FOOTER_END	0xf4
 
-#define IFW_GPT_ENTRIES		128
-#define IFW_GPT_ENTRY_SIZE	sizeof (struct grub_gpt_partentry)
-#define IFW_GPT_HEADER_SIZE	sizeof (struct grub_gpt_header)
-#define IFW_GPT_SECTORS		(1 + IFW_GPT_ENTRIES * IFW_GPT_ENTRY_SIZE / IFW_SECTOR)
-#define IFW_GPT_FIRST_USABLE	(1 + IFW_GPT_SECTORS)
+#define TBI_GPT_ENTRIES		128
+#define TBI_GPT_ENTRY_SIZE	sizeof (struct grub_gpt_partentry)
+#define TBI_GPT_HEADER_SIZE	sizeof (struct grub_gpt_header)
+#define TBI_GPT_SECTORS		(1 + TBI_GPT_ENTRIES * TBI_GPT_ENTRY_SIZE / TBI_SECTOR)
+#define TBI_GPT_FIRST_USABLE	(1 + TBI_GPT_SECTORS)
 
-#define IFW_EXTENTS_MAX		(64u << 20)
-#define IFW_NO_CACHE		(~(grub_uint64_t) 0)
+#define TBI_EXTENTS_MAX		(64u << 20)
+#define TBI_NO_CACHE		(~(grub_uint64_t) 0)
 
-enum ifw_codec
+enum tbi_codec
 {
-	IFW_CODEC_STANDARD,
-	IFW_CODEC_DEFLATE,
-	IFW_CODEC_TB_FAST,
-	IFW_CODEC_ZSTD
+	TBI_CODEC_STANDARD,
+	TBI_CODEC_DEFLATE,
+	TBI_CODEC_TB_FAST,
+	TBI_CODEC_ZSTD
 };
 
-struct ifw_part
+struct tbi_part
 {
 	grub_uint64_t first_lba;
 	grub_uint64_t last_lba;
@@ -198,39 +198,40 @@ struct ifw_part
 	grub_uint8_t mbr_type;
 };
 
-struct ifw_extent
+struct tbi_extent
 {
 	grub_uint64_t off;
 	grub_uint64_t phys;
 	grub_uint32_t len;
+	grub_uint32_t stored_len;
 };
 
-struct ifw_image
+struct tbi_image
 {
 	grub_file_t file;
 	grub_uint64_t size;
-	enum ifw_codec codec;
+	enum tbi_codec codec;
 	grub_uint32_t block_header;
 
-	struct ifw_part part[IFW_GPT_ENTRIES];
+	struct tbi_part part[TBI_GPT_ENTRIES];
 	grub_uint32_t npart;
 
-	struct ifw_extent *ext;
+	struct tbi_extent *ext;
 	grub_uint32_t next;
 	grub_uint32_t cap;
 	grub_uint32_t cur;
 
 	grub_uint8_t *stored;
 	grub_uint8_t *plain;
+	ZSTD_DCtx *zstd;
 	grub_uint64_t cached_phys;
-	grub_uint32_t cached_len;
 
 	grub_uint8_t *synth;
 	grub_uint32_t synth_len;
 };
 
 static grub_uint16_t
-ifw_get16 (const grub_uint8_t *p)
+tbi_get16 (const grub_uint8_t *p)
 {
 	grub_uint16_t v;
 
@@ -239,7 +240,7 @@ ifw_get16 (const grub_uint8_t *p)
 }
 
 static grub_uint32_t
-ifw_get32 (const grub_uint8_t *p)
+tbi_get32 (const grub_uint8_t *p)
 {
 	grub_uint32_t v;
 
@@ -248,7 +249,7 @@ ifw_get32 (const grub_uint8_t *p)
 }
 
 static grub_uint64_t
-ifw_get64 (const grub_uint8_t *p)
+tbi_get64 (const grub_uint8_t *p)
 {
 	grub_uint64_t v;
 
@@ -257,31 +258,31 @@ ifw_get64 (const grub_uint8_t *p)
 }
 
 static grub_err_t
-ifw_pread (struct ifw_image *img, grub_uint64_t off, void *buf, grub_size_t len)
+tbi_pread (struct tbi_image *img, grub_uint64_t off, void *buf, grub_size_t len)
 {
 	grub_ssize_t n;
 
 	if (off > grub_file_size (img->file) || len > grub_file_size (img->file) - off)
-		return grub_error (GRUB_ERR_BAD_DEVICE, "IFW image truncated");
+		return grub_error (GRUB_ERR_BAD_DEVICE, "TBI image truncated");
 	if (grub_file_seek (img->file, off) == (grub_off_t) -1)
 		return grub_errno;
 	n = grub_file_read (img->file, buf, len);
 	if (n < 0)
 		return grub_errno;
 	if ((grub_size_t) n != len)
-		return grub_error (GRUB_ERR_BAD_DEVICE, "IFW image truncated");
+		return grub_error (GRUB_ERR_BAD_DEVICE, "TBI image truncated");
 	return GRUB_ERR_NONE;
 }
 
 /* The checksum used inside sparse-control blocks.  */
 static grub_uint32_t
-ifw_checksum (const grub_uint8_t *p, grub_uint32_t len)
+tbi_checksum (const grub_uint8_t *p, grub_uint32_t len)
 {
 	grub_uint32_t sum = 0;
 
 	while (len >= 4)
 	{
-		grub_uint32_t word = ifw_get32 (p);
+		grub_uint32_t word = tbi_get32 (p);
 
 		sum += word;
 		sum = (sum << 1) | (sum >> 31);
@@ -303,7 +304,7 @@ ifw_checksum (const grub_uint8_t *p, grub_uint32_t len)
 	return sum;
 }
 
-struct ifw_std_bits
+struct tbi_std_bits
 {
 	const grub_uint8_t *in;
 	grub_uint32_t in_len;
@@ -311,7 +312,7 @@ struct ifw_std_bits
 };
 
 static int
-ifw_std_get_bits (struct ifw_std_bits *bits, unsigned count,
+tbi_std_get_bits (struct tbi_std_bits *bits, unsigned count,
 	grub_uint32_t *value)
 {
 	grub_uint32_t byte, word = 0;
@@ -330,21 +331,21 @@ ifw_std_get_bits (struct ifw_std_bits *bits, unsigned count,
 }
 
 static int
-ifw_std_gamma (struct ifw_std_bits *bits, grub_uint32_t *value)
+tbi_std_gamma (struct tbi_std_bits *bits, grub_uint32_t *value)
 {
 	grub_uint32_t bit, suffix;
 	unsigned zeros = 0;
 
 	do
 	{
-		if (!ifw_std_get_bits (bits, 1, &bit))
+		if (!tbi_std_get_bits (bits, 1, &bit))
 			return 0;
 		if (bit)
 			break;
 		if (++zeros > 15)
 			return 0;
 	} while (1);
-	if (!ifw_std_get_bits (bits, zeros, &suffix))
+	if (!tbi_std_get_bits (bits, zeros, &suffix))
 		return 0;
 	*value = (1u << zeros) | suffix;
 	return 1;
@@ -353,38 +354,38 @@ ifw_std_gamma (struct ifw_std_bits *bits, grub_uint32_t *value)
 /* TB Standard.  Tokens are read LSB first from bit offset three and the
    expected output length terminates the stream.  */
 static grub_err_t
-ifw_tb_standard (const grub_uint8_t *in, grub_uint32_t in_len,
+tbi_tb_standard (const grub_uint8_t *in, grub_uint32_t in_len,
 	grub_uint8_t *out, grub_uint32_t out_len)
 {
-	struct ifw_std_bits bits = { in, in_len, 3 };
+	struct tbi_std_bits bits = { in, in_len, 3 };
 	grub_uint32_t op = 0;
 
 	while (op < out_len)
 	{
 		grub_uint32_t token, code, len, dist, low, i;
 
-		if (!ifw_std_get_bits (&bits, 1, &token))
+		if (!tbi_std_get_bits (&bits, 1, &token))
 			goto bad;
 		if (!token)
 		{
-			if (!ifw_std_get_bits (&bits, 8, &code))
+			if (!tbi_std_get_bits (&bits, 8, &code))
 				goto bad;
 			out[op++] = (grub_uint8_t) code;
 			continue;
 		}
 
-		if (!ifw_std_gamma (&bits, &code))
+		if (!tbi_std_gamma (&bits, &code))
 			goto bad;
 		len = code + 1;
 		if (len == 2)
 		{
-			if (!ifw_std_get_bits (&bits, 8, &dist))
+			if (!tbi_std_get_bits (&bits, 8, &dist))
 				goto bad;
 		}
 		else
 		{
-			if (!ifw_std_gamma (&bits, &code) || code > 0x100
-				|| !ifw_std_get_bits (&bits, 8, &low))
+			if (!tbi_std_gamma (&bits, &code) || code > 0x100
+				|| !tbi_std_get_bits (&bits, 8, &low))
 				goto bad;
 			dist = ((code - 1) << 8) | low;
 		}
@@ -398,14 +399,14 @@ ifw_tb_standard (const grub_uint8_t *in, grub_uint32_t in_len,
 
 bad:
 	return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
-		"bad IFW TB Standard block");
+		"bad TBI TB Standard block");
 }
 
 /* TB Fast (compression values 14 and 15).  A token is either a literal
    run or an LZ match; the token bits select one- or two-byte lengths and
    distances.  */
 static grub_err_t
-ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
+tbi_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 	grub_uint8_t *out, grub_uint32_t out_len)
 {
 	grub_uint32_t ip = 0, op = 0;
@@ -416,7 +417,7 @@ ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 		grub_uint8_t token;
 
 		if (ip >= in_len)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated IFW TB Fast block");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated TBI TB Fast block");
 		token = in[ip++];
 		if (!(token & 0x80))
 		{
@@ -426,7 +427,7 @@ ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 				{
 					if (in_len - ip < 2)
 						goto bad;
-					len = ifw_get16 (in + ip);
+					len = tbi_get16 (in + ip);
 					ip += 2;
 				}
 				else
@@ -451,7 +452,7 @@ ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 		{
 			if (in_len - ip < 2)
 				goto bad;
-			len = ifw_get16 (in + ip);
+			len = tbi_get16 (in + ip);
 			ip += 2;
 		}
 		else
@@ -461,7 +462,7 @@ ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 		{
 			if (in_len - ip < 2)
 				goto bad;
-			dist = ifw_get16 (in + ip);
+			dist = tbi_get16 (in + ip);
 			ip += 2;
 		}
 		else
@@ -480,11 +481,11 @@ ifw_tb_fast (const grub_uint8_t *in, grub_uint32_t in_len,
 	return GRUB_ERR_NONE;
 
 bad:
-	return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW TB Fast block");
+	return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI TB Fast block");
 }
 
 static grub_err_t
-ifw_decode (struct ifw_image *img, grub_uint32_t stored_len,
+tbi_decode (struct tbi_image *img, grub_uint32_t stored_len,
 	grub_uint32_t plain_len)
 {
 	size_t n;
@@ -496,75 +497,82 @@ ifw_decode (struct ifw_image *img, grub_uint32_t stored_len,
 	}
 	switch (img->codec)
 	{
-	case IFW_CODEC_DEFLATE:
+	case TBI_CODEC_DEFLATE:
 		n = tinfl_decompress_mem_to_mem (img->plain, plain_len,
 			img->stored, stored_len, 0);
 		if (n != plain_len)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW Deflate block");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI Deflate block");
 		return GRUB_ERR_NONE;
-	case IFW_CODEC_TB_FAST:
-		return ifw_tb_fast (img->stored, stored_len, img->plain, plain_len);
-	case IFW_CODEC_ZSTD:
-		n = ZSTD_decompress (img->plain, plain_len, img->stored, stored_len);
+	case TBI_CODEC_TB_FAST:
+		return tbi_tb_fast (img->stored, stored_len, img->plain, plain_len);
+	case TBI_CODEC_ZSTD:
+		if (!img->zstd)
+		{
+			img->zstd = ZSTD_createDCtx ();
+			if (!img->zstd)
+				return grub_error (GRUB_ERR_OUT_OF_MEMORY, "cannot allocate TBI ZSTD context");
+		}
+		n = ZSTD_decompressDCtx (img->zstd, img->plain, plain_len,
+			img->stored, stored_len);
 		if (n != plain_len)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW ZSTD block");
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI ZSTD block");
 		return GRUB_ERR_NONE;
-	case IFW_CODEC_STANDARD:
-		return ifw_tb_standard (img->stored, stored_len, img->plain, plain_len);
+	case TBI_CODEC_STANDARD:
+		return tbi_tb_standard (img->stored, stored_len, img->plain, plain_len);
 	default:
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW compression type");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI compression type");
 	}
 }
 
 static grub_err_t
-ifw_read_block_header (struct ifw_image *img, grub_uint64_t phys,
+tbi_read_block_header (struct tbi_image *img, grub_uint64_t phys,
 	grub_uint32_t *plain_len, grub_uint32_t *stored_len)
 {
-	grub_uint8_t hdr[IFW_BLOCK_HEADER_LONG];
+	grub_uint8_t hdr[TBI_BLOCK_HEADER_LONG];
 	grub_uint32_t raw;
 	grub_err_t err;
 
-	err = ifw_pread (img, phys, hdr, img->block_header);
+	err = tbi_pread (img, phys, hdr, img->block_header);
 	if (err)
 		return err;
-	raw = ifw_get16 (hdr);
-	*plain_len = (raw ? raw : IFW_BLOCK_MAX) & ~1u;
-	raw = ifw_get16 (hdr + 2);
-	*stored_len = raw ? raw : IFW_BLOCK_MAX;
-	if (*plain_len == 0 || *plain_len > IFW_BLOCK_MAX || *stored_len > IFW_BLOCK_MAX)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW block size");
+	raw = tbi_get16 (hdr);
+	*plain_len = (raw ? raw : TBI_BLOCK_MAX) & ~1u;
+	raw = tbi_get16 (hdr + 2);
+	*stored_len = raw ? raw : TBI_BLOCK_MAX;
+	if (*plain_len == 0 || *plain_len > TBI_BLOCK_MAX || *stored_len > TBI_BLOCK_MAX)
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI block size");
 	return GRUB_ERR_NONE;
 }
 
 static grub_err_t
-ifw_read_block (struct ifw_image *img, grub_uint64_t phys,
-	grub_uint32_t *plain_len, grub_uint32_t *stored_len)
+tbi_read_block (struct tbi_image *img, grub_uint64_t phys,
+	grub_uint32_t plain_len, grub_uint32_t stored_len)
 {
 	grub_err_t err;
 
-	err = ifw_read_block_header (img, phys, plain_len, stored_len);
+	/* Lengths were validated while scanning.  A failed decode may overwrite
+	   plain, so retire its old cache key before attempting another block.  */
+	img->cached_phys = TBI_NO_CACHE;
+	err = tbi_pread (img, phys + img->block_header, img->stored, stored_len);
 	if (err)
 		return err;
-	err = ifw_pread (img, phys + img->block_header, img->stored, *stored_len);
-	if (err)
-		return err;
-	return ifw_decode (img, *stored_len, *plain_len);
+	return tbi_decode (img, stored_len, plain_len);
 }
 
 static grub_err_t
-ifw_add_extent (struct ifw_image *img, grub_uint64_t off,
-	grub_uint64_t phys, grub_uint32_t len)
+tbi_add_extent (struct tbi_image *img, grub_uint64_t off,
+	grub_uint64_t phys, grub_uint32_t len, grub_uint32_t stored_len)
 {
-	struct ifw_extent *larger;
+	struct tbi_extent *larger;
 	grub_uint32_t cap;
 
 	if (img->next == img->cap)
 	{
-		if (img->cap >= IFW_EXTENTS_MAX)
-			return grub_error (GRUB_ERR_OUT_OF_MEMORY, "too many IFW blocks");
+		if (img->cap >= TBI_EXTENTS_MAX)
+			return grub_error (GRUB_ERR_OUT_OF_MEMORY, "too many TBI blocks");
 		cap = img->cap ? img->cap * 2 : 4096;
-		if (cap > IFW_EXTENTS_MAX)
-			cap = IFW_EXTENTS_MAX;
+		if (cap > TBI_EXTENTS_MAX)
+			cap = TBI_EXTENTS_MAX;
 		larger = grub_realloc (img->ext, (grub_size_t) cap * sizeof (*larger));
 		if (!larger)
 			return grub_errno;
@@ -574,35 +582,36 @@ ifw_add_extent (struct ifw_image *img, grub_uint64_t off,
 	img->ext[img->next].off = off;
 	img->ext[img->next].phys = phys;
 	img->ext[img->next].len = len;
+	img->ext[img->next].stored_len = stored_len;
 	img->next++;
 	return GRUB_ERR_NONE;
 }
 
 static grub_err_t
-ifw_scan_stream (struct ifw_image *img, const struct ifw_part *part,
+tbi_scan_stream (struct tbi_image *img, const struct tbi_part *part,
 	grub_uint64_t target_base)
 {
-	grub_uint64_t phys = part->stream_base + IFW_STREAM_HEADER;
+	grub_uint64_t phys = part->stream_base + TBI_STREAM_HEADER;
 	grub_uint64_t logical = 0;
 	grub_uint64_t sectors = part->last_lba - part->first_lba + 1;
-	grub_uint64_t limit = sectors * IFW_SECTOR;
+	grub_uint64_t limit = sectors * TBI_SECTOR;
 
 	while (phys < part->footer)
 	{
 		grub_uint32_t plain_len, stored_len;
 		grub_err_t err;
 
-		err = ifw_read_block_header (img, phys, &plain_len, &stored_len);
+		err = tbi_read_block_header (img, phys, &plain_len, &stored_len);
 		if (err)
 			return err;
 		if (part->footer - phys < img->block_header
 			|| stored_len > part->footer - phys - img->block_header)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "IFW block runs past its stream");
-		if (plain_len % IFW_SECTOR == 0)
+			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "TBI block runs past its stream");
+		if (plain_len % TBI_SECTOR == 0)
 		{
 			if (plain_len > limit - logical)
-				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "IFW data exceeds its partition");
-			err = ifw_add_extent (img, target_base + logical, phys, plain_len);
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "TBI data exceeds its partition");
+			err = tbi_add_extent (img, target_base + logical, phys, plain_len, stored_len);
 			if (err)
 				return err;
 			logical += plain_len;
@@ -611,16 +620,16 @@ ifw_scan_stream (struct ifw_image *img, const struct ifw_part *part,
 		{
 			grub_uint32_t at;
 
-			err = ifw_read_block (img, phys, &plain_len, &stored_len);
+			err = tbi_read_block (img, phys, plain_len, stored_len);
 			if (err)
 				return err;
 			if (plain_len < 8 || (plain_len & 3)
-				|| ifw_get32 (img->plain + plain_len - 4)
-				   != ifw_checksum (img->plain, plain_len - 4))
-				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad IFW sparse-control block");
+				|| tbi_get32 (img->plain + plain_len - 4)
+				   != tbi_checksum (img->plain, plain_len - 4))
+				return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad TBI sparse-control block");
 			for (at = 0; at < plain_len - 4; at += 4)
 			{
-				grub_uint32_t word = ifw_get32 (img->plain + at);
+				grub_uint32_t word = tbi_get32 (img->plain + at);
 				grub_uint32_t kind = word >> 28;
 				grub_uint32_t count = word & 0x0fffffffU;
 				grub_uint64_t bytes;
@@ -629,22 +638,22 @@ ifw_scan_stream (struct ifw_image *img, const struct ifw_part *part,
 					break;
 				if (kind == 8)
 					return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
-						"differential IFW backups are not supported");
-				bytes = (grub_uint64_t) count * IFW_SECTOR;
+						"differential TBI backups are not supported");
+				bytes = (grub_uint64_t) count * TBI_SECTOR;
 				if (bytes > limit - logical)
-					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "IFW sparse run exceeds its partition");
+					return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "TBI sparse run exceeds its partition");
 				logical += bytes;
 			}
 		}
 		phys += img->block_header + stored_len;
 	}
 	if (phys != part->footer)
-		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "IFW stream does not end at its footer");
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "TBI stream does not end at its footer");
 	return GRUB_ERR_NONE;
 }
 
 static grub_uint32_t
-ifw_crc32 (const void *buf, grub_size_t len)
+tbi_crc32 (const void *buf, grub_size_t len)
 {
 	const grub_uint8_t *p = buf;
 	grub_uint32_t crc = 0xffffffffU;
@@ -660,29 +669,29 @@ ifw_crc32 (const void *buf, grub_size_t len)
 	return ~crc;
 }
 
-static const grub_uint8_t ifw_type_data[16] =
+static const grub_uint8_t tbi_type_data[16] =
 {
 	0xa2, 0xa0, 0xd0, 0xeb, 0xe5, 0xb9, 0x33, 0x44,
 	0x87, 0xc0, 0x68, 0xb6, 0xb7, 0x26, 0x99, 0xc7
 };
 
 /* MBR Linux types have no source GPT GUID in their descriptors.  */
-static const grub_uint8_t ifw_type_linux[16] =
+static const grub_uint8_t tbi_type_linux[16] =
 {
 	0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84, 0x72, 0x47,
 	0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4
 };
 
-static const grub_uint8_t ifw_type_swap[16] =
+static const grub_uint8_t tbi_type_swap[16] =
 {
 	0x6d, 0xfd, 0x57, 0x06, 0xab, 0xa4, 0xc4, 0x43,
 	0x84, 0xe5, 0x09, 0x33, 0xc8, 0x4b, 0x4f, 0x4f
 };
 
 static grub_err_t
-ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
+tbi_build_gpt (struct tbi_image *img, grub_uint64_t disk_sectors)
 {
-	grub_uint32_t bytes = (1 + IFW_GPT_SECTORS) * IFW_SECTOR;
+	grub_uint32_t bytes = (1 + TBI_GPT_SECTORS) * TBI_SECTOR;
 	struct grub_msdos_partition_mbr *mbr;
 	struct grub_gpt_partentry *ent;
 	struct grub_gpt_header *hdr;
@@ -699,8 +708,8 @@ ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
 		? 0xffffffffU : (grub_uint32_t) (disk_sectors - 1));
 	mbr->signature = grub_cpu_to_le16_compile_time (GRUB_PC_PARTITION_SIGNATURE);
 
-	hdr = (struct grub_gpt_header *) (img->synth + IFW_SECTOR);
-	ent = (struct grub_gpt_partentry *) (img->synth + 2 * IFW_SECTOR);
+	hdr = (struct grub_gpt_header *) (img->synth + TBI_SECTOR);
+	ent = (struct grub_gpt_partentry *) (img->synth + 2 * TBI_SECTOR);
 	for (i = 0; i < img->npart; i++)
 	{
 		const grub_uint8_t *type = img->part[i].type;
@@ -713,11 +722,11 @@ ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
 		if (empty)
 		{
 			if (img->part[i].mbr_type == GRUB_PC_PARTITION_TYPE_LINUX_SWAP)
-				type = ifw_type_swap;
+				type = tbi_type_swap;
 			else if (img->part[i].mbr_type == GRUB_PC_PARTITION_TYPE_EXT2FS)
-				type = ifw_type_linux;
+				type = tbi_type_linux;
 			else
-				type = ifw_type_data;
+				type = tbi_type_data;
 		}
 		grub_memcpy (&ent[i].type, type, sizeof (ent[i].type));
 		grub_memcpy (&ent[i].guid, img->part[i].guid, sizeof (ent[i].guid));
@@ -727,28 +736,28 @@ ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
 
 	grub_memcpy (hdr->magic, "EFI PART", sizeof (hdr->magic));
 	hdr->version = grub_cpu_to_le32_compile_time (0x00010000);
-	hdr->headersize = grub_cpu_to_le32_compile_time (IFW_GPT_HEADER_SIZE);
+	hdr->headersize = grub_cpu_to_le32_compile_time (TBI_GPT_HEADER_SIZE);
 	hdr->primary = grub_cpu_to_le64_compile_time (1);
 	hdr->backup = grub_cpu_to_le64 (disk_sectors - 1);
-	hdr->start = grub_cpu_to_le64_compile_time (IFW_GPT_FIRST_USABLE);
-	hdr->end = grub_cpu_to_le64 (disk_sectors - IFW_GPT_FIRST_USABLE);
+	hdr->start = grub_cpu_to_le64_compile_time (TBI_GPT_FIRST_USABLE);
+	hdr->end = grub_cpu_to_le64 (disk_sectors - TBI_GPT_FIRST_USABLE);
 	hdr->partitions = grub_cpu_to_le64_compile_time (2);
-	hdr->maxpart = grub_cpu_to_le32_compile_time (IFW_GPT_ENTRIES);
-	hdr->partentry_size = grub_cpu_to_le32_compile_time (IFW_GPT_ENTRY_SIZE);
-	hdr->partentry_crc32 = grub_cpu_to_le32 (ifw_crc32 (ent,
-		(grub_size_t) IFW_GPT_ENTRIES * IFW_GPT_ENTRY_SIZE));
-	hdr->crc32 = grub_cpu_to_le32 (ifw_crc32 (hdr, IFW_GPT_HEADER_SIZE));
+	hdr->maxpart = grub_cpu_to_le32_compile_time (TBI_GPT_ENTRIES);
+	hdr->partentry_size = grub_cpu_to_le32_compile_time (TBI_GPT_ENTRY_SIZE);
+	hdr->partentry_crc32 = grub_cpu_to_le32 (tbi_crc32 (ent,
+		(grub_size_t) TBI_GPT_ENTRIES * TBI_GPT_ENTRY_SIZE));
+	hdr->crc32 = grub_cpu_to_le32 (tbi_crc32 (hdr, TBI_GPT_HEADER_SIZE));
 	return GRUB_ERR_NONE;
 }
 
 static void
-ifw_sort_parts (struct ifw_image *img)
+tbi_sort_parts (struct tbi_image *img)
 {
 	grub_uint32_t i;
 
 	for (i = 1; i < img->npart; i++)
 	{
-		struct ifw_part part = img->part[i];
+		struct tbi_part part = img->part[i];
 		grub_uint32_t j = i;
 
 		while (j && img->part[j - 1].first_lba > part.first_lba)
@@ -761,9 +770,9 @@ ifw_sort_parts (struct ifw_image *img)
 }
 
 static grub_err_t
-ifw_open_image (struct ifw_image *img)
+tbi_open_image (struct tbi_image *img)
 {
-	grub_uint8_t meta[IFW_PART_PAYLOAD_MIN];
+	grub_uint8_t meta[TBI_PART_PAYLOAD_MIN];
 	grub_uint64_t at = 0;
 	grub_uint64_t meta_limit = grub_file_size (img->file);
 	grub_uint32_t records = 0;
@@ -775,31 +784,31 @@ ifw_open_image (struct ifw_image *img)
 	/* Saved track-zero data can push the descriptors past the first
 	   4 KiB.  Read record headers and only the payload prefixes we use,
 	   bounding the chain by the earliest partition stream once known.  */
-	while (at <= meta_limit && meta_limit - at >= IFW_REC_HEADER
-		&& records++ < IFW_META_RECORDS_MAX)
+	while (at <= meta_limit && meta_limit - at >= TBI_REC_HEADER
+		&& records++ < TBI_META_RECORDS_MAX)
 	{
-		grub_uint8_t header[IFW_REC_HEADER];
+		grub_uint8_t header[TBI_REC_HEADER];
 		grub_uint32_t type, len;
 		const grub_uint8_t *p = meta;
 
-		err = ifw_pread (img, at, header, sizeof (header));
+		err = tbi_pread (img, at, header, sizeof (header));
 		if (err)
 			return err;
-		type = ifw_get32 (header);
-		len = ifw_get32 (header + 4);
-		at += IFW_REC_HEADER;
+		type = tbi_get32 (header);
+		len = tbi_get32 (header + 4);
+		at += TBI_REC_HEADER;
 		if (type == 0xffffffffU)
 		{
 			have_end = 1;
 			break;
 		}
 		if (len > meta_limit - at)
-			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW metadata record");
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad TBI metadata record");
 		if (type == 0 || type == 1 || type == 6)
 		{
 			grub_size_t take = len < sizeof (meta) ? len : sizeof (meta);
 
-			err = ifw_pread (img, at, meta, take);
+			err = tbi_pread (img, at, meta, take);
 			if (err)
 				return err;
 		}
@@ -807,38 +816,38 @@ ifw_open_image (struct ifw_image *img)
 		{
 		case 0:
 			if (have_head || len < 0x1c || grub_memcmp (p, "IMG2", 4) != 0)
-				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not an IFW IMG2 image");
-			features = ifw_get16 (p + 0x10);
+				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a TBI IMG2 image");
+			features = tbi_get16 (p + 0x10);
 			have_head = 1;
 			break;
 
 		case 1:
 		{
-			struct ifw_part *part;
+			struct tbi_part *part;
 
-			if (len < IFW_PART_PAYLOAD_MIN || img->npart == IFW_GPT_ENTRIES)
-				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW partition descriptor");
+			if (len < TBI_PART_PAYLOAD_MIN || img->npart == TBI_GPT_ENTRIES)
+				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad TBI partition descriptor");
 			part = &img->part[img->npart++];
-			part->first_lba = ifw_get64 (p + IFW_PART_FIRST_LBA);
-			part->last_lba = ifw_get64 (p + IFW_PART_LAST_LBA);
-			part->stream_base = ifw_get64 (p + IFW_PART_STREAM_BASE);
+			part->first_lba = tbi_get64 (p + TBI_PART_FIRST_LBA);
+			part->last_lba = tbi_get64 (p + TBI_PART_LAST_LBA);
+			part->stream_base = tbi_get64 (p + TBI_PART_STREAM_BASE);
 			if (part->stream_base < at + len)
-				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "IFW stream overlaps metadata");
+				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "TBI stream overlaps metadata");
 			if (part->stream_base < meta_limit)
 				meta_limit = part->stream_base;
-			part->footer = ifw_get64 (p + IFW_PART_FOOTER_END);
+			part->footer = tbi_get64 (p + TBI_PART_FOOTER_END);
 			if (part->footer < 0x18)
-				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW stream footer");
+				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad TBI stream footer");
 			part->footer -= 0x18;
-			grub_memcpy (part->type, p + IFW_PART_TYPE_GUID, sizeof (part->type));
-			grub_memcpy (part->guid, p + IFW_PART_GUID, sizeof (part->guid));
-			part->mbr_type = p[IFW_PART_MBR_TYPE];
+			grub_memcpy (part->type, p + TBI_PART_TYPE_GUID, sizeof (part->type));
+			grub_memcpy (part->guid, p + TBI_PART_GUID, sizeof (part->guid));
+			part->mbr_type = p[TBI_PART_MBR_TYPE];
 			break;
 		}
 
 		case 6:
 			if (len >= 4)
-				have_crypt |= ifw_get32 (p) != 0;
+				have_crypt |= tbi_get32 (p) != 0;
 			break;
 
 		default:
@@ -847,52 +856,52 @@ ifw_open_image (struct ifw_image *img)
 		at += len;
 	}
 	if (!have_end)
-		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "unterminated IFW metadata");
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "unterminated TBI metadata");
 	if (!have_head || !img->npart)
-		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "IFW image has no partition stream");
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "TBI image has no partition stream");
 	if (have_crypt)
-		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted IFW backups are not supported");
+		return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "encrypted TBI backups are not supported");
 
-	img->block_header = features & 0x80 ? IFW_BLOCK_HEADER_LONG : IFW_BLOCK_HEADER_SHORT;
+	img->block_header = features & 0x80 ? TBI_BLOCK_HEADER_LONG : TBI_BLOCK_HEADER_SHORT;
 	if (features & 1)
-		img->codec = IFW_CODEC_DEFLATE;
+		img->codec = TBI_CODEC_DEFLATE;
 	else if (features & 0x40)
-		img->codec = IFW_CODEC_DEFLATE;
+		img->codec = TBI_CODEC_DEFLATE;
 	else if (features & 0x20)
-		img->codec = IFW_CODEC_TB_FAST;
+		img->codec = TBI_CODEC_TB_FAST;
 	else if (features & 0x100)
-		img->codec = IFW_CODEC_ZSTD;
+		img->codec = TBI_CODEC_ZSTD;
 	else
-		img->codec = IFW_CODEC_STANDARD;
+		img->codec = TBI_CODEC_STANDARD;
 
-	ifw_sort_parts (img);
+	tbi_sort_parts (img);
 	for (i = 0; i < img->npart; i++)
 	{
-		struct ifw_part *part = &img->part[i];
+		struct tbi_part *part = &img->part[i];
 
 		if (part->first_lba > part->last_lba
-			|| part->stream_base > grub_file_size (img->file) - IFW_STREAM_HEADER
-			|| part->footer < part->stream_base + IFW_STREAM_HEADER
+			|| part->stream_base > grub_file_size (img->file) - TBI_STREAM_HEADER
+			|| part->footer < part->stream_base + TBI_STREAM_HEADER
 			|| part->footer > grub_file_size (img->file))
-			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW partition stream");
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad TBI partition stream");
 		if (i && part->first_lba <= img->part[i - 1].last_lba)
-			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "overlapping IFW partitions");
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "overlapping TBI partitions");
 	}
 
-	img->stored = grub_malloc (IFW_BLOCK_MAX);
-	img->plain = grub_malloc (IFW_BLOCK_MAX);
+	img->stored = grub_malloc (TBI_BLOCK_MAX);
+	img->plain = grub_malloc (TBI_BLOCK_MAX);
 	if (!img->stored || !img->plain)
 		return grub_errno;
-	img->cached_phys = IFW_NO_CACHE;
+	img->cached_phys = TBI_NO_CACHE;
 
 	if (img->npart == 1)
 	{
 		grub_uint64_t sectors = img->part[0].last_lba - img->part[0].first_lba + 1;
 
-		if (sectors > (~(grub_uint64_t) 0) / IFW_SECTOR)
-			return grub_error (GRUB_ERR_OUT_OF_RANGE, "IFW partition is too large");
-		img->size = sectors * IFW_SECTOR;
-		err = ifw_scan_stream (img, &img->part[0], 0);
+		if (sectors > (~(grub_uint64_t) 0) / TBI_SECTOR)
+			return grub_error (GRUB_ERR_OUT_OF_RANGE, "TBI partition is too large");
+		img->size = sectors * TBI_SECTOR;
+		err = tbi_scan_stream (img, &img->part[0], 0);
 		if (err)
 			return err;
 	}
@@ -900,18 +909,18 @@ ifw_open_image (struct ifw_image *img)
 	{
 		grub_uint64_t disk_sectors;
 
-		if (img->part[img->npart - 1].last_lba > (~(grub_uint64_t) 0) - IFW_GPT_FIRST_USABLE)
-			return grub_error (GRUB_ERR_OUT_OF_RANGE, "IFW source disk is too large");
-		disk_sectors = img->part[img->npart - 1].last_lba + IFW_GPT_FIRST_USABLE;
-		if (disk_sectors > (~(grub_uint64_t) 0) / IFW_SECTOR)
-			return grub_error (GRUB_ERR_OUT_OF_RANGE, "IFW source disk is too large");
-		img->size = disk_sectors * IFW_SECTOR;
-		err = ifw_build_gpt (img, disk_sectors);
+		if (img->part[img->npart - 1].last_lba > (~(grub_uint64_t) 0) - TBI_GPT_FIRST_USABLE)
+			return grub_error (GRUB_ERR_OUT_OF_RANGE, "TBI source disk is too large");
+		disk_sectors = img->part[img->npart - 1].last_lba + TBI_GPT_FIRST_USABLE;
+		if (disk_sectors > (~(grub_uint64_t) 0) / TBI_SECTOR)
+			return grub_error (GRUB_ERR_OUT_OF_RANGE, "TBI source disk is too large");
+		img->size = disk_sectors * TBI_SECTOR;
+		err = tbi_build_gpt (img, disk_sectors);
 		if (err)
 			return err;
 		for (i = 0; i < img->npart; i++)
 		{
-			err = ifw_scan_stream (img, &img->part[i], img->part[i].first_lba * IFW_SECTOR);
+			err = tbi_scan_stream (img, &img->part[i], img->part[i].first_lba * TBI_SECTOR);
 			if (err)
 				return err;
 		}
@@ -920,52 +929,61 @@ ifw_open_image (struct ifw_image *img)
 }
 
 static void
-ifw_free_image (struct ifw_image *img)
+tbi_free_image (struct tbi_image *img)
 {
 	grub_free (img->ext);
 	grub_free (img->stored);
 	grub_free (img->plain);
 	grub_free (img->synth);
+	ZSTD_freeDCtx (img->zstd);
 	img->ext = NULL;
 	img->stored = NULL;
 	img->plain = NULL;
 	img->synth = NULL;
+	img->zstd = NULL;
 }
 
+/* Return the containing extent, or the next extent after a hole.
+   img->next denotes the trailing hole (including an entirely sparse image).  */
 static grub_uint32_t
-ifw_find_extent (struct ifw_image *img, grub_uint64_t off)
+tbi_find_extent (struct tbi_image *img, grub_uint64_t off)
 {
 	grub_uint32_t lo = 0, hi = img->next;
 
-	if (img->cur < img->next && img->ext[img->cur].off <= off
-		&& off < img->ext[img->cur].off + img->ext[img->cur].len)
-		return img->cur;
+	if (img->cur < img->next && img->ext[img->cur].off <= off)
+	{
+		grub_uint32_t nr = img->cur;
+
+		if (off < img->ext[nr].off + img->ext[nr].len)
+			return nr;
+		nr++;
+		if (nr == img->next || off < img->ext[nr].off + img->ext[nr].len)
+			return nr;
+	}
 	while (lo < hi)
 	{
 		grub_uint32_t mid = lo + (hi - lo) / 2;
 
-		if (img->ext[mid].off <= off)
+		if (img->ext[mid].off + img->ext[mid].len <= off)
 			lo = mid + 1;
 		else
 			hi = mid;
 	}
-	if (lo && off < img->ext[lo - 1].off + img->ext[lo - 1].len)
-		return lo - 1;
-	return img->next;
+	return lo;
 }
 
 static grub_err_t
-ifw_read (struct ifw_image *img, grub_uint64_t off, void *buf,
+tbi_read (struct tbi_image *img, grub_uint64_t off, void *buf,
 	grub_size_t len, grub_size_t *actually_read)
 {
-	struct ifw_extent *ext;
+	struct tbi_extent *ext;
 	grub_uint32_t nr;
 	grub_size_t n;
 	grub_err_t err;
 
 	*actually_read = 0;
 	if (off >= img->size)
-		return grub_error (GRUB_ERR_OUT_OF_RANGE, "read past the end of the IFW image");
+		return grub_error (GRUB_ERR_OUT_OF_RANGE, "read past the end of the TBI image");
 	if (len > img->size - off)
 		len = (grub_size_t) (img->size - off);
 	if (!len)
@@ -981,23 +999,13 @@ ifw_read (struct ifw_image *img, grub_uint64_t off, void *buf,
 		return GRUB_ERR_NONE;
 	}
 
-	nr = ifw_find_extent (img, off);
-	if (nr == img->next)
+	nr = tbi_find_extent (img, off);
+	if (nr == img->next || off < img->ext[nr].off)
 	{
-		grub_uint32_t lo = 0, hi = img->next;
 		grub_uint64_t end = img->size;
 
-		while (lo < hi)
-		{
-			grub_uint32_t mid = lo + (hi - lo) / 2;
-
-			if (img->ext[mid].off <= off)
-				lo = mid + 1;
-			else
-				hi = mid;
-		}
-		if (lo < img->next)
-			end = img->ext[lo].off;
+		if (nr < img->next)
+			end = img->ext[nr].off;
 		n = len;
 		if (n > end - off)
 			n = (grub_size_t) (end - off);
@@ -1010,13 +1018,9 @@ ifw_read (struct ifw_image *img, grub_uint64_t off, void *buf,
 	ext = &img->ext[nr];
 	if (img->cached_phys != ext->phys)
 	{
-		grub_uint32_t stored_len;
-
-		err = ifw_read_block (img, ext->phys, &img->cached_len, &stored_len);
+		err = tbi_read_block (img, ext->phys, ext->len, ext->stored_len);
 		if (err)
 			return err;
-		if (img->cached_len != ext->len)
-			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "IFW block size changed");
 		img->cached_phys = ext->phys;
 	}
 	n = ext->len - (grub_size_t) (off - ext->off);
@@ -1027,44 +1031,44 @@ ifw_read (struct ifw_image *img, grub_uint64_t off, void *buf,
 	return GRUB_ERR_NONE;
 }
 
-struct grub_ifw
+struct grub_tbi
 {
 	grub_file_t file;
-	struct ifw_image *image;
+	struct tbi_image *image;
 };
-typedef struct grub_ifw *grub_ifw_t;
+typedef struct grub_tbi *grub_tbi_t;
 
-static struct grub_fs grub_ifw_fs;
+static struct grub_fs grub_tbi_fs;
 
 static grub_err_t
-grub_ifw_close (grub_file_t file)
+grub_tbi_close (grub_file_t file)
 {
-	grub_ifw_t ifwio = file->data;
+	grub_tbi_t tbiio = file->data;
 
-	ifw_free_image (ifwio->image);
-	grub_free (ifwio->image);
-	grub_file_close (ifwio->file);
-	grub_free (ifwio);
+	tbi_free_image (tbiio->image);
+	grub_free (tbiio->image);
+	grub_file_close (tbiio->file);
+	grub_free (tbiio);
 	file->device = 0;
 	return grub_errno;
 }
 
 static grub_file_t
-grub_ifw_open (grub_file_t io, enum grub_file_type type)
+grub_tbi_open (grub_file_t io, enum grub_file_type type)
 {
-	grub_uint8_t probe[IFW_REC_HEADER + 4];
-	struct ifw_image *image;
-	grub_ifw_t ifwio;
+	grub_uint8_t probe[TBI_REC_HEADER + 4];
+	struct tbi_image *image;
+	grub_tbi_t tbiio;
 	grub_file_t file;
 
 	if (!(type & GRUB_FILE_TYPE_FILTER_VDISK))
 		return io;
-	if (io->size == GRUB_FILE_SIZE_UNKNOWN || io->size < IFW_MIN_IMAGE_SIZE)
+	if (io->size == GRUB_FILE_SIZE_UNKNOWN || io->size < TBI_MIN_IMAGE_SIZE)
 		return io;
 	if (grub_file_seek (io, 0) == (grub_off_t) -1
 		|| grub_file_read (io, probe, sizeof (probe)) != (grub_ssize_t) sizeof (probe)
-		|| ifw_get32 (probe) != 0 || ifw_get32 (probe + 4) < 0x1c
-		|| grub_memcmp (probe + IFW_REC_HEADER, "IMG2", 4) != 0)
+		|| tbi_get32 (probe) != 0 || tbi_get32 (probe + 4) < 0x1c
+		|| grub_memcmp (probe + TBI_REC_HEADER, "IMG2", 4) != 0)
 	{
 		grub_file_seek (io, 0);
 		grub_errno = GRUB_ERR_NONE;
@@ -1075,9 +1079,9 @@ grub_ifw_open (grub_file_t io, enum grub_file_type type)
 	if (!image)
 		return 0;
 	image->file = io;
-	if (ifw_open_image (image) != GRUB_ERR_NONE)
+	if (tbi_open_image (image) != GRUB_ERR_NONE)
 	{
-		ifw_free_image (image);
+		tbi_free_image (image);
 		grub_free (image);
 		grub_file_seek (io, 0);
 		grub_errno = GRUB_ERR_NONE;
@@ -1085,41 +1089,41 @@ grub_ifw_open (grub_file_t io, enum grub_file_type type)
 	}
 
 	file = grub_zalloc (sizeof (*file));
-	ifwio = grub_zalloc (sizeof (*ifwio));
-	if (!file || !ifwio)
+	tbiio = grub_zalloc (sizeof (*tbiio));
+	if (!file || !tbiio)
 	{
-		ifw_free_image (image);
+		tbi_free_image (image);
 		grub_free (image);
 		grub_free (file);
-		grub_free (ifwio);
+		grub_free (tbiio);
 		return 0;
 	}
-	ifwio->file = io;
-	ifwio->image = image;
+	tbiio->file = io;
+	tbiio->image = image;
 	file->device = io->device;
-	file->data = ifwio;
-	file->fs = &grub_ifw_fs;
+	file->data = tbiio;
+	file->fs = &grub_tbi_fs;
 	file->not_easily_seekable = io->not_easily_seekable;
 	file->size = image->size;
 	return file;
 }
 
 static grub_ssize_t
-grub_ifw_read (grub_file_t file, char *buf, grub_size_t len)
+grub_tbi_read (grub_file_t file, char *buf, grub_size_t len)
 {
-	grub_ifw_t ifwio = file->data;
+	grub_tbi_t tbiio = file->data;
 	grub_uint64_t off = file->offset;
 	grub_ssize_t total = 0;
 
 	while (len)
 	{
 		grub_size_t got = 0;
-		grub_err_t err = ifw_read (ifwio->image, off, buf, len, &got);
+		grub_err_t err = tbi_read (tbiio->image, off, buf, len, &got);
 
 		if (err)
 			return -1;
 		if (!got)
-			return grub_error (GRUB_ERR_FILE_READ_ERROR, "IFW read made no progress"), -1;
+			return grub_error (GRUB_ERR_FILE_READ_ERROR, "TBI read made no progress"), -1;
 		off += got;
 		buf += got;
 		total += got;
@@ -1128,23 +1132,23 @@ grub_ifw_read (grub_file_t file, char *buf, grub_size_t len)
 	return total;
 }
 
-static struct grub_fs grub_ifw_fs =
+static struct grub_fs grub_tbi_fs =
 {
-	.name = "ifw",
+	.name = "tbi",
 	.fs_dir = 0,
 	.fs_open = 0,
-	.fs_read = grub_ifw_read,
-	.fs_close = grub_ifw_close,
+	.fs_read = grub_tbi_read,
+	.fs_close = grub_tbi_close,
 	.fs_label = 0,
 	.next = 0
 };
 
-GRUB_MOD_INIT (ifw)
+GRUB_MOD_INIT (tbi)
 {
-	grub_file_filter_register (GRUB_FILE_FILTER_IFW, grub_ifw_open);
+	grub_file_filter_register (GRUB_FILE_FILTER_TBI, grub_tbi_open);
 }
 
-GRUB_MOD_FINI (ifw)
+GRUB_MOD_FINI (tbi)
 {
-	grub_file_filter_unregister (GRUB_FILE_FILTER_IFW);
+	grub_file_filter_unregister (GRUB_FILE_FILTER_TBI);
 }

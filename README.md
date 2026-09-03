@@ -41,7 +41,7 @@ File-level or filesystem-native encryption is not supported.
 - **Compression:** gzip, bzip2, LZ4, LZOP, XZ, Zstandard, Brotli, LZMA
 - **Dynamic disks and RAID:** Android LP (dynamic partitions), Windows LDM, Linux LVM, mdraid, RAID5/6, NVIDIA dmraid
 - **Partition tables:** MBR, GPT, Apple, BSD, DragonFly BSD, Acorn, Amiga, DVH, Plan 9, Sun, UnixWare
-- **Backups:** Acronis True Image TIB/TIBX, TeraByte Image for Windows TBI, DiskGenius PMF/PMFX, Drive Snapshot SNA, Norton Ghost GHO/GHS, ntfsclone, Partclone
+- **Backups:** Acronis True Image TIB/TIBX, TeraByte Image TBI, DiskGenius PMF/PMFX, Drive Snapshot SNA, Norton Ghost GHO/GHS, ntfsclone, Partclone
 
 ## Linux build
 
