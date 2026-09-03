@@ -356,6 +356,7 @@ fail:
 	return false;
 }
 
+#if FSROVER_EMBED_DOKAN
 /* Write an embedded RT_RCDATA resource verbatim to PATH (overwriting).  */
 bool
 write_resource (int id, const wchar_t *path, std::wstring *error)
@@ -423,6 +424,7 @@ install_service (const wchar_t *sys_path, std::wstring *error)
 	}
 	return true;
 }
+#endif
 
 } // namespace
 
@@ -471,6 +473,7 @@ dokanfs_select_backend (dokanfs_backend backend)
 	return true;
 }
 
+#if FSROVER_EMBED_DOKAN
 bool
 dokanfs_install (std::wstring *error)
 {
@@ -517,6 +520,7 @@ dokanfs_install (std::wstring *error)
 		g_backend = dokanfs_backend::dokan;
 	return true;
 }
+#endif
 
 void
 dokanfs_shutdown (void)

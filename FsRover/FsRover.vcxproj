@@ -65,7 +65,18 @@
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros">
+    <FSROVER_EMBED_DOKAN Condition="'$(FSROVER_EMBED_DOKAN)'==''">1</FSROVER_EMBED_DOKAN>
+    <FSROVER_ENABLE_ADMIN_FEATURES Condition="'$(FSROVER_ENABLE_ADMIN_FEATURES)'==''">1</FSROVER_ENABLE_ADMIN_FEATURES>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>FSROVER_EMBED_DOKAN=$(FSROVER_EMBED_DOKAN);FSROVER_ENABLE_ADMIN_FEATURES=$(FSROVER_ENABLE_ADMIN_FEATURES);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>FSROVER_EMBED_DOKAN=$(FSROVER_EMBED_DOKAN);FSROVER_ENABLE_ADMIN_FEATURES=$(FSROVER_ENABLE_ADMIN_FEATURES);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <OutDir>$(SolutionDir)build\$(Platform)\</OutDir>
     <IntDir>$(SolutionDir)build\$(Platform)\$(ProjectName)\</IntDir>
@@ -194,6 +205,7 @@
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="build_config.h" />
     <ClInclude Include="dokan\dokan.h" />
     <ClInclude Include="dokan\fileinfo.h" />
     <ClInclude Include="dokan\public.h" />
@@ -240,13 +252,21 @@
     <Import Project="..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets" Condition="Exists('..\packages\YY-Thunks.1.2.1\build\native\YY-Thunks.targets')" />
     <Import Project="..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets" Condition="Exists('..\packages\YY.NuGet.Import.Helper.1.0.2\build\native\YY.NuGet.Import.Helper.targets')" />
   </ImportGroup>
-  <Target Name="CopyLibcdi" AfterTargets="Build" Condition="Exists('$(LibcdiRuntimeSource)')">
+  <Target Name="CopyLibcdi" AfterTargets="Build" Condition="'$(FSROVER_ENABLE_ADMIN_FEATURES)'=='1' and Exists('$(LibcdiRuntimeSource)')">
     <Copy SourceFiles="$(LibcdiRuntimeSource)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true">
       <Output TaskParameter="CopiedFiles" ItemName="LibcdiRuntimeCopiedFiles" />
     </Copy>
     <ItemGroup>
       <FileWrites Include="@(LibcdiRuntimeCopiedFiles)" />
     </ItemGroup>
+  </Target>
+  <Target Name="RemoveDisabledLibcdi" AfterTargets="Build" Condition="'$(FSROVER_ENABLE_ADMIN_FEATURES)'=='0'">
+    <!-- Remove a sidecar left by an earlier SMART-enabled build. -->
+    <Delete Files="$(OutDir)$([System.IO.Path]::GetFileName('$(LibcdiRuntimeSource)'))" />
+  </Target>
+  <Target Name="ValidateFeatureOptions" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(FSROVER_EMBED_DOKAN)'!='0' and '$(FSROVER_EMBED_DOKAN)'!='1'" Text="FSROVER_EMBED_DOKAN must be 0 or 1." />
+    <Error Condition="'$(FSROVER_ENABLE_ADMIN_FEATURES)'!='0' and '$(FSROVER_ENABLE_ADMIN_FEATURES)'!='1'" Text="FSROVER_ENABLE_ADMIN_FEATURES must be 0 or 1." />
   </Target>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>

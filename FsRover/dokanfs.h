@@ -25,6 +25,8 @@
 #ifndef FSROVER_DOKANFS_H
 #define FSROVER_DOKANFS_H	1
 
+#include "build_config.h"
+
 #include <windows.h>
 
 #include <string>
@@ -63,14 +65,15 @@ bool dokanfs_backend_available (dokanfs_backend backend);
 dokanfs_backend dokanfs_current_backend (void);
 bool dokanfs_select_backend (dokanfs_backend backend);
 
+#if FSROVER_EMBED_DOKAN
 /* Install the app-embedded Dokan runtime (library + kernel driver) to
    the system, start the driver service and
    re-probe.  On success dokanfs_available() becomes true and true is
    returned; otherwise false with *ERROR set.  Writing System32 and
    creating a kernel service needs an elevated token: the app runs
-   asInvoker, so the GUI only offers this while is_elevated() and points
-   at its File menu re-launch otherwise.  */
+   asInvoker, so the GUI only offers this while is_elevated().  */
 bool dokanfs_install (std::wstring *error);
+#endif
 
 /* Unmount everything and unload the library.  */
 void dokanfs_shutdown (void);

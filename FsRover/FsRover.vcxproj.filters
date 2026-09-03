@@ -105,6 +105,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="build_config.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
     <ClInclude Include="backend.h">
       <Filter>SRC</Filter>
     </ClInclude>

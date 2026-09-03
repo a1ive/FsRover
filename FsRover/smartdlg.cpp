@@ -29,6 +29,10 @@
  * grub state.
  */
 
+#include "build_config.h"
+
+#if FSROVER_ENABLE_ADMIN_FEATURES
+
 #include <windows.h>
 #include <commctrl.h>
 #include <uxtheme.h>
@@ -1058,3 +1062,5 @@ smart_shutdown (void)
 	g_cdi.destroy (g_cdi_smart);
 	g_cdi_smart = nullptr;
 }
+
+#endif

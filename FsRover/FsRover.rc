@@ -4,6 +4,7 @@
 
 #include <winresrc.h>
 
+#include "build_config.h"
 #include "resource.h"
 #include "../grub/rover/version.h"
 #include "../filetype/resource.h"
@@ -26,6 +27,7 @@ IDR_FILETYPE_MAGIC_ZST RCDATA "../filetype/magic/magic.zst"
 // not part of the string table.
 IDR_HELP_MD RCDATA "help.md"
 
+#if FSROVER_EMBED_DOKAN
 // Bundled Dokan runtime for the build architecture: user-mode library
 // (dokan2.dll) and Microsoft-signed kernel driver (dokan2.sys).  Dokan >
 // Install Dokan writes both to the system, creates the Dokan2 service and
@@ -41,6 +43,7 @@ IDR_DOKAN_SYS RCDATA "dokan/prebuilt/ARM64/dokan2.sys"
 #elif defined(ROVER_ARCH_X86)
 IDR_DOKAN_DLL RCDATA "dokan/prebuilt/x86/dokan2.dll"
 IDR_DOKAN_SYS RCDATA "dokan/prebuilt/x86/dokan2.sys"
+#endif
 #endif
 
 // Hex viewer: a 64-bit offset bar above one virtual list view.  All
@@ -173,6 +176,7 @@ BEGIN
 	DEFPUSHBUTTON	"OK", IDOK, 263, 219, 50, 14
 END
 
+#if FSROVER_ENABLE_ADMIN_FEATURES
 // Disk S.M.A.R.T.: only the header controls and the attribute list live
 // in the template.  The sheet between them -- model and capacity, the
 // health and temperature boxes, and the two columns of "field: value"
@@ -190,6 +194,7 @@ BEGIN
 	CONTROL		"", IDC_SMART_HEX, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 305, 9, 48, 10
 	CONTROL		"", IDC_SMART_LIST, "SysListView32", LVS_REPORT | LVS_SHOWSELALWAYS | WS_TABSTOP | WS_BORDER, 7, 160, 346, 133
 END
+#endif
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION ROVER_VERSION
@@ -317,10 +322,12 @@ BEGIN
 	IDS_SUPPORT_DISKFILTER	"Disk filters"
 	IDS_SUPPORT_CRYPTODISK	"Encrypted volumes"
 	IDS_SUPPORT_IOFILTER	"I/O filters"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_INSTALL	"Install Dokan"
 	IDS_DOKAN_INSTALLING	"Installing Dokan..."
 	IDS_DOKAN_INSTALL_OK	"Dokan was installed successfully."
 	IDS_FMT_DOKAN_INSTALL_FAIL	"Could not install Dokan: %s"
+#endif
 	IDS_DOKAN_LETTER	"Drive letter:"
 	IDS_DOKAN_OPEN_EXPLORER	"Open in Explorer after mounting"
 	IDS_DP_DEVICE		"Device"
@@ -360,12 +367,16 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"Select disk image"
 	IDS_FILTER_OPEN_IMAGE	"Disk images and archives"
 	IDS_FILTER_ALL		"All files (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_RUNAS		"&Run as Administrator"
 	IDS_ELEVATE_FAILED	"Could not restart as administrator."
+#endif
 	IDS_BACKEND_START_FAILED	"Could not start the backend worker."
 	IDS_BACKEND_STOP_FAILED	"The backend worker did not stop cleanly."
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_NEED_ADMIN	"Dokan requires administrator rights"
 	IDS_DOKAN_WOW64		"Installing Dokan needs the 64-bit build of FsRover"
+#endif
 	IDS_FMT_MOUNT_BACKEND	"Backend: %s"
 	IDS_MOUNT_UNAVAILABLE	"WinFsp and Dokan are not available"
 	IDS_MENU_MARKDOWN	"Markdown preview"
@@ -388,6 +399,7 @@ BEGIN
 	IDS_PM_BADPARAM		"Enter a cipher of the form cipher-mode-iv and a key size in bits that is a multiple of 8."
 	IDS_PM_HASH_NONE	"none"
 	IDS_PROPS_NO_INODE	"not reported by this filesystem"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_SMART		"View S.M.A.R.T."
 	IDS_SM_TITLE		"S.M.A.R.T."
 	IDS_SM_HEALTH		"Health status"
@@ -413,6 +425,7 @@ BEGIN
 	IDS_SM_ATTR		"Attribute"
 	IDS_SM_NO_DATA		"No S.M.A.R.T. information is available for this disk."
 	IDS_SM_HEX		"HEX"
+#endif
 END
 
 // Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
@@ -608,10 +621,12 @@ BEGIN
 	IDS_SUPPORT_DISKFILTER	"磁盘过滤器"
 	IDS_SUPPORT_CRYPTODISK	"加密磁盘"
 	IDS_SUPPORT_IOFILTER	"I/O 过滤器"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_INSTALL	"安装 Dokan"
 	IDS_DOKAN_INSTALLING	"正在安装 Dokan..."
 	IDS_DOKAN_INSTALL_OK	"Dokan 安装成功。"
 	IDS_FMT_DOKAN_INSTALL_FAIL	"无法安装 Dokan：%s"
+#endif
 	IDS_DOKAN_LETTER	"盘符："
 	IDS_DOKAN_OPEN_EXPLORER	"挂载后在资源管理器中打开"
 	IDS_DP_DEVICE		"设备"
@@ -651,12 +666,16 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"选择镜像文件"
 	IDS_FILTER_OPEN_IMAGE	"磁盘镜像和压缩包"
 	IDS_FILTER_ALL		"所有文件 (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_RUNAS		"以管理员身份运行(&R)"
 	IDS_ELEVATE_FAILED	"无法以管理员身份重新启动。"
+#endif
 	IDS_BACKEND_START_FAILED	"无法启动后端工作线程。"
 	IDS_BACKEND_STOP_FAILED	"后端工作线程未能正常停止。"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要管理员权限"
 	IDS_DOKAN_WOW64		"安装 Dokan 需要 64 位版本的 FsRover"
+#endif
 	IDS_FMT_MOUNT_BACKEND	"后端：%s"
 	IDS_MOUNT_UNAVAILABLE	"WinFsp 和 Dokan 均不可用"
 	IDS_MENU_MARKDOWN	"Markdown 预览"
@@ -679,6 +698,7 @@ BEGIN
 	IDS_PM_BADPARAM		"加密算法需形如 cipher-mode-iv，密钥长度需为 8 的倍数（位）。"
 	IDS_PM_HASH_NONE	"无"
 	IDS_PROPS_NO_INODE	"该文件系统未提供"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_SMART		"查看 S.M.A.R.T."
 	IDS_SM_TITLE		"S.M.A.R.T."
 	IDS_SM_HEALTH		"健康状态"
@@ -704,6 +724,7 @@ BEGIN
 	IDS_SM_ATTR		"属性"
 	IDS_SM_NO_DATA		"无法获取该磁盘的 S.M.A.R.T. 信息。"
 	IDS_SM_HEX		"HEX"
+#endif
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -892,10 +913,12 @@ BEGIN
 	IDS_SUPPORT_DISKFILTER	"磁碟過濾器"
 	IDS_SUPPORT_CRYPTODISK	"加密磁碟區"
 	IDS_SUPPORT_IOFILTER	"I/O 過濾器"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_INSTALL	"安裝 Dokan"
 	IDS_DOKAN_INSTALLING	"正在安裝 Dokan..."
 	IDS_DOKAN_INSTALL_OK	"Dokan 安裝成功。"
 	IDS_FMT_DOKAN_INSTALL_FAIL	"無法安裝 Dokan：%s"
+#endif
 	IDS_DOKAN_LETTER	"磁碟機代號："
 	IDS_DOKAN_OPEN_EXPLORER	"掛載後在檔案總管中開啟"
 	IDS_DP_DEVICE		"裝置"
@@ -935,12 +958,16 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"選擇映像檔"
 	IDS_FILTER_OPEN_IMAGE	"磁碟映像與壓縮檔"
 	IDS_FILTER_ALL		"所有檔案 (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_RUNAS		"以系統管理員身分執行(&R)"
 	IDS_ELEVATE_FAILED	"無法以系統管理員身分重新啟動。"
+#endif
 	IDS_BACKEND_START_FAILED	"無法啟動後端工作執行緒。"
 	IDS_BACKEND_STOP_FAILED	"後端工作執行緒未能正常停止。"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_NEED_ADMIN	"使用 Dokan 需要系統管理員權限"
 	IDS_DOKAN_WOW64		"安裝 Dokan 需要 64 位元版本的 FsRover"
+#endif
 	IDS_FMT_MOUNT_BACKEND	"後端：%s"
 	IDS_MOUNT_UNAVAILABLE	"WinFsp 與 Dokan 均不可用"
 	IDS_MENU_MARKDOWN	"Markdown 預覽"
@@ -963,6 +990,7 @@ BEGIN
 	IDS_PM_BADPARAM		"加密演算法需形如 cipher-mode-iv，金鑰長度需為 8 的倍數（位元）。"
 	IDS_PM_HASH_NONE	"無"
 	IDS_PROPS_NO_INODE	"該檔案系統未提供"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_SMART		"檢視 S.M.A.R.T."
 	IDS_SM_TITLE		"S.M.A.R.T."
 	IDS_SM_HEALTH		"健康狀態"
@@ -988,6 +1016,7 @@ BEGIN
 	IDS_SM_ATTR		"屬性"
 	IDS_SM_NO_DATA		"無法取得該磁碟的 S.M.A.R.T. 資訊。"
 	IDS_SM_HEX		"HEX"
+#endif
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122
@@ -1176,10 +1205,12 @@ BEGIN
 	IDS_SUPPORT_DISKFILTER	"ディスクフィルター"
 	IDS_SUPPORT_CRYPTODISK	"暗号化ディスク"
 	IDS_SUPPORT_IOFILTER	"I/O フィルター"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_INSTALL	"Dokan をインストール"
 	IDS_DOKAN_INSTALLING	"Dokan をインストールしています..."
 	IDS_DOKAN_INSTALL_OK	"Dokan をインストールしました。"
 	IDS_FMT_DOKAN_INSTALL_FAIL	"Dokan をインストールできませんでした: %s"
+#endif
 	IDS_DOKAN_LETTER	"ドライブ文字："
 	IDS_DOKAN_OPEN_EXPLORER	"マウント後にエクスプローラーで開く"
 	IDS_DP_DEVICE		"デバイス"
@@ -1219,12 +1250,16 @@ BEGIN
 	IDS_PICK_OPEN_IMAGE	"ディスクイメージを選択"
 	IDS_FILTER_OPEN_IMAGE	"ディスクイメージ / アーカイブ"
 	IDS_FILTER_ALL		"すべてのファイル (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_RUNAS		"管理者として実行(&R)"
 	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
+#endif
 	IDS_BACKEND_START_FAILED	"バックエンドワーカーを起動できませんでした。"
 	IDS_BACKEND_STOP_FAILED	"バックエンドワーカーを正常に停止できませんでした。"
+#if FSROVER_EMBED_DOKAN
 	IDS_DOKAN_NEED_ADMIN	"Dokan の使用には管理者権限が必要です"
 	IDS_DOKAN_WOW64		"Dokan のインストールには 64 ビット版の FsRover が必要です"
+#endif
 	IDS_FMT_MOUNT_BACKEND	"バックエンド: %s"
 	IDS_MOUNT_UNAVAILABLE	"WinFsp と Dokan は利用できません"
 	IDS_MENU_MARKDOWN	"Markdown プレビュー"
@@ -1247,6 +1282,7 @@ BEGIN
 	IDS_PM_BADPARAM		"暗号化方式は cipher-mode-iv の形式で、鍵長は 8 の倍数 (ビット) を指定してください。"
 	IDS_PM_HASH_NONE	"なし"
 	IDS_PROPS_NO_INODE	"このファイルシステムでは取得できません"
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	IDS_MENU_SMART		"S.M.A.R.T. を表示"
 	IDS_SM_TITLE		"S.M.A.R.T."
 	IDS_SM_HEALTH		"健康状態"
@@ -1272,6 +1308,7 @@ BEGIN
 	IDS_SM_ATTR		"属性"
 	IDS_SM_NO_DATA		"このディスクの S.M.A.R.T. 情報を取得できません。"
 	IDS_SM_HEX		"HEX"
+#endif
 END
 
 IDD_CRYPTO DIALOGEX 0, 0, 240, 122

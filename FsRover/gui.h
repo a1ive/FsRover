@@ -27,6 +27,8 @@
 #ifndef FSROVER_GUI_H
 #define FSROVER_GUI_H	1
 
+#include "build_config.h"
+
 #include <windows.h>
 #include <commctrl.h>
 
@@ -144,6 +146,7 @@ bool props_on_progress (backend_progress *p);
 void show_disk_props (const backend_diskent &d,
 		      const std::vector<backend_diskent> &disks);
 
+#if FSROVER_ENABLE_ADMIN_FEATURES
 /* smartdlg.cpp */
 
 /* False = libcdi is not next to the executable, so nothing can be read
@@ -151,6 +154,7 @@ void show_disk_props (const backend_diskent &d,
 bool smart_available (void);
 void show_smart (const backend_diskent &d);	/* windisk "hdN" only */
 void smart_shutdown (void);	/* before COM goes down */
+#endif
 
 /* cryptodlg.cpp */
 void prompt_unlock (const std::string &devname, const std::string &uuid);

@@ -83,12 +83,16 @@ constexpr int IDM_FILE_EXIT = 201;
 constexpr int IDM_FILE_TIMESTAMPS = 202;
 constexpr int IDM_FILE_OPEN_IMAGE = 203;
 constexpr int IDM_FILE_OPEN_IMAGE_DECOMP = 204;
+#if FSROVER_ENABLE_ADMIN_FEATURES
 constexpr int IDM_FILE_RUNAS = 205;
+#endif
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_HELP_SUPPORT = 220;
 constexpr int IDM_HELP_ABOUT = 221;
+#if FSROVER_EMBED_DOKAN
 constexpr int IDM_DOKAN_INSTALL = 222;
+#endif
 constexpr int IDM_HELP_SHORTCUTS = 223;
 constexpr int IDM_HELP_DOC = 224;
 constexpr int IDM_BACKEND_WINFSP = 225;
@@ -112,7 +116,9 @@ constexpr int IDM_EXPORT = 13;
 constexpr int IDM_MARKDOWN = 14;
 constexpr int IDM_VERACRYPT = 15;
 constexpr int IDM_PLAINMOUNT = 16;
+#if FSROVER_ENABLE_ADMIN_FEATURES
 constexpr int IDM_SMART = 17;
+#endif
 constexpr int IDM_TRAY_OPEN = 900;
 constexpr int IDM_TRAY_EXIT = 901;
 constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
@@ -1065,6 +1071,7 @@ do_dokan_unmount (dokan_mount *m)
 	set_status (text);
 }
 
+#if FSROVER_EMBED_DOKAN
 /* Install the app-embedded Dokan runtime (Dokan menu, shown only while
    the driver is absent and this process is elevated).  Runs in-process,
    writing to System32 and starting a kernel service directly; a wait
@@ -1097,10 +1104,11 @@ do_dokan_install (void)
 		MessageBoxW (g_main, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 	}
 }
+#endif
 
+#if FSROVER_ENABLE_ADMIN_FEATURES
 /* Restart elevated (File menu, shown only while this process is not).
-   A running process cannot gain privileges, so the physical drives and
-   the Dokan install only appear in the new instance; this one hands
+   A running process cannot gain privileges, so this instance hands
    over as soon as the elevated one has been started.  */
 void
 run_as_admin (void)
@@ -1111,10 +1119,7 @@ run_as_admin (void)
 	if (!GetModuleFileNameW (nullptr, exe, ARRAYSIZE (exe)))
 		return;
 
-	/* Nothing to hand over: this is only reachable without elevation,
-	   and a drive letter cannot be mounted from there.
-
-	   NOASYNC: the shell must be done with the request before this
+	/* NOASYNC: the shell must be done with the request before this
 	   process leaves.  */
 	info.fMask = SEE_MASK_NOASYNC;
 	info.hwnd = g_main;
@@ -1130,6 +1135,7 @@ run_as_admin (void)
 	}
 	DestroyWindow (g_main);
 }
+#endif
 
 void
 on_tree_rclick (void)
@@ -1171,12 +1177,15 @@ on_tree_rclick (void)
 	bool can_vc = can_raw && d.size >= 256 * 1024
 		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
 	bool can_pm = can_raw && d.dev_id != BACKEND_DEV_CRYPTODISK;
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	/* S.M.A.R.T. belongs to a drive, not to a volume: only a whole
 	   windisk "hdN" has a \\.\PhysicalDriveN behind it to ask.  The
 	   optical drives ("cdN") and everything mapped or imaged are out,
 	   and the item is left off their menus entirely.  */
 	bool is_drive = d.dev_id == BACKEND_DEV_WINDISK && !d.is_partition
 		&& d.name.compare (0, 2, "hd") == 0;
+#endif
+
 	UINT busy = g_extracting ? MF_GRAYED : 0u;
 
 	HMENU menu = CreatePopupMenu ();
@@ -1195,11 +1204,14 @@ on_tree_rclick (void)
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	/* Neither S.M.A.R.T. nor Properties goes through the backend --
 	   one is libcdi's own I/O, the other reads the cached diskent --
 	   so both stay available during an extraction.  */
 	if (is_drive)
 		AppendMenuW (menu, MF_STRING | (smart_available () ? 0u : MF_GRAYED), IDM_SMART, res_str (IDS_MENU_SMART).c_str ());
+#endif
+
 	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
 	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
 	DestroyMenu (menu);
@@ -1241,10 +1253,13 @@ on_tree_rclick (void)
 		if (can_raw)
 			start_export (d);
 		break;
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	case IDM_SMART:
 		if (is_drive)
 			show_smart (d);
 		break;
+#endif
+
 	case IDM_PROPS:
 		show_disk_props (d, g_disks);
 		break;
@@ -1870,6 +1885,7 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	/* Elevation cannot change while the process runs, so the re-launch
 	   is either offered for good or never.  Under --file it is never:
 	   the new instance would start on an empty command line, dropping
@@ -1877,6 +1893,8 @@ create_menu_bar (HWND wnd)
 	   was asked to leave alone.  */
 	if (!is_elevated () && !g_cmdline.no_windisk)
 		AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_RUNAS, res_str (IDS_MENU_RUNAS).c_str ());
+#endif
+
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
 
 	HMENU sel = CreatePopupMenu ();
@@ -1954,20 +1972,21 @@ on_menu_popup (HMENU menu)
 	{
 		AppendMenuW (menu, MF_STRING | MF_GRAYED, 0,
 			res_str (IDS_MOUNT_UNAVAILABLE).c_str ());
+#if FSROVER_EMBED_DOKAN
 		AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 		/* With the driver absent and nothing in the way, offer to
 		   install the bundled runtime instead of just greying the
 		   feature out.  What can be in the way is named in the order
 		   the user can act on it: a 32-bit build on 64-bit Windows
 		   bundles a runtime the system cannot use and elevating
-		   would not change that, while a missing token is one menu
-		   item away.  */
+		   would not change that. Otherwise an elevated token is needed.  */
 		if (is_wow64 ())
 			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_WOW64).c_str ());
 		else if (!is_elevated ())
 			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
 		else
 			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
+#endif
 		return;
 	}
 	wchar_t backend[96];
@@ -1983,6 +2002,7 @@ on_menu_popup (HMENU menu)
 		| (dokanfs_backend_available (dokanfs_backend::dokan) ? 0u : MF_GRAYED)
 		| (selected == dokanfs_backend::dokan ? MF_CHECKED : 0u),
 		IDM_BACKEND_DOKAN, L"Dokan");
+#if FSROVER_EMBED_DOKAN
 	if (!dokanfs_backend_available (dokanfs_backend::dokan))
 	{
 		AppendMenuW (hosts, MF_SEPARATOR, 0, nullptr);
@@ -1993,6 +2013,8 @@ on_menu_popup (HMENU menu)
 		else
 			AppendMenuW (hosts, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
 	}
+#endif
+
 	AppendMenuW (menu, MF_POPUP, (UINT_PTR) hosts, backend);
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	if (!dokanfs_count ())
@@ -2119,9 +2141,12 @@ on_command (int id)
 	case IDM_BACKEND_DOKAN:
 		dokanfs_select_backend (dokanfs_backend::dokan);
 		break;
+#if FSROVER_EMBED_DOKAN
 	case IDM_DOKAN_INSTALL:
 		do_dokan_install ();
 		break;
+#endif
+
 	case IDM_FILE_REFRESH:
 		if (!g_extracting)
 			refresh ();
@@ -2135,9 +2160,12 @@ on_command (int id)
 		/* A running extraction keeps the setting it started with.  */
 		g_preserve_times = !g_preserve_times;
 		break;
+#if FSROVER_ENABLE_ADMIN_FEATURES
 	case IDM_FILE_RUNAS:
 		run_as_admin ();
 		break;
+#endif
+
 	case IDM_FILE_EXIT:
 		SendMessageW (g_main, WM_CLOSE, 0, 0);
 		break;
@@ -2365,7 +2393,9 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_DESTROY:
 		Shell_NotifyIconW (NIM_DELETE, &g_tray);
 		dokanfs_shutdown ();
+#if FSROVER_ENABLE_ADMIN_FEATURES
 		smart_shutdown ();
+#endif
 		if (!backend_stop ())
 			MessageBoxW (nullptr, res_str (IDS_BACKEND_STOP_FAILED).c_str (),
 				res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
