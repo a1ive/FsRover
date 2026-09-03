@@ -1221,6 +1221,12 @@ Ghost writes several different payload shapes, all of which are recognised:
   older Ghost layout with `0x19` directory records are accepted. FAT long names
   remain UTF-16; 8.3 fallback names and FAT volume labels use the selected
   filename encoding.
+- **Filesystem-aware EXT2/EXT3 backups** expose the saved inode/path catalogue
+  with Unix case-sensitive names, symbolic links, hard links and sparse files.
+  Scanning continues across successive EXT partitions, swap descriptors and FAT
+  catalogues, preserving the numbered partition directories. A swap descriptor
+  produces an empty directory because Ghost saved no file tree for it. External
+  extended attributes (including SELinux labels) are not exported as file data.
 - **Filesystem-aware NTFS backups** (GHPR / compression type 10) are rebuilt as
   a sparse NTFS volume from their MFT records, non-resident attribute runlists
   and stored run data. Unstored clusters read as zeros; the regular `ntfs`

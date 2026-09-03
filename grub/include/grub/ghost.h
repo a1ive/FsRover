@@ -25,9 +25,10 @@
 /* Both the file header and each partition header are this long.  */
 #define GRUB_GHOST_HEADER_SIZE		512
 
-/* Record header: [2B kind][2B stale][4B magic][2B len].  Only the low
-   byte of the first field is a kind; the rest is uninitialised memory
-   in every writer seen.  */
+/* Record header: [1B kind][3B flags/count/stale][4B magic][2B len].
+   The upper bytes depend on the kind: ext sparse records carry a BE
+   block count, ext inode bit 8 marks a hard link, and other records can
+   contain stale bytes.  Dispatch record kinds using the low byte.  */
 #define GRUB_GHOST_REC_HDR_SIZE		10
 #define GRUB_GHOST_REC_MAGIC		0x012f18d8
 
@@ -50,14 +51,16 @@
 #define GRUB_GHOST_PART_NTFS		0x04	/* NTFS filesystem packets */
 #define GRUB_GHOST_PART_EXT2		0x05	/* ext2/ext3 inode catalogue */
 
-/* Filesystem-aware ext2/ext3 record types.  Unlike the older FAT
-   catalogue, these use the whole low 16-bit record type.  */
-#define GRUB_GHOST_EXT_INFO_FIRST	0x061b
-#define GRUB_GHOST_EXT_INFO_LAST	0x061c
+/* Filesystem-aware ext2/ext3 record kinds.  */
+#define GRUB_GHOST_EXT_INFO_FIRST	0x1b
+#define GRUB_GHOST_EXT_INFO_LAST	0x1c
 #define GRUB_GHOST_EXT_INODE		0x001d
 #define GRUB_GHOST_EXT_DATA		0x001e
 #define GRUB_GHOST_EXT_END		0x001f
-#define GRUB_GHOST_EXT_CHECKSUM		0x0803
+#define GRUB_GHOST_EXT_CHECKSUM		0x03
+#define GRUB_GHOST_EXT_HOLE		0x20
+#define GRUB_GHOST_EXT_SWAP		0x21
+#define GRUB_GHOST_EXT_XATTR		0x26
 
 /* File header byte 3.  */
 #define GRUB_GHOST_COMP_NONE		0

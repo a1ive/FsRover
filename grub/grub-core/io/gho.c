@@ -93,6 +93,7 @@ struct gho_image
 {
 	struct gho_span *spans;
 	unsigned nspans;
+	unsigned span_nr;		/* last span used by gho_pread */
 	grub_uint64_t stream_size;
 
 	grub_uint32_t id;		/* image id, shared by every file */
@@ -122,10 +123,29 @@ static grub_err_t
 gho_pread (struct gho_image *image, grub_uint64_t off, void *buf, grub_size_t len)
 {
 	grub_uint8_t *out = buf;
-	unsigned i = 0;
+	unsigned i = image->span_nr;
 
 	if (off > image->stream_size || len > image->stream_size - off)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "Ghost image truncated");
+	if (len == 0)
+		return GRUB_ERR_NONE;
+	if (off < image->spans[i].start
+	    || off - image->spans[i].start >= image->spans[i].size)
+	{
+		unsigned lo = 0;
+		unsigned hi = image->nspans;
+
+		while (lo < hi)
+		{
+			unsigned mid = lo + (hi - lo) / 2;
+
+			if (off >= image->spans[mid].start + image->spans[mid].size)
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		i = lo;
+	}
 
 	while (len > 0)
 	{
@@ -140,6 +160,7 @@ gho_pread (struct gho_image *image, grub_uint64_t off, void *buf, grub_size_t le
 			return grub_error (GRUB_ERR_BAD_DEVICE, "Ghost image truncated");
 
 		sp = &image->spans[i];
+		image->span_nr = i;
 		in = off - sp->start;
 		n = len;
 		if (n > sp->size - in)
@@ -634,27 +655,44 @@ gho_add_ntfs_block (struct gho_image *image, grub_uint32_t *capacity,
 }
 
 static grub_err_t
-gho_build_ntfs_block_index (struct gho_image *image)
+gho_build_ntfs_block_index (struct gho_image *image, grub_uint8_t *scan)
 {
 	grub_uint64_t pos = image->data_start;
+	grub_uint64_t buf_at = pos;
+	grub_size_t buf_len = 0;
 	grub_uint64_t logical = 0;
 	grub_uint32_t capacity = 0;
 
 	while (pos + 2 <= image->stream_size)
 	{
-		grub_uint8_t prefix[2];
+		const grub_uint8_t *p;
+		grub_size_t left = buf_len - (grub_size_t) (pos - buf_at);
 		grub_uint32_t stored;
 		grub_size_t outlen;
 		grub_err_t err;
 
-		err = gho_pread (image, pos, prefix, sizeof (prefix));
-		if (err)
-			return err;
-		stored = grub_ghost_get16 (prefix);
+		/* Keep the incomplete tail and append sequential input.  Having
+		   STORED_MAX bytes available covers both the prefix and payload
+		   of any block, including one split across a window or span. */
+		if (left < GRUB_GHOST_STORED_MAX && pos + left < image->stream_size)
+		{
+			grub_size_t more = GHO_SCAN_BUF - left;
+
+			if (more > image->stream_size - pos - left)
+				more = (grub_size_t) (image->stream_size - pos - left);
+			grub_memmove (scan, scan + (pos - buf_at), left);
+			err = gho_pread (image, pos + left, scan + left, more);
+			if (err)
+				return err;
+			buf_at = pos;
+			buf_len = left + more;
+		}
+		p = scan + (pos - buf_at);
+		stored = grub_ghost_get16 (p);
 		if (stored < GRUB_GHOST_STORED_MIN || stored > image->stream_size - pos)
 			break;
-		err = gho_decode_block (image, pos, image->blk_buf,
-					GRUB_GHOST_BLOCK_MAX, &outlen);
+		err = grub_ghost_decode (image->comp, image->hash_tbl, p + 2, stored - 2,
+					image->blk_buf, GRUB_GHOST_BLOCK_MAX, &outlen);
 		if (err)
 			return err;
 		if (outlen == 0 || outlen > GRUB_GHOST_BLOCK_MAX
@@ -1266,6 +1304,20 @@ gho_build_index (struct gho_image *image, grub_uint8_t *scan)
 	return GRUB_ERR_NONE;
 }
 
+/* Catalogue span stitching never calls the decoder. */
+static grub_err_t
+gho_alloc_buffers (struct gho_image *image)
+{
+	image->blk_buf = grub_malloc (GRUB_GHOST_BLOCK_MAX);
+	image->cmp_buf = grub_malloc (GRUB_GHOST_STORED_MAX);
+	if (image->comp == GRUB_GHOST_COMP_FAST)
+		image->hash_tbl = grub_malloc (GRUB_GHOST_FASTLZ_HASH_SIZE * sizeof (*image->hash_tbl));
+	if (!image->blk_buf || !image->cmp_buf
+	    || (image->comp == GRUB_GHOST_COMP_FAST && !image->hash_tbl))
+		return grub_errno;
+	return GRUB_ERR_NONE;
+}
+
 static grub_err_t
 gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 {
@@ -1295,11 +1347,8 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	if (err)
 		return err;
 
-	image->blk_buf = grub_malloc (GRUB_GHOST_BLOCK_MAX);
-	image->cmp_buf = grub_malloc (GRUB_GHOST_STORED_MAX);
-	image->hash_tbl = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE, sizeof (*image->hash_tbl));
 	scan = grub_malloc (GHO_SCAN_BUF);
-	if (!image->blk_buf || !image->cmp_buf || !image->hash_tbl || !scan)
+	if (!scan)
 	{
 		err = grub_errno;
 		goto fail;
@@ -1312,10 +1361,13 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	   selects only the block decoder (NTFS also occurs with Fast LZ).  */
 	if (subtype == GRUB_GHOST_PART_NTFS)
 	{
+		err = gho_alloc_buffers (image);
+		if (err)
+			goto fail;
 		err = gho_find_ntfs_data_start (image, scan);
 		if (err)
 			goto fail;
-		err = gho_build_ntfs_block_index (image);
+		err = gho_build_ntfs_block_index (image, scan);
 		if (err)
 			goto fail;
 		err = gho_build_ntfs_extents (image);
@@ -1356,6 +1408,9 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	}
 
 	/* The first block fixes the block size.  */
+	err = gho_alloc_buffers (image);
+	if (err)
+		goto fail;
 	err = gho_decode_block (image, image->data_start, image->blk_buf, GRUB_GHOST_BLOCK_MAX, &n);
 	if (err)
 		goto fail;

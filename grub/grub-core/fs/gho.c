@@ -93,8 +93,10 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GHO_EXT_MODE_DIR	0040000
 #define GHO_EXT_MODE_REG	0100000
 #define GHO_EXT_MODE_SYMLINK	0120000
+#define GHO_EXT_INODE_BUCKETS	16384
 
 #define GHO_CACHE_NONE		0xffffffffu
+#define GHO_INDEX_STRIDE		64u
 
 enum gho_node_kind
 {
@@ -126,14 +128,22 @@ struct gho_node
 	int case_insensitive;
 	int variable;			/* ext records have variable decoded sizes */
 	grub_uint8_t *inline_data;	/* short ext symlink */
+	struct gho_node *hardlink;	/* shared content; owned by the target node */
+	struct gho_node *inode_next;	/* per-partition lookup while scanning */
 
 	/* GHO_NODE_FILE: records run back to back from FIRST, so only
 	   their body lengths need keeping.  */
 	grub_uint64_t first;
 	grub_uint16_t *lens;
 	grub_uint32_t *outs;		/* decoded sizes, learned lazily */
+	grub_uint64_t *offsets;		/* ext payloads; metadata can interrupt a run */
 	grub_uint32_t nblk;
 	grub_uint32_t cap;
+	/* One checkpoint per STRIDE blocks: FAT record offsets or ext logical
+	   offsets.  Ext checkpoints cover only the validated prefix. */
+	grub_uint64_t *checkpoints;
+	grub_uint32_t indexed_blocks;
+	grub_uint64_t indexed_bytes;
 
 	/* GHO_NODE_BLOBS */
 	struct gho_blob *blobs;
@@ -235,6 +245,8 @@ gho_free_node (struct gho_node *n)
 		grub_free (n->name);
 		grub_free (n->lens);
 		grub_free (n->outs);
+		grub_free (n->offsets);
+		grub_free (n->checkpoints);
 		grub_free (n->inline_data);
 		grub_free (n->blobs);
 		grub_free (n);
@@ -320,10 +332,12 @@ gho_add_len (struct gho_node *n, grub_uint16_t len)
 }
 
 static grub_err_t
-gho_add_ext_len (struct gho_node *n, grub_uint16_t len)
+gho_add_ext_len (struct gho_node *n, grub_uint16_t len, grub_uint64_t off,
+	grub_uint32_t hole)
 {
 	grub_uint32_t oldcap = n->cap;
 	grub_uint32_t *outs;
+	grub_uint64_t *offsets;
 	grub_size_t sz;
 	grub_err_t err;
 
@@ -338,8 +352,15 @@ gho_add_ext_len (struct gho_node *n, grub_uint16_t len)
 		if (!outs)
 			return grub_errno;
 		n->outs = outs;
+		if (grub_mul ((grub_size_t) n->cap, sizeof (*offsets), &sz))
+			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost file too large");
+		offsets = grub_realloc (n->offsets, sz);
+		if (!offsets)
+			return grub_errno;
+		n->offsets = offsets;
 	}
-	n->outs[n->nblk - 1] = 0;
+	n->outs[n->nblk - 1] = hole;
+	n->offsets[n->nblk - 1] = off;
 	return GRUB_ERR_NONE;
 }
 
@@ -636,7 +657,7 @@ gho_find_start (struct gho_data *data, struct gho_cur *cur, grub_uint64_t *start
 static grub_err_t
 gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
 			   const grub_uint8_t *meta, grub_size_t metalen,
-			   struct gho_node **file)
+			   struct gho_node **inodes, int hardlink, struct gho_node **file)
 {
 	grub_uint32_t ino;
 	grub_uint32_t parent_ino;
@@ -648,6 +669,8 @@ gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
 	char *base;
 	struct gho_node *parent;
 	struct gho_node *n;
+	struct gho_node *owner;
+	unsigned bucket;
 	int kind;
 
 	*file = NULL;
@@ -657,6 +680,12 @@ gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
 	parent_ino = grub_ghost_get32 (meta + 4);
 	mode = grub_ghost_get16 (meta + 8);
 	pathlen = metalen - GHO_EXT_META_SIZE;
+	/* Writers use both counted paths and counted, NUL-terminated paths.
+	   Accept a single terminator, never an embedded NUL or an empty name. */
+	if (meta[GHO_EXT_META_SIZE + pathlen - 1] == 0)
+		pathlen--;
+	if (pathlen == 0)
+		return grub_error (GRUB_ERR_BAD_FS, "empty Ghost ext path");
 	for (i = 0; i < pathlen; i++)
 		if (meta[GHO_EXT_META_SIZE + i] == 0)
 			return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext path");
@@ -724,6 +753,22 @@ gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
 	if ((mode & GHO_EXT_MODE_MASK) == GHO_EXT_MODE_REG)
 		size |= (grub_uint64_t) grub_ghost_get32 (meta + 116) << 32;
 	n->size = size;
+	bucket = ino % GHO_EXT_INODE_BUCKETS;
+	for (owner = inodes[bucket]; owner; owner = owner->inode_next)
+		if (owner->inode == ino)
+			break;
+	if (hardlink)
+	{
+		if (!owner || (mode & GHO_EXT_MODE_MASK) != GHO_EXT_MODE_REG
+		    || owner->kind != GHO_NODE_FILE || !owner->variable || owner->size != size)
+			return grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext hard link");
+		n->hardlink = owner;
+		return GRUB_ERR_NONE;
+	}
+	if (owner)
+		return grub_error (GRUB_ERR_BAD_FS, "duplicate Ghost ext inode");
+	n->inode_next = inodes[bucket];
+	inodes[bucket] = n;
 
 	if (kind == GHO_NODE_SYMLINK && size < GHO_EXT_INLINE_MAX)
 	{
@@ -749,16 +794,21 @@ gho_ext_add_inode (struct gho_data *data, struct gho_node *part,
 
 static grub_err_t
 gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
-	      struct gho_node *part, grub_uint64_t pos)
+	      struct gho_node *part, grub_uint64_t *position)
 {
 	struct gho_node *file = NULL;
+	struct gho_node **inodes;
+	grub_uint64_t pos = *position;
+	grub_uint32_t block_size = 0;
 	grub_uint8_t *meta;
-	grub_int32_t *hash;
+	grub_int32_t *hash = NULL;
 	grub_err_t err = GRUB_ERR_NONE;
 
 	meta = grub_malloc (GRUB_GHOST_BLOCK_MAX);
-	hash = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE, sizeof (*hash));
-	if (!meta || !hash)
+	if (data->comp == GRUB_GHOST_COMP_FAST)
+		hash = grub_malloc (GRUB_GHOST_FASTLZ_HASH_SIZE * sizeof (*hash));
+	inodes = grub_calloc (GHO_EXT_INODE_BUCKETS, sizeof (*inodes));
+	if (!meta || !inodes || (data->comp == GRUB_GHOST_COMP_FAST && !hash))
 	{
 		err = grub_errno;
 		goto out;
@@ -793,10 +843,24 @@ gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
 			goto out;
 		}
 
-		switch (type)
+		switch (type & 0xff)
 		{
 		case GRUB_GHOST_EXT_INFO_FIRST:
+			file = NULL;
+			break;
+
 		case GRUB_GHOST_EXT_INFO_LAST:
+			err = grub_ghost_decode (data->comp, hash,
+				p + GRUB_GHOST_REC_HDR_SIZE, len, meta, GRUB_GHOST_BLOCK_MAX, &outlen);
+			if (err)
+				goto out;
+			if (outlen < 104 || grub_ghost_get16 (meta + 56) != 0xef53
+			    || grub_ghost_get32 (meta + 24) > 6)
+			{
+				err = grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext superblock");
+				goto out;
+			}
+			block_size = 1024u << grub_ghost_get32 (meta + 24);
 			file = NULL;
 			break;
 
@@ -806,7 +870,7 @@ gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
 					 meta, GRUB_GHOST_BLOCK_MAX, &outlen);
 			if (err)
 				goto out;
-			err = gho_ext_add_inode (data, part, meta, outlen, &file);
+			err = gho_ext_add_inode (data, part, meta, outlen, inodes, (type & 0x100) != 0, &file);
 			if (err)
 				goto out;
 			break;
@@ -816,10 +880,36 @@ gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
 			{
 				if (file->nblk == 0)
 					file->first = pos;
-				err = gho_add_ext_len (file, len);
+				err = gho_add_ext_len (file, len, pos + GRUB_GHOST_REC_HDR_SIZE, 0);
 				if (err)
 					goto out;
 			}
+			break;
+
+		case GRUB_GHOST_EXT_HOLE:
+		{
+			grub_uint32_t blocks = ((grub_uint32_t) p[1] << 16)
+				| ((grub_uint32_t) p[2] << 8) | p[3];
+			grub_uint32_t bytes;
+
+			if (len != 0 || !blocks || !block_size || grub_mul (blocks, block_size, &bytes)
+			    || (file && bytes > file->size))
+			{
+				err = grub_error (GRUB_ERR_BAD_FS, "bad Ghost ext sparse run");
+				goto out;
+			}
+			if (file)
+			{
+				err = gho_add_ext_len (file, 0, 0, bytes);
+				if (err)
+					goto out;
+			}
+			break;
+		}
+
+		case GRUB_GHOST_EXT_XATTR:
+			/* External ext attribute blocks (including SELinux labels) do
+			   not contribute bytes to the current file's content. */
 			break;
 
 		case GRUB_GHOST_EXT_CHECKSUM:
@@ -827,9 +917,20 @@ gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
 			break;
 
 		case GRUB_GHOST_EXT_END:
-			if (part->inode != 2)
+			if (part->inode != 2 || !block_size || len != 0)
 				err = grub_error (GRUB_ERR_BAD_FS,
 						  "Ghost ext root inode missing");
+			else
+				*position = pos + GRUB_GHOST_REC_HDR_SIZE;
+			goto out;
+
+		case GRUB_GHOST_EXT_SWAP:
+			/* Ghost saves no filesystem catalogue for swap.  Keep its
+			   numbered partition entry and continue with the next header. */
+			if (part->inode || part->child || len != 16)
+				err = grub_error (GRUB_ERR_BAD_FS, "bad Ghost swap descriptor");
+			else
+				*position = pos + GRUB_GHOST_REC_HDR_SIZE + len;
 			goto out;
 
 		default:
@@ -842,6 +943,7 @@ gho_scan_ext (struct gho_data *data, struct gho_cur *cur,
 	err = grub_error (GRUB_ERR_BAD_FS, "unterminated Ghost ext catalogue");
 
 out:
+	grub_free (inodes);
 	grub_free (meta);
 	grub_free (hash);
 	return err;
@@ -898,10 +1000,10 @@ gho_scan (struct gho_data *data, struct gho_cur *cur)
 			pos += GRUB_GHOST_HEADER_SIZE;
 			if (subtype == GRUB_GHOST_PART_EXT2)
 			{
-				err = gho_scan_ext (data, cur, part, pos);
+				err = gho_scan_ext (data, cur, part, &pos);
 				if (err)
 					return err;
-				break;
+				continue;
 			}
 
 			/* Anything Ghost could not walk as files is stored as
@@ -1174,6 +1276,64 @@ gho_lookup (struct gho_data *data, const char *path)
 /* ------------------------------------------------------------------ */
 /* file data                                                           */
 
+/* GET_SIZE, empty files and inline symlinks need no decoding workspace.
+   Commit all buffers together so a failed allocation can be retried. */
+static grub_err_t
+gho_alloc_buffers (struct gho_file *f)
+{
+	grub_uint8_t *blk;
+	grub_uint8_t *cmp;
+	grub_int32_t *hash = NULL;
+
+	if (f->blk)
+		return GRUB_ERR_NONE;
+	blk = grub_malloc (GRUB_GHOST_BLOCK_MAX);
+	cmp = grub_malloc (GRUB_GHOST_STORED_MAX);
+	if (f->data->comp == GRUB_GHOST_COMP_FAST)
+		hash = grub_malloc (GRUB_GHOST_FASTLZ_HASH_SIZE * sizeof (*hash));
+	if (!blk || !cmp || (f->data->comp == GRUB_GHOST_COMP_FAST && !hash))
+		goto fail;
+	f->blk = blk;
+	f->cmp = cmp;
+	f->hash = hash;
+	return GRUB_ERR_NONE;
+
+fail:
+	grub_free (blk);
+	grub_free (cmp);
+	grub_free (hash);
+	return grub_errno;
+}
+
+static grub_err_t
+gho_alloc_index (struct gho_node *n)
+{
+	grub_size_t count;
+	grub_size_t sz;
+
+	if (n->checkpoints || n->nblk <= GHO_INDEX_STRIDE)
+		return GRUB_ERR_NONE;
+	count = (n->nblk - 1) / GHO_INDEX_STRIDE + 1;
+	if (grub_mul (count, sizeof (*n->checkpoints), &sz))
+		return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost file too large");
+	n->checkpoints = grub_malloc (sz);
+	if (!n->checkpoints)
+		return grub_errno;
+	if (!n->variable)
+	{
+		grub_uint64_t off = n->first;
+		grub_uint32_t i;
+
+		for (i = 0; i < n->nblk; i++)
+		{
+			if (i % GHO_INDEX_STRIDE == 0)
+				n->checkpoints[i / GHO_INDEX_STRIDE] = off;
+			off += GRUB_GHOST_REC_HDR_SIZE + n->lens[i];
+		}
+	}
+	return GRUB_ERR_NONE;
+}
+
 /* Build the block list of a sector-imaged partition.  Deferred until
    the image is opened, because it walks the whole chain.  */
 static grub_err_t
@@ -1222,6 +1382,9 @@ gho_build_chain (struct gho_file *f, grub_disk_t disk)
 		return grub_error (GRUB_ERR_BAD_FS, "empty Ghost sector image");
 
 	/* The first block fixes the block size, the last one may be short.  */
+	err = gho_alloc_buffers (f);
+	if (err)
+		return err;
 	if (n->blobs[0].len > GRUB_GHOST_STORED_MAX)
 		return grub_error (GRUB_ERR_BAD_FS, "bad Ghost block");
 	err = gho_dread (disk, n->blobs[0].off, f->cmp, n->blobs[0].len);
@@ -1265,7 +1428,12 @@ gho_file_block (struct gho_file *f, grub_uint32_t nr)
 	grub_uint32_t i = 0;
 	grub_uint64_t off = n->first;
 
-	if (f->walk_idx <= nr && f->walk_idx > 0)
+	if (n->checkpoints)
+	{
+		i = (nr / GHO_INDEX_STRIDE) * GHO_INDEX_STRIDE;
+		off = n->checkpoints[nr / GHO_INDEX_STRIDE];
+	}
+	if (f->walk_idx <= nr && f->walk_idx > i)
 	{
 		i = f->walk_idx;
 		off = f->walk_off;
@@ -1290,9 +1458,20 @@ gho_load (struct gho_file *f, grub_disk_t disk, grub_uint32_t nr)
 		return GRUB_ERR_NONE;
 	f->cached_nr = GHO_CACHE_NONE;
 
+	err = gho_alloc_buffers (f);
+	if (err)
+		return err;
+	if (n->kind == GHO_NODE_FILE && !n->variable)
+	{
+		err = gho_alloc_index (n);
+		if (err)
+			return err;
+	}
+
 	if (n->kind == GHO_NODE_FILE || n->variable)
 	{
-		off = gho_file_block (f, nr) + GRUB_GHOST_REC_HDR_SIZE;
+		off = n->variable ? n->offsets[nr]
+			: gho_file_block (f, nr) + GRUB_GHOST_REC_HDR_SIZE;
 		clen = n->lens[nr];
 	}
 	else
@@ -1339,8 +1518,34 @@ gho_ext_locate (struct gho_file *f, grub_disk_t disk, grub_uint64_t off,
 	struct gho_node *n = f->node;
 	grub_uint32_t i = 0;
 	grub_uint64_t base = 0;
+	grub_err_t err;
 
-	if (f->data_idx < n->nblk && f->data_off <= off)
+	err = gho_alloc_index (n);
+	if (err)
+		return err;
+	if (off >= n->indexed_bytes)
+	{
+		i = n->indexed_blocks;
+		base = n->indexed_bytes;
+	}
+	else if (n->checkpoints)
+	{
+		grub_uint32_t lo = 0;
+		grub_uint32_t hi = (n->indexed_blocks - 1) / GHO_INDEX_STRIDE + 1;
+
+		while (lo < hi)
+		{
+			grub_uint32_t mid = lo + (hi - lo) / 2;
+
+			if (n->checkpoints[mid] <= off)
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		i = (lo - 1) * GHO_INDEX_STRIDE;
+		base = n->checkpoints[lo - 1];
+	}
+	if (f->data_idx >= i && f->data_idx < n->indexed_blocks && f->data_off <= off)
 	{
 		i = f->data_idx;
 		base = f->data_off;
@@ -1352,7 +1557,7 @@ gho_ext_locate (struct gho_file *f, grub_disk_t disk, grub_uint64_t off,
 
 		if (len == 0)
 		{
-			grub_err_t err = gho_load (f, disk, i);
+			err = gho_load (f, disk, i);
 
 			if (err)
 				return err;
@@ -1361,6 +1566,16 @@ gho_ext_locate (struct gho_file *f, grub_disk_t disk, grub_uint64_t off,
 		if (base > ~((grub_uint64_t) 0) - len)
 			return grub_error (GRUB_ERR_BAD_FS, "oversized Ghost ext file");
 		end = base + len;
+		if (end > n->size || (i + 1 == n->nblk && end != n->size)
+		    || (i + 1 < n->nblk && end == n->size))
+			return grub_error (GRUB_ERR_BAD_FS, "Ghost ext data length mismatch");
+		if (i == n->indexed_blocks)
+		{
+			if (n->checkpoints && i % GHO_INDEX_STRIDE == 0)
+				n->checkpoints[i / GHO_INDEX_STRIDE] = base;
+			n->indexed_blocks++;
+			n->indexed_bytes = end;
+		}
 		if (off < end)
 		{
 			f->data_idx = i;
@@ -1429,6 +1644,8 @@ grub_gho_open (grub_file_t file, const char *name)
 		return grub_error (GRUB_ERR_FILE_NOT_FOUND, "file not found");
 	if (node->kind == GHO_NODE_DIR)
 		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a regular file");
+	if (node->hardlink)
+		node = node->hardlink;
 
 	f = grub_zalloc (sizeof (*f));
 	if (!f)
@@ -1436,15 +1653,6 @@ grub_gho_open (grub_file_t file, const char *name)
 	f->data = data;
 	f->node = node;
 	f->cached_nr = GHO_CACHE_NONE;
-	f->blk = grub_malloc (GRUB_GHOST_BLOCK_MAX);
-	f->cmp = grub_malloc (GRUB_GHOST_STORED_MAX);
-	f->hash = grub_calloc (GRUB_GHOST_FASTLZ_HASH_SIZE, sizeof (*f->hash));
-	if (!f->blk || !f->cmp || !f->hash)
-	{
-		err = grub_errno;
-		goto fail;
-	}
-
 	if (node->kind == GHO_NODE_BLOBS && node->chain_at)
 	{
 		err = gho_build_chain (f, file->device->disk);
@@ -1528,9 +1736,14 @@ grub_gho_read (grub_file_t file, char *buf, grub_size_t len)
 			if (take > n->bs - in)
 				take = n->bs - in;
 		}
-		if (gho_load (f, file->device->disk, nr) != GRUB_ERR_NONE)
-			return -1;
-		grub_memcpy (buf, f->blk + in, take);
+		if (n->variable && n->lens[nr] == 0)
+			grub_memset (buf, 0, take);
+		else
+		{
+			if (gho_load (f, file->device->disk, nr) != GRUB_ERR_NONE)
+				return -1;
+			grub_memcpy (buf, f->blk + in, take);
+		}
 		buf += take;
 		off += take;
 		done += take;
