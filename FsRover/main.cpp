@@ -1762,6 +1762,41 @@ on_list_cache_hint (NMLVCACHEHINT *hint)
 	hint_list_sizes (hint->iFrom, hint->iTo);
 }
 
+int
+on_list_finditem (NMLVFINDITEMW *find)
+{
+	const LVFINDINFOW &fi = find->lvfi;
+	if ((fi.flags & (LVFI_PARAM | LVFI_NEARESTXY))
+		|| !(fi.flags & (LVFI_STRING | LVFI_PARTIAL | LVFI_SUBSTRING | LVFI_WRAP))
+		|| !fi.psz || !*fi.psz || g_rows.empty ())
+		return -1;
+
+	const int count = (int) g_rows.size ();
+	const bool wrap = (fi.flags & LVFI_WRAP) != 0;
+	const bool partial = (fi.flags & (LVFI_PARTIAL | LVFI_SUBSTRING)) != 0;
+	const int length = lstrlenW (fi.psz);
+	/* The notification's iStart is inclusive (unlike LVM_FINDITEM). */
+	int item = find->iStart < 0 ? 0 : find->iStart;
+	if (item >= count)
+	{
+		if (!wrap)
+			return -1;
+		item = 0;
+	}
+	const int limit = wrap ? count : count - item;
+	for (int n = 0; n < limit; n++)
+	{
+		const std::wstring &name = g_rows[(size_t) item].name;
+		if (name.size () >= (size_t) length
+			&& (partial || name.size () == (size_t) length)
+			&& CompareStringOrdinal (name.c_str (), length, fi.psz, length, TRUE) == CSTR_EQUAL)
+			return item;
+		if (++item == count)
+			item = 0;
+	}
+	return -1;
+}
+
 void
 on_list_dblclk (int item)
 {
@@ -1798,6 +1833,8 @@ on_notify (NMHDR *hdr)
 		on_list_getdispinfo ((NMLVDISPINFOW *) hdr);
 	else if (hdr->hwndFrom == g_list && hdr->code == LVN_ODCACHEHINT)
 		on_list_cache_hint ((NMLVCACHEHINT *) hdr);
+	else if (hdr->hwndFrom == g_list && hdr->code == LVN_ODFINDITEMW)
+		return on_list_finditem ((NMLVFINDITEMW *) hdr);
 	else if (hdr->hwndFrom == g_list && hdr->code == NM_DBLCLK)
 		on_list_dblclk (((NMITEMACTIVATE *) hdr)->iItem);
 	else if (hdr->hwndFrom == g_list && hdr->code == NM_RCLICK)
