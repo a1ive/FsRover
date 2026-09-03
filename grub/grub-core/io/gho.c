@@ -1091,8 +1091,12 @@ gho_build_ntfs_extents (struct gho_image *image)
 			goto fail;
 		if (!gho_ntfs_id_packet (packet, &id, &mft))
 			break;
-		if (id != 0x8004 && id != 0x8008 && id != 0x8010)
-			break;
+		if (id != 0x8004 && id != 0x8008 && id != 0x8010 && id != 0x8080)
+		{
+			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
+					  "unsupported Ghost NTFS record 0x%x", id);
+			goto fail;
+		}
 		pos += sizeof (packet);
 		err = gho_ntfs_read_data_packet (image, &pos, &record_size);
 		if (err)
@@ -1108,7 +1112,10 @@ gho_build_ntfs_extents (struct gho_image *image)
 			goto fail;
 		pos += record_size;
 		records++;
-		if (id == 0x8004 && grub_memcmp (record, "FILE", 4) == 0)
+		/* Excluded file data (0x8080, e.g. pagefile.sys) still has
+		   FILE metadata followed by attribute skip packets (0x8040).  */
+		if ((id == 0x8004 || id == 0x8080)
+			&& grub_memcmp (record, "FILE", 4) == 0)
 		{
 			err = gho_ntfs_fixup (record, record_size);
 			if (err)
@@ -1301,8 +1308,9 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	err = gho_find_data_start (image, scan, &subtype);
 	if (err)
 		goto fail;
-	if (image->comp == GRUB_GHOST_COMP_NTFS
-		&& subtype == GRUB_GHOST_PART_NTFS)
+	/* The partition subtype selects the packet layout; compression
+	   selects only the block decoder (NTFS also occurs with Fast LZ).  */
+	if (subtype == GRUB_GHOST_PART_NTFS)
 	{
 		err = gho_find_ntfs_data_start (image, scan);
 		if (err)
