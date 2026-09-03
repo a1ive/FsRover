@@ -29,12 +29,13 @@
  *
  *   0x0000  IMG2 global metadata record chain
  *            terminator and zero padding
- *   0x1000  partition stream 0 (16-byte stream header, blocks, footer/index)
- *            zero padding to the next 4-KiB boundary
+ *   first recorded stream_base (0x1000 or later): partition stream 0
+ *            (16-byte stream header, blocks, footer/index), then padding
  *            partition stream 1, if present
  *            ...
  *
- * The first 4 KiB contains little-endian records of the form:
+ * Global metadata is a little-endian record chain ending before the first
+ * partition stream; saved track-zero data can make it exceed 4 KiB:
  *
  *   u32 type;
  *   u32 payload_size;
@@ -45,7 +46,7 @@
  *
  *   type 0, IMG2 header
  *     +0x00  char[4] "IMG2"
- *     +0x04  u32 version marker (v3: 0x33c00000; v4: 0x40c00000)
+ *     +0x04  u32 version marker (observed: 0x32600000, 0x33c00000, 0x40c00000)
  *     +0x08  u64 creation time as Windows FILETIME
  *     +0x10  u16 feature bits used below
  *     +0x18  u32 producer/subversion value (observed: 0x33200 / 0x40600)
@@ -55,6 +56,7 @@
  *     +0x74  u64 last source LBA, inclusive
  *     +0x7c  u8[16] GPT partition-type GUID
  *     +0x8c  u8[16] GPT unique-partition GUID
+ *     +0xa4  u8 MBR partition type (legacy disks have zero GPT GUIDs)
  *     +0xe4  u64 block-region length (footer - stream_base)
  *     +0xec  u64 stream_base
  *     +0xf4  u64 footer anchor (the block limit is this value - 0x18)
@@ -150,7 +152,8 @@
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
-#define IFW_META_SIZE		4096
+#define IFW_MIN_IMAGE_SIZE	4096
+#define IFW_META_RECORDS_MAX	4096
 #define IFW_REC_HEADER		12
 #define IFW_STREAM_HEADER	16
 #define IFW_BLOCK_HEADER_LONG	8
@@ -163,6 +166,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define IFW_PART_LAST_LBA	0x74
 #define IFW_PART_TYPE_GUID	0x7c
 #define IFW_PART_GUID		0x8c
+#define IFW_PART_MBR_TYPE	0xa4
 #define IFW_PART_STREAM_BASE	0xec
 #define IFW_PART_FOOTER_END	0xf4
 
@@ -191,6 +195,7 @@ struct ifw_part
 	grub_uint64_t footer;
 	grub_uint8_t type[16];
 	grub_uint8_t guid[16];
+	grub_uint8_t mbr_type;
 };
 
 struct ifw_extent
@@ -661,6 +666,19 @@ static const grub_uint8_t ifw_type_data[16] =
 	0x87, 0xc0, 0x68, 0xb6, 0xb7, 0x26, 0x99, 0xc7
 };
 
+/* MBR Linux types have no source GPT GUID in their descriptors.  */
+static const grub_uint8_t ifw_type_linux[16] =
+{
+	0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84, 0x72, 0x47,
+	0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4
+};
+
+static const grub_uint8_t ifw_type_swap[16] =
+{
+	0x6d, 0xfd, 0x57, 0x06, 0xab, 0xa4, 0xc4, 0x43,
+	0x84, 0xe5, 0x09, 0x33, 0xc8, 0x4b, 0x4f, 0x4f
+};
+
 static grub_err_t
 ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
 {
@@ -692,7 +710,16 @@ ifw_build_gpt (struct ifw_image *img, grub_uint64_t disk_sectors)
 		for (j = 0; j < sizeof (img->part[i].type); j++)
 			if (type[j])
 				empty = 0;
-		grub_memcpy (&ent[i].type, empty ? ifw_type_data : type, sizeof (ent[i].type));
+		if (empty)
+		{
+			if (img->part[i].mbr_type == GRUB_PC_PARTITION_TYPE_LINUX_SWAP)
+				type = ifw_type_swap;
+			else if (img->part[i].mbr_type == GRUB_PC_PARTITION_TYPE_EXT2FS)
+				type = ifw_type_linux;
+			else
+				type = ifw_type_data;
+		}
+		grub_memcpy (&ent[i].type, type, sizeof (ent[i].type));
 		grub_memcpy (&ent[i].guid, img->part[i].guid, sizeof (ent[i].guid));
 		ent[i].start = grub_cpu_to_le64 (img->part[i].first_lba);
 		ent[i].end = grub_cpu_to_le64 (img->part[i].last_lba);
@@ -736,36 +763,56 @@ ifw_sort_parts (struct ifw_image *img)
 static grub_err_t
 ifw_open_image (struct ifw_image *img)
 {
-	grub_uint8_t meta[IFW_META_SIZE];
-	grub_uint32_t at = 0;
+	grub_uint8_t meta[IFW_PART_PAYLOAD_MIN];
+	grub_uint64_t at = 0;
+	grub_uint64_t meta_limit = grub_file_size (img->file);
+	grub_uint32_t records = 0;
 	grub_uint32_t features = 0;
-	int have_head = 0, have_crypt = 0;
+	int have_head = 0, have_crypt = 0, have_end = 0;
 	grub_uint32_t i;
 	grub_err_t err;
 
-	err = ifw_pread (img, 0, meta, sizeof (meta));
-	if (err)
-		return err;
-	while (at <= sizeof (meta) - IFW_REC_HEADER)
+	/* Saved track-zero data can push the descriptors past the first
+	   4 KiB.  Read record headers and only the payload prefixes we use,
+	   bounding the chain by the earliest partition stream once known.  */
+	while (at <= meta_limit && meta_limit - at >= IFW_REC_HEADER
+		&& records++ < IFW_META_RECORDS_MAX)
 	{
-		grub_uint32_t type = ifw_get32 (meta + at);
-		grub_uint32_t len = ifw_get32 (meta + at + 4);
-		const grub_uint8_t *p = meta + at + IFW_REC_HEADER;
+		grub_uint8_t header[IFW_REC_HEADER];
+		grub_uint32_t type, len;
+		const grub_uint8_t *p = meta;
 
+		err = ifw_pread (img, at, header, sizeof (header));
+		if (err)
+			return err;
+		type = ifw_get32 (header);
+		len = ifw_get32 (header + 4);
+		at += IFW_REC_HEADER;
 		if (type == 0xffffffffU)
-			break;
-		if (len > sizeof (meta) - at - IFW_REC_HEADER)
-			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW metadata record");
-		if (type == 0)
 		{
+			have_end = 1;
+			break;
+		}
+		if (len > meta_limit - at)
+			return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW metadata record");
+		if (type == 0 || type == 1 || type == 6)
+		{
+			grub_size_t take = len < sizeof (meta) ? len : sizeof (meta);
+
+			err = ifw_pread (img, at, meta, take);
+			if (err)
+				return err;
+		}
+		switch (type)
+		{
+		case 0:
 			if (have_head || len < 0x1c || grub_memcmp (p, "IMG2", 4) != 0)
 				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not an IFW IMG2 image");
 			features = ifw_get16 (p + 0x10);
 			have_head = 1;
-		}
-		else if (type == 6 && len >= 4)
-			have_crypt |= ifw_get32 (p) != 0;
-		else if (type == 1)
+			break;
+
+		case 1:
 		{
 			struct ifw_part *part;
 
@@ -775,15 +822,32 @@ ifw_open_image (struct ifw_image *img)
 			part->first_lba = ifw_get64 (p + IFW_PART_FIRST_LBA);
 			part->last_lba = ifw_get64 (p + IFW_PART_LAST_LBA);
 			part->stream_base = ifw_get64 (p + IFW_PART_STREAM_BASE);
+			if (part->stream_base < at + len)
+				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "IFW stream overlaps metadata");
+			if (part->stream_base < meta_limit)
+				meta_limit = part->stream_base;
 			part->footer = ifw_get64 (p + IFW_PART_FOOTER_END);
 			if (part->footer < 0x18)
 				return grub_error (GRUB_ERR_BAD_FILE_TYPE, "bad IFW stream footer");
 			part->footer -= 0x18;
 			grub_memcpy (part->type, p + IFW_PART_TYPE_GUID, sizeof (part->type));
 			grub_memcpy (part->guid, p + IFW_PART_GUID, sizeof (part->guid));
+			part->mbr_type = p[IFW_PART_MBR_TYPE];
+			break;
 		}
-		at += IFW_REC_HEADER + len;
+
+		case 6:
+			if (len >= 4)
+				have_crypt |= ifw_get32 (p) != 0;
+			break;
+
+		default:
+			break;
+		}
+		at += len;
 	}
+	if (!have_end)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "unterminated IFW metadata");
 	if (!have_head || !img->npart)
 		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "IFW image has no partition stream");
 	if (have_crypt)
@@ -995,7 +1059,7 @@ grub_ifw_open (grub_file_t io, enum grub_file_type type)
 
 	if (!(type & GRUB_FILE_TYPE_FILTER_VDISK))
 		return io;
-	if (io->size == GRUB_FILE_SIZE_UNKNOWN || io->size < IFW_META_SIZE)
+	if (io->size == GRUB_FILE_SIZE_UNKNOWN || io->size < IFW_MIN_IMAGE_SIZE)
 		return io;
 	if (grub_file_seek (io, 0) == (grub_off_t) -1
 		|| grub_file_read (io, probe, sizeof (probe)) != (grub_ssize_t) sizeof (probe)
