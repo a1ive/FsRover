@@ -627,6 +627,8 @@ grub_vma_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook, v
 		grub_memset (&info, 0, sizeof (info));
 		info.inodeset = 1;
 		info.inode = i;
+		info.sizeset = 1;
+		info.size = data->items[i].size;
 		if (data->ctime)
 		{
 			info.mtimeset = 1;

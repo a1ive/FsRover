@@ -873,6 +873,7 @@ grub_bfs_dir_iter (const char *name, grub_uint64_t value,
       return 0;
     }
 
+  grub_memset (&info, 0, sizeof (info));
   info.mtimeset = 1;
 #ifdef MODE_AFS
   info.mtime =
@@ -882,6 +883,11 @@ grub_bfs_dir_iter (const char *name, grub_uint64_t value,
 #endif
   info.dir = ((grub_bfs_to_cpu32 (ino.mode) & ATTR_TYPE) == ATTR_DIR);
   info.symlink = ((grub_bfs_to_cpu32 (ino.mode) & ATTR_TYPE) == ATTR_LNK);
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = grub_bfs_to_cpu64 (ino.size);
+    }
   return ctx->hook (name, &info, ctx->hook_data);
 }
 

@@ -705,6 +705,11 @@ grub_sfs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
   info.mtimeset = 1;
   info.inodeset = 1;
   info.inode = node->block;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = node->size;
+    }
   grub_free (node->cache);
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);

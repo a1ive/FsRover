@@ -156,10 +156,17 @@ grub_cpio_rewind (struct grub_archelp_data *data)
   data->next_hofs = 0;
 }
 
+static grub_uint64_t
+grub_cpio_get_size (struct grub_archelp_data *data)
+{
+  return data->size;
+}
+
 static struct grub_archelp_ops arcops =
   {
     .find_file = grub_cpio_find_file,
     .get_link_target = grub_cpio_get_link_target,
+    .get_size = grub_cpio_get_size,
     .rewind = grub_cpio_rewind
   };
 

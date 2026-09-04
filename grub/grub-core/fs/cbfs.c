@@ -114,9 +114,16 @@ grub_cbfs_rewind (struct grub_archelp_data *data)
   data->next_hofs = data->cbfs_start;
 }
 
+static grub_uint64_t
+grub_cbfs_get_size (struct grub_archelp_data *data)
+{
+  return data->size;
+}
+
 static struct grub_archelp_ops arcops =
   {
     .find_file = grub_cbfs_find_file,
+    .get_size = grub_cbfs_get_size,
     .rewind = grub_cbfs_rewind
   };
 

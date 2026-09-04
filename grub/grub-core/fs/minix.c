@@ -614,6 +614,11 @@ grub_minix_dir (grub_device_t device, const char *path,
       info.mtime = grub_minix_to_cpu32 (data->inode.mtime);
       info.inodeset = 1;
       info.inode = grub_minix_to_cpu_ino (ino);
+      if (!info.dir && !info.symlink)
+	{
+	  info.sizeset = 1;
+	  info.size = GRUB_MINIX_INODE_SIZE (data);
+	}
 
       if (hook (filename, &info, hook_data) ? 1 : 0)
 	break;

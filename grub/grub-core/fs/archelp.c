@@ -202,6 +202,11 @@ grub_archelp_dir (struct grub_archelp_data *data,
 	      info.dir = (p != NULL) || ((mode & GRUB_ARCHELP_ATTR_TYPE)
 					 == GRUB_ARCHELP_ATTR_DIR);
 	      info.symlink = ((mode & GRUB_ARCHELP_ATTR_TYPE) == GRUB_ARCHELP_ATTR_LNK);
+	      if (!info.dir && !info.symlink && arcops->get_size)
+		{
+		  info.sizeset = 1;
+		  info.size = arcops->get_size (data);
+		}
 	      if (!(mode & GRUB_ARCHELP_ATTR_NOTIME))
 		{
 		  info.mtime = mtime;

@@ -2248,6 +2248,11 @@ grub_apfs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 	{
 		info.mtimeset = 1;
 		info.mtime = (grub_int64_t) (node->mtime_ns / 1000000000ULL);
+		if ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_REG)
+		{
+			info.sizeset = 1;
+			info.size = node->size;
+		}
 	}
 	else
 		grub_errno = GRUB_ERR_NONE;

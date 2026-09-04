@@ -1254,6 +1254,8 @@ grub_hfs_dir_hook (struct grub_hfs_record *rec, void *hook_arg)
       info.inodeset = 1;
       info.mtime = grub_be_to_cpu32 (frec->mtime) - 2082844800;
       info.inode = grub_be_to_cpu32 (frec->fileid);
+      info.sizeset = 1;
+      info.size = grub_be_to_cpu32 (frec->size);
       return ctx->hook (fname, &info, ctx->hook_data);
     }
 

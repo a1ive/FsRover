@@ -1205,6 +1205,7 @@ list_file (struct grub_ntfs_file *diro, grub_uint8_t *pos, grub_uint8_t *end_pos
 	  fdiro->data = diro->data;
 	  fdiro->ino = u64at (pos, 0) & 0xffffffffffffULL;
 	  fdiro->mtime = u64at (pos, 0x20);
+	  fdiro->size = u64at (pos, 0x40);
 
 	  ustr = get_utf8 (np, ns);
 	  if (ustr == NULL)
@@ -1668,6 +1669,11 @@ grub_ntfs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
     - 86400ULL * ((1970 - 1601) / 4) + 86400ULL * ((1970 - 1601) / 100);
   info.inodeset = 1;
   info.inode = node->ino;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = node->size;
+    }
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);
 }

@@ -1968,6 +1968,11 @@ grub_f2fs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
     {
       info.mtimeset = 1;
       info.mtime = grub_le_to_cpu64 (node->inode.i.i_mtime);
+      if ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_REG)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_f2fs_file_size (&node->inode.i);
+	}
     }
 
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);

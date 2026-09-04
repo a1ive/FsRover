@@ -196,8 +196,9 @@ list_dir_hook (const struct rover_dirent *ent, void *data)
 	e.name = ent->name;
 	e.is_dir = ent->is_dir != 0;
 	e.is_symlink = ent->is_symlink != 0;
-	e.size = e.is_dir || e.is_symlink ? 0 : BACKEND_SIZE_UNKNOWN;
-	e.size_set = e.is_dir || e.is_symlink;
+	e.size = e.is_dir || e.is_symlink ? 0
+		: ent->size_set ? ent->size : BACKEND_SIZE_UNKNOWN;
+	e.size_set = e.is_dir || e.is_symlink || ent->size_set;
 	e.mtime = ent->mtime_set ? ent->mtime : 0;
 	e.inode_set = ent->inode_set != 0;
 	e.inode = ent->inode;

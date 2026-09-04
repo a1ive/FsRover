@@ -1085,6 +1085,11 @@ grub_fsa_dir (grub_device_t device, const char *path,
 		info.symlink = !child_is_dir && data->items[i].type == FSA_OBJ_SYMLINK;
 		info.inodeset = 1;
 		info.inode = i;
+		if (!info.dir && !info.symlink)
+		{
+			info.sizeset = 1;
+			info.size = data->items[i].size;
+		}
 		if (!child_is_dir && data->items[i].mtime)
 		{
 			info.mtimeset = 1;

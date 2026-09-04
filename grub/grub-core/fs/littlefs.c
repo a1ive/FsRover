@@ -1302,6 +1302,11 @@ grub_littlefs_dir (grub_device_t device, const char *path,
 
 	  grub_memset (&info, 0, sizeof (info));
 	  info.dir = node.isdir;
+	  if (!node.isdir)
+	    {
+	      info.sizeset = 1;
+	      info.size = node.size;
+	    }
 	  if (node.isdir)
 	    {
 	      /* The first pair of a directory identifies it for as long as it

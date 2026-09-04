@@ -45,6 +45,9 @@ struct grub_archelp_ops
   char *
   (*get_link_target) (struct grub_archelp_data *data);
 
+  grub_uint64_t
+  (*get_size) (struct grub_archelp_data *data);
+
   void
   (*rewind) (struct grub_archelp_data *data);
 };

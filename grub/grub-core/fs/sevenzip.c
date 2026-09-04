@@ -2194,6 +2194,11 @@ grub_7z_dir (grub_device_t device, const char *path,
 				info.mtime = sz_ntfs_time
 					(&data->db.MTime.Vals[i]);
 			}
+			if (!info.symlink)
+			{
+				info.sizeset = 1;
+				info.size = SzArEx_GetFileSize (&data->db, i);
+			}
 		}
 
 		if (hook (name, &info, hook_data))

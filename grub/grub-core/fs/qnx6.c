@@ -861,6 +861,11 @@ grub_qnx6_dir_iter(const char* filename,
 
 	info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
 	info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = fs64_to_cpu(ctx->data, node->inode.raw.di_size);
+	}
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

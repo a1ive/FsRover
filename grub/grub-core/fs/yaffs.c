@@ -1080,6 +1080,11 @@ grub_yaffs_dir_hook (const char *name, enum grub_fshelp_filetype type,
 	info.mtimeset = 1;
 	info.inode = node->object->id;
 	info.inodeset = 1;
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = target->size;
+	}
 	stop = context->hook (name, &info, context->hook_data);
 	grub_free (node);
 	return stop;

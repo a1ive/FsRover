@@ -2538,6 +2538,16 @@ dwarfs_dir (grub_device_t device, const char *path,
 		info.symlink = (mode & DWARFS_MODE_TYPE_MASK) == DWARFS_MODE_SYMLINK;
 		info.inodeset = 1;
 		info.inode = child;
+		if (!info.dir && !info.symlink)
+		{
+			grub_uint32_t begin, end;
+
+			if (dwarfs_file_chunks (data, child, &begin, &end) == 0
+				&& dwarfs_file_size (data, begin, end, &info.size) == 0)
+				info.sizeset = 1;
+			else
+				grub_errno = GRUB_ERR_NONE;
+		}
 		if (dwarfs_inode_mtime (data, child, &info.mtime) == 0)
 			info.mtimeset = 1;
 		else

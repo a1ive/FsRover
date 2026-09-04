@@ -67,6 +67,12 @@ grub_fbfs_get_link_target(struct grub_archelp_data* data __attribute__((unused))
 	return NULL;
 }
 
+static grub_uint64_t
+grub_fbfs_get_size(struct grub_archelp_data* data)
+{
+	return data->p->data_size;
+}
+
 static void
 grub_fbfs_rewind(struct grub_archelp_data* data)
 {
@@ -77,6 +83,7 @@ static struct grub_archelp_ops arcops =
 {
 	.find_file = grub_fbfs_find_file,
 	.get_link_target = grub_fbfs_get_link_target,
+	.get_size = grub_fbfs_get_size,
 	.rewind = grub_fbfs_rewind
 };
 

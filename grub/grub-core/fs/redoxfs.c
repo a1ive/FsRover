@@ -1121,6 +1121,11 @@ dir_hook_wrapper (const char *name, grub_size_t namelen,
           == REDOXFS_MODE_DIR) ? 1 : 0;
   info.symlink = ((grub_le_to_cpu16 (node.mode) & REDOXFS_MODE_TYPE)
           == REDOXFS_MODE_SYMLINK) ? 1 : 0;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = grub_le_to_cpu64 (node.size);
+    }
 
   if (namelen > REDOXFS_DIR_ENTRY_MAX_LENGTH)
     namelen = REDOXFS_DIR_ENTRY_MAX_LENGTH;

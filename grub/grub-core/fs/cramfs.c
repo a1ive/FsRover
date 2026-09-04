@@ -429,6 +429,11 @@ grub_cramfs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 	info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
 	info.symlink =
 		((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = node->size;
+	}
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

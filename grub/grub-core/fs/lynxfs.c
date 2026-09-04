@@ -547,6 +547,11 @@ grub_lynxfs_dir_iter(const char* filename, enum grub_fshelp_filetype filetype,
 	{
 		info.mtimeset = 1;
 		info.mtime = grub_be_to_cpu32(node->inode.i_mtime);
+		if ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_REG)
+		{
+			info.sizeset = 1;
+			info.size = grub_be_to_cpu32(node->inode.i_size);
+		}
 	}
 
 	info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);

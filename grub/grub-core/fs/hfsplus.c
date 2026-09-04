@@ -997,6 +997,11 @@ grub_hfsplus_dir_iter (const char *filename,
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
   info.mtimeset = 1;
   info.mtime = node->mtime;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = node->size;
+    }
   info.inodeset = 1;
   info.inode = node->fileid;
   info.case_insensitive = !! (filetype & GRUB_FSHELP_CASE_INSENSITIVE);

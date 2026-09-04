@@ -1040,6 +1040,11 @@ grub_iso9660_dir_iter (const char *filename,
   grub_memset (&info, 0, sizeof (info));
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = get_node_size (node);
+    }
   info.mtimeset = !!iso9660_to_unixtime2 (&node->dirents[0].mtime, &info.mtime);
   /* An extent start is the closest thing ISO 9660 has to an inode:
      it is what a directory record points at, and what a corrupt one

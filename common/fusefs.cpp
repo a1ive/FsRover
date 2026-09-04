@@ -61,6 +61,7 @@ struct dir_entry
 {
 	std::string name;
 	fusefs_stat st;
+	bool size_set;
 };
 
 } // namespace
@@ -182,21 +183,24 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 				item.name = ent->name;
 				item.st.mode = (ent->is_dir ? MODE_DIR | MODE_EXEC : MODE_FILE) | MODE_READ;
 				item.st.inode = ent->inode_set ? ent->inode : 0;
+				item.st.size = ent->size_set ? ent->size : 0;
 				item.st.mtime = ent->mtime_set ? ent->mtime : 0;
+				item.size_set = ent->size_set != 0;
 				out->push_back (std::move (item));
 				return 0;
 			}, &entries);
 		if (err)
 			return;
 
-		/* Rover directory hooks do not carry sizes.  Directory consumers
-		   cache the first metadata snapshot, so obtain exact file sizes now. */
+		/* Directory consumers cache the first metadata snapshot.  Most
+		   drivers report sizes from metadata already read while enumerating;
+		   obtain exact sizes separately only when a driver cannot do so. */
 		std::string prefix = full;
 		if (prefix.empty () || prefix.back () != '/')
 			prefix += '/';
 		for (dir_entry &item : entries)
 		{
-			if ((item.st.mode & MODE_DIR) == MODE_DIR)
+			if ((item.st.mode & MODE_DIR) == MODE_DIR || item.size_set)
 				continue;
 			rover_file *file = rover_file_open ((prefix + item.name).c_str ());
 			if (file)

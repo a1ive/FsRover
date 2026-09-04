@@ -733,6 +733,8 @@ grub_hikvision_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t h
 		info.case_insensitive = 1;
 		info.inodeset = 1;
 		info.inode = (grub_uint64_t) i + 256;
+		info.sizeset = 1;
+		info.size = data->entries[i].size;
 		if (hik_valid_timestamp (data->entries[i].end_time))
 		{
 			info.mtimeset = 1;

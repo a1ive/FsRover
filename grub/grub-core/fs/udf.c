@@ -1870,6 +1870,11 @@ grub_udf_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
   grub_memset (&info, 0, sizeof (info));
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = U64 (node->block.fe.file_size);
+    }
   if (U16 (node->block.fe.tag.tag_ident) == GRUB_UDF_TAG_IDENT_FE)
     tstamp = &node->block.fe.modification_time;
   else if (U16 (node->block.fe.tag.tag_ident) == GRUB_UDF_TAG_IDENT_EFE)

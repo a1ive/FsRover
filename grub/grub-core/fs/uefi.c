@@ -2722,6 +2722,11 @@ grub_uefi_dir (grub_device_t device, const char *path,
 		info.dir = d->ents[i].is_dir;
 		info.inodeset = 1;
 		info.inode = i;
+		if (!info.dir)
+		{
+			info.sizeset = 1;
+			info.size = d->ents[i].size;
+		}
 		if (hook (rest, &info, hook_data))
 			return GRUB_ERR_NONE;
 	}

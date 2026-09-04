@@ -715,6 +715,11 @@ grub_fatx_dir_hook (const char *name, enum grub_fshelp_filetype type,
 	info.case_insensitive = 1;
 	info.inodeset = 1;
 	info.inode = node->inode;
+	if (!info.dir)
+	{
+		info.sizeset = 1;
+		info.size = node->size;
+	}
 	info.mtimeset = fatx_timestamp (node->write_time,
 		partition->big_endian, &info.mtime);
 	stop = context->hook (name, &info, context->hook_data);

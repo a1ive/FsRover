@@ -851,6 +851,11 @@ grub_jfs_dir (grub_device_t device, const char *path,
       info.mtime = grub_le_to_cpu32 (inode.mtime.sec);
       info.inodeset = 1;
       info.inode = diro->ino;
+      if (!info.dir && !info.symlink)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_le_to_cpu64 (inode.size);
+	}
       if (hook (diro->name, &info, hook_data))
 	goto fail;
     }

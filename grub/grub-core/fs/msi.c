@@ -1351,6 +1351,11 @@ grub_msi_dir (grub_device_t device, const char *path,
 		info.dir = child_is_dir;
 		info.inodeset = 1;
 		info.inode = i;
+		if (!info.dir)
+		{
+			info.sizeset = 1;
+			info.size = data->files[i].size;
+		}
 		if (hook (name, &info, hook_data))
 			goto out;
 	}

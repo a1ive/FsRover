@@ -1142,6 +1142,11 @@ grub_ubifs_dir_iter(const char *name, grub_uint8_t type,
 	{
 		info.mtimeset = 1;
 		info.mtime = ii.mtime;
+		if (!info.dir && !info.symlink)
+		{
+			info.sizeset = 1;
+			info.size = ii.size;
+		}
 	}
 	else
 		grub_errno = GRUB_ERR_NONE;

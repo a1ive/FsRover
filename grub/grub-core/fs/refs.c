@@ -1794,6 +1794,11 @@ grub_refs_dir_iter(const char *filename, enum grub_fshelp_filetype filetype,
 		info.inodeset = 1;
 		info.inode = node->oid;
 	}
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = node->size;
+	}
 	grub_free(node);
 	return ctx->hook(filename, &info, ctx->hook_data);
 }

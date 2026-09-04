@@ -1027,6 +1027,11 @@ grub_rar_dir (grub_device_t device, const char *path,
 			info.symlink = data->items[i].is_link;
 			info.mtimeset = data->items[i].mtime_set;
 			info.mtime = data->items[i].mtime;
+			if (!info.symlink)
+			{
+				info.sizeset = 1;
+				info.size = data->items[i].unp_size;
+			}
 		}
 
 		if (hook (name, &info, hook_data))

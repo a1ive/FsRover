@@ -1668,6 +1668,11 @@ grub_pmf_dir (grub_device_t device, const char *path,
 		info.case_insensitive = 1;
 		info.inodeset = 1;
 		info.inode = (grub_uint64_t) (ent - data->ents);
+		if (!info.dir)
+		{
+			info.sizeset = 1;
+			info.size = ent->size;
+		}
 		if (ent->mtime)
 		{
 			info.mtimeset = 1;

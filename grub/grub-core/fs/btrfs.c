@@ -2345,6 +2345,11 @@ grub_btrfs_dir (grub_device_t device, const char *path,
 	  cdirel->name[grub_le_to_cpu16 (cdirel->n)] = 0;
 	  info.dir = (cdirel->type == GRUB_BTRFS_DIR_ITEM_TYPE_DIRECTORY);
 	  info.symlink = (cdirel->type == GRUB_BTRFS_DIR_ITEM_TYPE_SYMLINK);
+	  if (!err && !info.dir && !info.symlink)
+	    {
+	      info.sizeset = 1;
+	      info.size = grub_le_to_cpu64 (inode.size);
+	    }
 	  if (hook (cdirel->name, &info, hook_data))
 	    goto out;
 	  cdirel->name[grub_le_to_cpu16 (cdirel->n)] = c;

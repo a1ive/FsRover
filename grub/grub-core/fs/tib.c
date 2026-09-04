@@ -1136,6 +1136,11 @@ grub_tib_dir (grub_device_t device, const char *path,
 		info.dir = ent->dir;
 		info.inodeset = 1;
 		info.inode = ent->source;
+		if (!info.dir)
+		{
+			info.sizeset = 1;
+			info.size = ent->size;
+		}
 		if (hook (ent->path + plen, &info, hook_data))
 			break;
 	}

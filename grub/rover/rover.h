@@ -127,8 +127,8 @@ int rover_enum_disks (rover_disk_hook cb, void *data);
 
 /*
  * Directory enumeration.  "." and ".." are filtered out.  Entry sizes
- * are not available here (grub dir hooks do not report them); use
- * rover_stat() per entry.  Pointers are only valid during the callback.
+ * are optional: size is valid only when size_set is nonzero.  Pointers are
+ * only valid during the callback.
  */
 
 struct rover_dirent
@@ -138,6 +138,8 @@ struct rover_dirent
 	int is_symlink;
 	int mtime_set;
 	long long mtime;	/* seconds since Unix epoch */
+	int size_set;
+	unsigned long long size;	/* logical bytes for regular files */
 	/* On-disk identity of the entry (inode number, MFT record, start
 	   cluster -- whatever the driver uses to tell two objects apart
 	   within one volume).  Not every driver reports one: inode_set is

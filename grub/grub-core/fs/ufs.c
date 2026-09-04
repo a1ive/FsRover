@@ -731,6 +731,11 @@ grub_ufs_dir (grub_device_t device, const char *path,
       info.mtimeset = 1;
       info.inodeset = 1;
       info.inode = grub_ufs_to_cpu32 (dirent.ino);
+      if (!info.dir && !info.symlink)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_ufs_to_cpu64 (inode.size);
+	}
 
       if (hook (filename, &info, hook_data))
 	{

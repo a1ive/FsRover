@@ -1125,6 +1125,11 @@ grub_jffs2_dir_iter(const char *filename, grub_uint8_t type,
 	grub_jffs2_stat_ino(ctx->data, ino, &isize, &mtime);
 	info.mtimeset = 1;
 	info.mtime = mtime ? mtime : mctime;
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = isize;
+	}
 	return ctx->hook(filename, &info, ctx->hook_data);
 }
 

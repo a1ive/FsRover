@@ -1045,6 +1045,11 @@ grub_fat_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook,
 					    ctxt.entry.type_specific.file.m_time_tenth,
 					    &info.mtime);
       info.inode = ctxt.dir.first_cluster;
+      if (!info.dir)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_le_to_cpu64 (ctxt.dir.file_size);
+	}
 #else
       if (ctxt.dir.attr & GRUB_FAT_ATTR_VOLUME_ID)
 	continue;
@@ -1053,6 +1058,11 @@ grub_fat_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook,
 					  &info.mtime);
       info.inode = ((grub_le_to_cpu16 (ctxt.dir.first_cluster_high) << 16)
 		    | grub_le_to_cpu16 (ctxt.dir.first_cluster_low));
+      if (!info.dir)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_le_to_cpu32 (ctxt.dir.file_size);
+	}
 #endif
       /* The start cluster is what grub_fat_dir() itself follows, so it
 	 identifies the object -- except that every empty file is left at

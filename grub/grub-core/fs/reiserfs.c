@@ -1308,6 +1308,11 @@ grub_reiserfs_dir_iter (const char *filename,
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
   info.mtimeset = 1;
   info.mtime = node->mtime;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = node->size;
+    }
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);
 }

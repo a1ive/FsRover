@@ -1622,6 +1622,11 @@ grub_gho_dir (grub_device_t device, const char *path,
 		info.case_insensitive = dir->case_insensitive;
 		info.inodeset = c->inode != 0;
 		info.inode = c->inode;
+		if (!info.dir && !info.symlink)
+		{
+			info.sizeset = 1;
+			info.size = c->size;
+		}
 		if (hook (c->name, &info, hook_data))
 			break;
 	}

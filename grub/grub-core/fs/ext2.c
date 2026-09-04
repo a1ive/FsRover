@@ -1012,6 +1012,12 @@ grub_ext2_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
     {
       info.mtimeset = 1;
       info.mtime = grub_le_to_cpu32 (node->inode.mtime);
+      if ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_REG)
+	{
+	  info.sizeset = 1;
+	  info.size = grub_le_to_cpu32 (node->inode.size);
+	  info.size |= ((grub_uint64_t) grub_le_to_cpu32 (node->inode.size_high)) << 32;
+	}
     }
 
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);

@@ -1068,6 +1068,11 @@ grub_pkg_dir (grub_device_t device, struct grub_pkg_ops *ops,
 		if (!child_is_dir)
 		{
 			info.symlink = entry->is_lnk;
+			if (!info.dir && !info.symlink)
+			{
+				info.sizeset = 1;
+				info.size = entry->size;
+			}
 			if (entry->mtime != 0)
 			{
 				info.mtimeset = 1;

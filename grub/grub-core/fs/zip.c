@@ -319,6 +319,8 @@ grub_zip_dir(grub_device_t device, const char* path,
 			info.mtimeset = 1;
 			info.mtime = data->stat.m_time;
 			info.inode = data->index;
+			info.sizeset = !info.dir;
+			info.size = info.sizeset ? data->stat.m_uncomp_size : 0;
 			hook(p, &info, hook_data);
 			goto fail;
 		}
@@ -344,6 +346,8 @@ grub_zip_dir(grub_device_t device, const char* path,
 				info.mtimeset = 1;
 				info.mtime = data->stat.m_time;
 				info.inode = data->index;
+				info.sizeset = !info.dir;
+				info.size = info.sizeset ? data->stat.m_uncomp_size : 0;
 				if (*p == '/')
 					p++;
 				if (*p == '\0')

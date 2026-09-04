@@ -2250,6 +2250,11 @@ erofs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
     {
       info.mtimeset = 1;
       info.mtime = erofs_inode_mtime (node);
+      if ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_REG)
+	{
+	  info.sizeset = 1;
+	  info.size = erofs_inode_file_size (node);
+	}
     }
 
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);

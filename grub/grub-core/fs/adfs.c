@@ -909,6 +909,11 @@ grub_adfs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
 	info.mtimeset = mtime_valid;
 	info.inodeset = 1;
 	info.inode = node->indaddr;
+	if (!info.dir && !info.symlink)
+	{
+		info.sizeset = 1;
+		info.size = node->size;
+	}
 	grub_free (node);
 	ret = ctx->hook (filename, &info, ctx->hook_data);
 	return ret;

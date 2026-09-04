@@ -573,6 +573,11 @@ grub_affs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
   info.mtime = aftime2ctime (&node->di.mtime);
   info.inodeset = 1;
   info.inode = node->block;
+  if (!info.dir && !info.symlink)
+    {
+      info.sizeset = 1;
+      info.size = grub_be_to_cpu32 (node->di.size);
+    }
   grub_free (node);
   return ctx->hook (filename, &info, ctx->hook_data);
 }

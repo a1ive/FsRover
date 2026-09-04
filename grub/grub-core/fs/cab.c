@@ -815,6 +815,11 @@ grub_cab_dir (grub_device_t device, const char *path,
 		info.dir = child_is_dir || data->items[i].is_dir;
 		info.inodeset = 1;
 		info.inode = i;
+		if (!info.dir)
+		{
+			info.sizeset = 1;
+			info.size = grub_cab_item_size (data, i);
+		}
 		if (!child_is_dir && data->items[i].mtime != 0)
 		{
 			info.mtimeset = 1;
