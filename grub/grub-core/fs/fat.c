@@ -563,7 +563,8 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 	  if (next_cluster >= node->data->cluster_eof_mark)
 	    return ret;
 
-	  if (next_cluster < 2 || next_cluster >= node->data->num_clusters)
+	  if (next_cluster < 2 || next_cluster >= node->data->num_clusters
+	      || next_cluster == node->cur_cluster)
 	    {
 	      grub_error (GRUB_ERR_BAD_FS, "invalid cluster %u",
 			  next_cluster);
