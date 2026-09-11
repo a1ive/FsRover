@@ -1478,6 +1478,9 @@ host.
 ### Behaviour of a mounted volume
 
 - **Read-only.**
+- Entries identified by the driver as symbolic links are omitted from mounted
+  directories. Accessing a link, including a path through a directory link,
+  reports **not supported**.
 - The volume reports **case-sensitive search**, **case-preserved names** and
   **Unicode on disk**, with a maximum path component length of 255.
 - The Windows volume label is the grub device name (`hd0,gpt2`, `loop0`, …) and

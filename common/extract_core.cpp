@@ -109,11 +109,19 @@ widen (const std::string &text)
 	return wide;
 }
 
+struct collect_context
+{
+	std::vector<dir_entry> *entries;
+	const options *opts;
+};
+
 int
 collect_dir_entry (const struct rover_dirent *entry, void *data)
 {
-	auto *entries = static_cast<std::vector<dir_entry> *> (data);
-	entries->push_back ({ entry->name, entry->is_dir != 0,
+	auto *context = static_cast<collect_context *> (data);
+	if (cancelled (*context->opts))
+		return 1;
+	context->entries->push_back ({ entry->name, entry->is_dir != 0,
 		entry->is_symlink != 0, entry->mtime_set ? entry->mtime : 0,
 		entry->inode_set != 0, entry->inode });
 	return 0;
@@ -295,18 +303,25 @@ walk_dir (const std::string &src, size_t parent,
 	unsigned long long &links, const options &opts, std::string &error)
 {
 	std::vector<dir_entry> children;
+	collect_context collect = { &children, &opts };
 
+	if (cancelled (opts))
+		return false;
 	if (chain.size () >= WALK_MAX_DEPTH)
 	{
 		error = src + ": directory nesting too deep";
 		return false;
 	}
-	if (rover_dir_list (src.c_str (), collect_dir_entry, &children))
+	if (rover_dir_list (src.c_str (), collect_dir_entry, &collect))
 	{
 		const char *message = rover_last_error ();
 		error = src + ": " + (message ? message : "cannot list directory");
 		return false;
 	}
+	/* The driver has returned: synchronous mount requests are now safe. */
+	service (opts);
+	if (cancelled (opts))
+		return false;
 	for (const dir_entry &entry : children)
 	{
 		if (cancelled (opts))
@@ -548,6 +563,9 @@ extract (const std::vector<std::string> &sources,
 			*error = source + ": " + (message ? message : "cannot stat source");
 			goto out;
 		}
+		service (opts);
+		if (cancelled (opts))
+			goto out;
 		if (stat.is_symlink)
 		{
 			context.links_skipped++;

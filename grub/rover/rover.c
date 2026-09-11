@@ -22,6 +22,8 @@
  * so rover_last_error() reflects the most recent rover call only.
  */
 
+#include <errno.h>
+
 #include <grub/types.h>
 #include <grub/err.h>
 #include <grub/mm.h>
@@ -39,6 +41,31 @@
 
 #include "fscharset.h"
 #include "rover.h"
+
+int
+rover_last_errno (void)
+{
+	switch (grub_errno)
+	{
+	case GRUB_ERR_NONE: return 0;
+	case GRUB_ERR_FILE_NOT_FOUND: return ENOENT;
+	case GRUB_ERR_UNKNOWN_DEVICE: return ENODEV;
+	case GRUB_ERR_OUT_OF_MEMORY: return ENOMEM;
+	case GRUB_ERR_ACCESS_DENIED: return EACCES;
+	case GRUB_ERR_BAD_FILENAME:
+	case GRUB_ERR_BAD_ARGUMENT:
+	case GRUB_ERR_BAD_NUMBER:
+	case GRUB_ERR_BAD_FILE_TYPE: return EINVAL;
+	case GRUB_ERR_OUT_OF_RANGE: return EOVERFLOW;
+	case GRUB_ERR_NOT_IMPLEMENTED_YET: return ENOTSUP;
+	case GRUB_ERR_SYMLINK_LOOP:
+	case GRUB_ERR_RECURSION_DEPTH: return ELOOP;
+	case GRUB_ERR_TIMEOUT: return ETIMEDOUT;
+	case GRUB_ERR_STILL_REFERENCED: return EBUSY;
+	case GRUB_ERR_EXISTS: return EEXIST;
+	default: return EIO;
+	}
+}
 
 int
 rover_set_fs_char_encoding (unsigned int encoding)
@@ -716,7 +743,8 @@ rover_stat (const char *path, rover_stat_t *st)
 		*sep = '\0';
 		(fs->fs_dir) (dev, fs_path, stat_dir_hook, &ctx);
 	}
-	grub_errno = GRUB_ERR_NONE;
+	if (grub_errno)
+		goto fail;
 
 	if (!ctx.found)
 	{
@@ -724,7 +752,7 @@ rover_stat (const char *path, rover_stat_t *st)
 		goto fail;
 	}
 
-	if (!st->is_dir && st->size == ROVER_SIZE_UNKNOWN)
+	if (!st->is_dir && !st->is_symlink && st->size == ROVER_SIZE_UNKNOWN)
 	{
 		file = grub_file_open (path, GRUB_FILE_TYPE_GET_SIZE | GRUB_FILE_TYPE_NO_DECOMPRESS);
 		if (file)

@@ -48,6 +48,49 @@ rover_path (const fusefs *fs, const char *path)
 	return path[0] == '/' ? fs->root + path : fs->root + "/" + path;
 }
 
+/* GRUB exposes link identity but has no common readlink interface.  Do not
+   synthesize regular files from links or follow a directory link indirectly.
+   Reject every link component, including direct calls with /link/child. */
+int
+mount_stat (const std::string &full, rover_stat_t *st)
+{
+	size_t close = full.find (')');
+	for (size_t slash = full.find ('/', close == std::string::npos ? 0 : close + 1);
+		slash != std::string::npos; slash = full.find ('/', slash + 1))
+	{
+		if (slash == close + 1)
+			continue;
+		rover_stat_t parent = {};
+		if (rover_stat (full.substr (0, slash).c_str (), &parent))
+			return -rover_last_errno ();
+		if (parent.is_symlink)
+			return -ENOTSUP;
+		if (!parent.is_dir)
+			return -ENOTDIR;
+	}
+	if (rover_stat (full.c_str (), st))
+		return -rover_last_errno ();
+	return st->is_symlink ? -ENOTSUP : 0;
+}
+
+rover_file *
+open_file (const std::string &full, int *error)
+{
+	rover_stat_t st = {};
+	*error = mount_stat (full, &st);
+	if (*error)
+		return nullptr;
+	if (st.is_dir)
+	{
+		*error = -EISDIR;
+		return nullptr;
+	}
+	rover_file *file = rover_file_open (full.c_str ());
+	if (!file)
+		*error = -rover_last_errno ();
+	return file;
+}
+
 void
 fill_stat (const rover_stat_t &in, fusefs_stat *out)
 {
@@ -89,10 +132,10 @@ fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st)
 	int err = 0;
 	std::string full = rover_path (fs, path);
 
-	if (!fs->dispatch ([&] { err = rover_stat (full.c_str (), &rover_st); }))
+	if (!fs->dispatch ([&] { err = mount_stat (full, &rover_st); }))
 		return -EIO;
 	if (err)
-		return -ENOENT;
+		return err;
 	fill_stat (rover_st, st);
 	return 0;
 }
@@ -106,10 +149,11 @@ fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle)
 
 	std::string full = rover_path (fs, path);
 	rover_file *file = nullptr;
-	if (!fs->dispatch ([&] { file = rover_file_open (full.c_str ()); }))
+	int err = 0;
+	if (!fs->dispatch ([&] { file = open_file (full, &err); }))
 		return -EIO;
 	if (!file)
-		return -ENOENT;
+		return err;
 	*handle = (uint64_t) (uintptr_t) file;
 	return 0;
 }
@@ -130,12 +174,9 @@ fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 		rover_file *file = (rover_file *) (uintptr_t) *handle;
 		if (!file)
 		{
-			file = rover_file_open (full.c_str ());
+			file = open_file (full, &result);
 			if (!file)
-			{
-				result = -ENOENT;
 				return;
-			}
 			*handle = (uint64_t) (uintptr_t) file;
 		}
 		unsigned long long file_size = rover_file_size (file);
@@ -145,11 +186,11 @@ fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 			file_size - (unsigned long long) offset);
 		if (rover_file_seek (file, (unsigned long long) offset))
 		{
-			result = -EIO;
+			result = -rover_last_errno ();
 			return;
 		}
 		long long got = rover_file_read (file, buf, want);
-		result = got < 0 ? -EIO : (int) got;
+		result = got < 0 ? -rover_last_errno () : (int) got;
 	}))
 		return -EIO;
 	return result;
@@ -175,9 +216,21 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 
 	if (!fs->dispatch ([&]
 	{
+		rover_stat_t st = {};
+		err = mount_stat (full, &st);
+		if (err)
+			return;
+		if (!st.is_dir)
+		{
+			err = -ENOTDIR;
+			return;
+		}
 		err = rover_dir_list (full.c_str (),
 			[] (const rover_dirent *ent, void *opaque) -> int
 			{
+				/* Unsupported links must not appear as ordinary files. */
+				if (ent->is_symlink)
+					return 0;
 				auto *out = (std::vector<dir_entry> *) opaque;
 				dir_entry item = {};
 				item.name = ent->name;
@@ -190,7 +243,10 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 				return 0;
 			}, &entries);
 		if (err)
+		{
+			err = -rover_last_errno ();
 			return;
+		}
 
 		/* Directory consumers cache the first metadata snapshot.  Most
 		   drivers report sizes from metadata already read while enumerating;
@@ -212,7 +268,7 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	}))
 		return -EIO;
 	if (err)
-		return -ENOENT;
+		return err;
 
 	fusefs_stat dot = {};
 	dot.mode = MODE_DIR | MODE_READ | MODE_EXEC;

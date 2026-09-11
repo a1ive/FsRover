@@ -68,6 +68,10 @@ int rover_set_fs_char_encoding (unsigned int encoding);
    succeeded.  Valid until the next rover/grub call.  */
 const char *rover_last_error (void);
 
+/* Host errno for the current GRUB error (0 on success).  Read before any
+   other rover call; this does not clear or change the original error. */
+int rover_last_errno (void);
+
 /*
  * Disk/volume enumeration.  The callback receives every grub device:
  * whole disks ("hd0"), partitions ("hd0,gpt2"), and volume-manager

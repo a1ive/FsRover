@@ -353,6 +353,7 @@ run_export_image (const export_image_task &task, UINT seq, backend_result *res)
 	std::vector<char> buf ((size_t) 1 << 20);
 	rover_file *f;
 	HANDLE h;
+	std::wstring temporary;
 	UINT64 total;
 	ULONGLONG last_tick;
 
@@ -366,8 +367,20 @@ run_export_image (const export_image_task &task, UINT seq, backend_result *res)
 	if (task.limit < total)
 		total = task.limit;
 
-	h = CreateFileW (task.dest.c_str (), GENERIC_WRITE, 0, nullptr,
-			 CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	/* Reserve a sibling on the destination volume.  A failed or cancelled
+	   export must never truncate or delete the existing destination. */
+	for (unsigned long long attempt = 0;; attempt++)
+	{
+		temporary = task.dest.substr (0, task.dest.find_last_of (L"\\/") + 1)
+			+ L".rover-" + std::to_wstring (GetCurrentProcessId ())
+			+ L"-" + std::to_wstring (seq) + L"-" + std::to_wstring (attempt) + L".tmp";
+		h = CreateFileW (temporary.c_str (), GENERIC_WRITE, 0, nullptr,
+			CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (h != INVALID_HANDLE_VALUE || GetLastError () != ERROR_FILE_EXISTS)
+			break;
+		if (g_cancel.load (std::memory_order_relaxed))
+			break;
+	}
 	if (h == INVALID_HANDLE_VALUE)
 	{
 		rover_file_close (f);
@@ -415,15 +428,21 @@ run_export_image (const export_image_task &task, UINT seq, backend_result *res)
 		}
 	}
 
-	CloseHandle (h);
+	if (res->error.empty () && !g_cancel.load (std::memory_order_relaxed)
+		&& !FlushFileBuffers (h))
+		res->error = "cannot flush image file";
+	if (!CloseHandle (h) && res->error.empty ())
+		res->error = "cannot close image file";
 	rover_file_close (f);
 	if (res->error.empty () && g_cancel.load (std::memory_order_relaxed))
 		res->error = "export cancelled";
-	/* A partial raw image is indistinguishable from a complete one
-	   once the app is gone, and there is no resume; drop it.  */
+	if (res->error.empty () && !MoveFileExW (temporary.c_str (), task.dest.c_str (),
+		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+		res->error = "cannot replace destination image";
+	/* Only the temporary output belongs to an unsuccessful export. */
 	if (!res->error.empty ())
 	{
-		DeleteFileW (task.dest.c_str ());
+		DeleteFileW (temporary.c_str ());
 		res->stat_bytes = 0;
 	}
 	else

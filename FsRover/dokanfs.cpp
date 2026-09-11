@@ -120,6 +120,30 @@ unix_to_filetime (long long t)
 	return ft;
 }
 
+NTSTATUS
+error_status (int error)
+{
+	switch (error)
+	{
+	case 0: return STATUS_SUCCESS;
+	case -ENOENT: return STATUS_OBJECT_NAME_NOT_FOUND;
+	case -ENODEV: return STATUS_NO_SUCH_DEVICE;
+	case -ENOTDIR: return STATUS_NOT_A_DIRECTORY;
+	case -EISDIR: return STATUS_FILE_IS_A_DIRECTORY;
+	case -EACCES: return STATUS_ACCESS_DENIED;
+	case -ENOMEM: return STATUS_INSUFFICIENT_RESOURCES;
+	case -EINVAL: return STATUS_INVALID_PARAMETER;
+	case -ENOTSUP: return STATUS_NOT_SUPPORTED;
+	case -ELOOP: return STATUS_REPARSE_POINT_NOT_RESOLVED;
+	case -ETIMEDOUT: return STATUS_IO_TIMEOUT;
+	case -EROFS: return STATUS_MEDIA_WRITE_PROTECTED;
+	case -EOVERFLOW: return STATUS_INTEGER_OVERFLOW;
+	case -EBUSY: return STATUS_DEVICE_BUSY;
+	case -EEXIST: return STATUS_OBJECT_NAME_COLLISION;
+	default: return STATUS_IO_DEVICE_ERROR;
+	}
+}
+
 NTSTATUS DOKAN_CALLBACK
 fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 	ULONG disposition, ULONG options, PDOKAN_FILE_INFO info)
@@ -133,7 +157,7 @@ fs_create (LPCWSTR name, PDOKAN_IO_SECURITY_CONTEXT, ACCESS_MASK, ULONG, ULONG,
 	fusefs_stat st = {};
 	int err = fusefs_getattr (&m->core, path.c_str (), &st);
 	if (err)
-		return STATUS_OBJECT_NAME_NOT_FOUND;
+		return error_status (err);
 
 	if ((st.mode & 0170000) == 0040000)
 	{
@@ -171,10 +195,8 @@ fs_read (LPCWSTR name, LPVOID buf, DWORD len, LPDWORD got, LONGLONG off, PDOKAN_
 	uint64_t handle = info->Context;
 	int rc = fusefs_read (&m->core, path.c_str (), buf, len, off, &handle);
 	info->Context = handle;
-	if (rc == -ENOENT)
-		return STATUS_OBJECT_NAME_NOT_FOUND;
 	if (rc < 0)
-		return STATUS_UNSUCCESSFUL;
+		return error_status (rc);
 	*got = (DWORD) rc;
 	return rc == 0 && len && off >= 0 ? STATUS_END_OF_FILE : STATUS_SUCCESS;
 }
@@ -185,8 +207,9 @@ fs_getinfo (LPCWSTR name, LPBY_HANDLE_FILE_INFORMATION out, PDOKAN_FILE_INFO inf
 	dokan_mount *m = mount_of (info);
 	std::string path = fuse_path (name);
 	fusefs_stat st = {};
-	if (fusefs_getattr (&m->core, path.c_str (), &st))
-		return STATUS_OBJECT_NAME_NOT_FOUND;
+	int err = fusefs_getattr (&m->core, path.c_str (), &st);
+	if (err)
+		return error_status (err);
 
 	ZeroMemory (out, sizeof (*out));
 	out->dwFileAttributes = FILE_ATTRIBUTE_READONLY;
@@ -235,7 +258,7 @@ fs_findfiles (LPCWSTR name, PFillFindData fill, PDOKAN_FILE_INFO info)
 			wcsncpy_s (fd.cFileName, widen (entry_name).c_str (), _TRUNCATE);
 			return context->fill (&fd, context->info);
 		}, &context);
-	return rc ? STATUS_OBJECT_NAME_NOT_FOUND : STATUS_SUCCESS;
+	return error_status (rc);
 }
 
 NTSTATUS DOKAN_CALLBACK
