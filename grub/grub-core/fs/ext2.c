@@ -552,8 +552,8 @@ grub_ext2_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
         }
       else
         {
-          grub_error (GRUB_ERR_BAD_FS, "something wrong with extent");
-	  ret = -1;
+	  /* Empty leaf or a hole before the first extent.  */
+	  ret = 0;
         }
 
       if (leaf != (struct grub_ext4_extent_header *) inode->blocks.dir_blocks)
