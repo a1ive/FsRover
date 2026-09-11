@@ -22,6 +22,8 @@
  * their own files (propsdlg/cryptodlg/hexview/textview/imageview) and
  * are reached only through the functions below.  Everything here runs
  * on the GUI thread; grub work still goes through backend.h.
+ * File pickers, mount dialogs and the tray use their focused interfaces in
+ * filedlg.h, mountdlg.h and tray.h.
  */
 
 #ifndef FSROVER_GUI_H
@@ -44,7 +46,7 @@
 /* Posted by a dialog to itself from WM_DPICHANGED: everything that has
    to run after the dialog manager has rescaled the frame, the dialog
    font and the controls.  (WM_APP + 1..6 are taken by backend.h and
-   dokanfs.h, + 5 by the tray icon in main.cpp.)  */
+   dokanfs.h, + 5 by the tray icon in tray.cpp.)  */
 constexpr UINT WM_APP_DPI_CHANGED = WM_APP + 7;
 
 /*

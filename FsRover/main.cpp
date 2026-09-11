@@ -40,6 +40,9 @@
 #include "../common/fs_encoding.h"
 #include "dokanfs.h"
 #include "gui.h"
+#include "filedlg.h"
+#include "mountdlg.h"
+#include "tray.h"
 #include "resource.h"
 #include "strconv.h"
 
@@ -119,12 +122,6 @@ constexpr int IDM_PLAINMOUNT = 16;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 constexpr int IDM_SMART = 17;
 #endif
-constexpr int IDM_TRAY_OPEN = 900;
-constexpr int IDM_TRAY_EXIT = 901;
-constexpr int IDM_TRAY_UNMOUNT_BASE = 1000;
-
-/* tray -> window: mouse events on the notification icon.  */
-constexpr UINT WM_APP_TRAY = WM_APP + 5;
 
 /* This window's DPI, and the layout metrics it scales.  Read from the
    creation monitor in WM_CREATE and refreshed on WM_DPICHANGED; every
@@ -251,8 +248,7 @@ HIMAGELIST g_himl_cancel;	/* same button while extracting */
 HIMAGELIST g_tree_iml;	/* tree device-icon image list */
 HIMAGELIST g_list_iml;	/* DPI-sized file/folder icons */
 IImageList *g_shell_iml;	/* source shell icons at the nearest larger size */
-NOTIFYICONDATAW g_tray;	/* resident notification icon */
-UINT g_taskbar_msg;	/* "TaskbarCreated", re-add the icon after a shell restart */
+tray_icon g_tray;	/* notification icon and its shell-restart handling */
 
 void
 set_status (const wchar_t *text)
@@ -596,112 +592,6 @@ address_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
 	return DefSubclassProc (wnd, msg, wp, lp);
 }
 
-/* Extraction */
-
-std::wstring
-pick_folder (void)
-{
-	IFileDialog *dlg = nullptr;
-	IShellItem *item = nullptr;
-	wchar_t *path = nullptr;
-	FILEOPENDIALOGOPTIONS opts = 0;
-	std::wstring out;
-	std::wstring title = res_str (IDS_PICK_FOLDER);
-
-	if (FAILED (CoCreateInstance (CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
-		return {};
-	if (FAILED (dlg->GetOptions (&opts))
-		|| FAILED (dlg->SetOptions (opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST))
-		|| FAILED (dlg->SetTitle (title.c_str ()))
-		|| FAILED (dlg->Show (g_main))
-		|| FAILED (dlg->GetResult (&item))
-		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
-		goto fail;
-
-	out = path;
-	CoTaskMemFree (path);
-fail:
-	if (item)
-		item->Release ();
-	dlg->Release ();
-	return out;
-}
-
-/* Save dialog for the raw image export.  DEFNAME seeds the name; the
-   ".img" extension is appended when the user types none.  */
-std::wstring
-pick_image_file (const std::wstring &defname)
-{
-	IFileSaveDialog *dlg = nullptr;
-	IShellItem *item = nullptr;
-	wchar_t *path = nullptr;
-	FILEOPENDIALOGOPTIONS opts = 0;
-	std::wstring out;
-	std::wstring title = res_str (IDS_PICK_IMAGE);
-	std::wstring filter = res_str (IDS_FILTER_IMAGE);
-	COMDLG_FILTERSPEC types[] = { { filter.c_str (), L"*.img" } };
-
-	if (FAILED (CoCreateInstance (CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
-		return {};
-	if (FAILED (dlg->GetOptions (&opts))
-		|| FAILED (dlg->SetOptions (opts | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST))
-		|| FAILED (dlg->SetTitle (title.c_str ()))
-		|| FAILED (dlg->SetFileTypes (ARRAYSIZE (types), types))
-		|| FAILED (dlg->SetDefaultExtension (L"img"))
-		|| FAILED (dlg->SetFileName (defname.c_str ()))
-		|| FAILED (dlg->Show (g_main))
-		|| FAILED (dlg->GetResult (&item))
-		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
-		goto fail;
-
-	out = path;
-	CoTaskMemFree (path);
-fail:
-	if (item)
-		item->Release ();
-	dlg->Release ();
-	return out;
-}
-
-/* Open dialog for the File menu's "open image": any Windows file can be mounted.  */
-std::wstring
-pick_open_image (void)
-{
-	IFileOpenDialog *dlg = nullptr;
-	IShellItem *item = nullptr;
-	wchar_t *path = nullptr;
-	FILEOPENDIALOGOPTIONS opts = 0;
-	std::wstring out;
-	std::wstring title = res_str (IDS_PICK_OPEN_IMAGE);
-	std::wstring filter = res_str (IDS_FILTER_OPEN_IMAGE);
-	std::wstring filter_all = res_str (IDS_FILTER_ALL);
-	COMDLG_FILTERSPEC types[] =
-	{
-		{ filter.c_str (), L"*.img;*.ima;*.iso;*.vhd;*.vhdx;*.vdi;*.qcow;*.qcow2;*.vmdk;*.dmg;"
-				   L"*.cue;*.toc;*.nrg;*.ccd;*.mds;*.cdr" },
-		{ filter_all.c_str (), L"*.*" },
-	};
-
-	if (FAILED (CoCreateInstance (CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS (&dlg))))
-		return {};
-	if (FAILED (dlg->GetOptions (&opts))
-		|| FAILED (dlg->SetOptions (opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST))
-		|| FAILED (dlg->SetTitle (title.c_str ()))
-		|| FAILED (dlg->SetFileTypes (ARRAYSIZE (types), types))
-		|| FAILED (dlg->Show (g_main))
-		|| FAILED (dlg->GetResult (&item))
-		|| FAILED (item->GetDisplayName (SIGDN_FILESYSPATH, &path)))
-		goto fail;
-
-	out = path;
-	CoTaskMemFree (path);
-fail:
-	if (item)
-		item->Release ();
-	dlg->Release ();
-	return out;
-}
-
 } // namespace
 
 /* Mount a file from the Windows filesystem as a virtual disk
@@ -720,7 +610,7 @@ namespace
 void
 open_host_image (bool decompress)
 {
-	std::wstring file = pick_open_image ();
+	std::wstring file = pick_open_image (g_main);
 
 	if (file.empty ())
 		return;
@@ -812,7 +702,7 @@ start_extract (std::vector<std::string> &&paths)
 {
 	if (g_extracting || paths.empty ())
 		return;
-	std::wstring dest = pick_folder ();
+	std::wstring dest = pick_folder (g_main);
 	if (dest.empty ())
 		return;
 
@@ -841,7 +731,7 @@ start_export (const backend_diskent &d)
 {
 	if (g_extracting)
 		return;
-	std::wstring dest = pick_image_file (image_default_name (d.name));
+	std::wstring dest = pick_image_file (g_main, image_default_name (d.name));
 	if (dest.empty ())
 		return;
 
@@ -972,139 +862,21 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	}
 }
 
-/* Windows drive-letter mounts (WinFsp default, selectable Dokan host). */
 
-/* Mount options collected by the dialog; the device entry is a
-   snapshot because a disk refresh arriving during the modal loop
-   reallocates g_disks, and the Explorer checkbox keeps its last
-   state for the session.  */
-backend_diskent g_dokan_disk;
-wchar_t g_dokan_letter;
-bool g_dokan_explorer = true;
-
-INT_PTR CALLBACK
-dokan_mount_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
+/* The main window owns the status bar; mount dialogs return its text. */
+void
+do_dokan_mount (const backend_diskent &disk)
 {
-	switch (msg)
-	{
-	case WM_INITDIALOG:
-	{
-		SetWindowTextW (dlg, res_str (IDS_MENU_DOKAN_MOUNT).c_str ());
-		std::wstring info = widen (g_dokan_disk.name) + L" (" + widen (g_dokan_disk.fs) + L")";
-		SetDlgItemTextW (dlg, IDC_DOKAN_INFO, info.c_str ());
-		SetDlgItemTextW (dlg, IDC_DOKAN_LETTER_LABEL, res_str (IDS_DOKAN_LETTER).c_str ());
-		SetDlgItemTextW (dlg, IDC_DOKAN_EXPLORER, res_str (IDS_DOKAN_OPEN_EXPLORER).c_str ());
-		SetDlgItemTextW (dlg, IDCANCEL, res_str (IDS_BTN_CANCEL).c_str ());
-
-		HWND combo = GetDlgItem (dlg, IDC_DOKAN_LETTER);
-		DWORD mask = GetLogicalDrives ();
-		for (int i = 3; i < 26; i++)	/* D: through Z: */
-			if (!(mask & (1u << i)))
-			{
-				wchar_t item[3] = { (wchar_t) (L'A' + i), L':', 0 };
-				SendMessageW (combo, CB_ADDSTRING, 0, (LPARAM) item);
-			}
-		/* Default to the highest free letter.  */
-		int count = (int) SendMessageW (combo, CB_GETCOUNT, 0, 0);
-		SendMessageW (combo, CB_SETCURSEL, (WPARAM) (count - 1), 0);
-		CheckDlgButton (dlg, IDC_DOKAN_EXPLORER, g_dokan_explorer ? BST_CHECKED : BST_UNCHECKED);
-		return TRUE;
-	}
-	case WM_COMMAND:
-		switch (LOWORD (wp))
-		{
-		case IDOK:
-		{
-			HWND combo = GetDlgItem (dlg, IDC_DOKAN_LETTER);
-			int sel = (int) SendMessageW (combo, CB_GETCURSEL, 0, 0);
-			if (sel < 0)
-				return TRUE;	/* no free drive letter */
-			wchar_t item[8] = {};
-			SendMessageW (combo, CB_GETLBTEXT, (WPARAM) sel, (LPARAM) item);
-			g_dokan_letter = item[0];
-			g_dokan_explorer = IsDlgButtonChecked (dlg, IDC_DOKAN_EXPLORER) == BST_CHECKED;
-			EndDialog (dlg, 1);
-			return TRUE;
-		}
-		case IDCANCEL:
-			EndDialog (dlg, 0);
-			return TRUE;
-		}
-		break;
-	}
-	return FALSE;
+	std::wstring text = show_mount_dialog (g_main, disk);
+	if (!text.empty ())
+		set_status (text.c_str ());
 }
 
 void
-do_dokan_mount (const backend_diskent &d)
+do_dokan_unmount (dokan_mount *mount)
 {
-	g_dokan_disk = d;
-	{
-		modal_scope hold;
-		if (DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DOKANMOUNT), g_main, dokan_mount_dlg_proc, 0) != 1)
-			return;
-	}
-
-	std::wstring err;
-	dokan_mount *m = dokanfs_mount (g_dokan_disk.name, g_dokan_disk.fs, g_dokan_disk.size, g_dokan_letter, g_dokan_explorer, &err);
-	if (!m)
-	{
-		set_status (err.c_str ());
-		return;
-	}
-	wchar_t text[160];
-	// Mounted %s to %s
-	_snwprintf_s (text, 160, _TRUNCATE, res_str (IDS_FMT_DOKAN_MOUNTED).c_str (),
-		widen (g_dokan_disk.name).c_str (), dokanfs_letter (m).c_str ());
-	set_status (text);
+	set_status (unmount_drive (mount).c_str ());
 }
-
-void
-do_dokan_unmount (dokan_mount *m)
-{
-	std::string dev = dokanfs_device (m);
-
-	dokanfs_unmount (m);
-	wchar_t text[160];
-	// Unmount %s (%s)
-	_snwprintf_s (text, 160, _TRUNCATE, res_str (IDS_FMT_UNMOUNTED).c_str (), widen (dev).c_str ());
-	set_status (text);
-}
-
-#if FSROVER_EMBED_DOKAN
-/* Install the app-embedded Dokan runtime (Dokan menu, shown only while
-   the driver is absent and this process is elevated).  Runs in-process,
-   writing to System32 and starting a kernel service directly; a wait
-   cursor covers the brief pause and the outcome is reported explicitly,
-   since installing a driver is worth confirming.  */
-void
-do_dokan_install (void)
-{
-	set_status (IDS_DOKAN_INSTALLING);
-	UpdateWindow (g_status);
-	HCURSOR prev = SetCursor (LoadCursorW (nullptr, IDC_WAIT));
-
-	std::wstring err;
-	bool ok = dokanfs_install (&err);
-
-	SetCursor (prev);
-
-	modal_scope hold;
-	if (ok)
-	{
-		set_status (IDS_DOKAN_INSTALL_OK);
-		MessageBoxW (g_main, res_str (IDS_DOKAN_INSTALL_OK).c_str (), res_str (IDS_APP_TITLE).c_str (), MB_ICONINFORMATION | MB_OK);
-	}
-	else
-	{
-		wchar_t text[320];
-		// Could not install Dokan: %s
-		_snwprintf_s (text, 320, _TRUNCATE, res_str (IDS_FMT_DOKAN_INSTALL_FAIL).c_str (), err.c_str ());
-		set_status (text);
-		MessageBoxW (g_main, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
-	}
-}
-#endif
 
 #if FSROVER_ENABLE_ADMIN_FEATURES
 /* Restart elevated (File menu, shown only while this process is not).
@@ -1263,84 +1035,6 @@ on_tree_rclick (void)
 	case IDM_PROPS:
 		show_disk_props (d, g_disks);
 		break;
-	}
-}
-
-/* Tray icon: resident for quick unmounting; the app only exits
-   through WM_CLOSE, which warns while dokan mounts are alive.  It is
-   also the only way back to a minimized window, which leaves the
-   taskbar entirely (WM_SIZE).  */
-
-void
-tray_add (HWND wnd)
-{
-	/* Explorer drops every notification icon when it restarts and
-	   broadcasts this to ask for them back.  Without it a restart
-	   would stand the icon down for good, and a window that is
-	   hidden rather than merely minimized could never be reached
-	   again.  Registering twice is harmless: the atom is the same.  */
-	g_taskbar_msg = RegisterWindowMessageW (L"TaskbarCreated");
-
-	g_tray.cbSize = sizeof (g_tray);
-	g_tray.hWnd = wnd;
-	g_tray.uID = 1;
-	g_tray.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-	g_tray.uCallbackMessage = WM_APP_TRAY;
-	g_tray.hIcon = (HICON) LoadImageW (GetModuleHandleW (nullptr),
-		MAKEINTRESOURCEW (IDI_APP),
-		IMAGE_ICON,
-		GetSystemMetrics (SM_CXSMICON),
-		GetSystemMetrics (SM_CYSMICON), 0);
-	wcscpy_s (g_tray.szTip, res_str (IDS_APP_TITLE).c_str ());
-	Shell_NotifyIconW (NIM_ADD, &g_tray);
-}
-
-void
-show_main_window (void)
-{
-	/* Minimizing hides the window, so it can be hidden and iconic at
-	   once (from the minimize box) or hidden and normal (from
-	   --minimize, which never showed it).  SW_RESTORE covers the
-	   first, SW_SHOW the second; using SW_SHOW on an iconic window
-	   would only put the minimized frame back on screen.  */
-	ShowWindow (g_main, IsIconic (g_main) ? SW_RESTORE : SW_SHOW);
-	SetForegroundWindow (g_main);
-}
-
-void
-tray_menu (void)
-{
-	POINT pt;
-	GetCursorPos (&pt);
-
-	HMENU menu = CreatePopupMenu ();
-	for (size_t i = 0; i < dokanfs_count (); i++)
-	{
-		dokan_mount *m = dokanfs_get (i);
-		wchar_t text[160];
-		_snwprintf_s (text, 160, _TRUNCATE, res_str (IDS_FMT_TRAY_UNMOUNT).c_str (),
-			dokanfs_letter (m).c_str (), widen (dokanfs_device (m)).c_str ());
-		AppendMenuW (menu, MF_STRING, IDM_TRAY_UNMOUNT_BASE + (int) i, text);
-	}
-	if (dokanfs_count ())
-		AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (menu, MF_STRING, IDM_TRAY_OPEN, res_str (IDS_TRAY_OPEN).c_str ());
-	AppendMenuW (menu, MF_STRING, IDM_TRAY_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
-
-	/* Required for the menu to close on an outside click.  */
-	SetForegroundWindow (g_main);
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
-	DestroyMenu (menu);
-
-	if (cmd == IDM_TRAY_OPEN)
-		show_main_window ();
-	else if (cmd == IDM_TRAY_EXIT)
-		SendMessageW (g_main, WM_CLOSE, 0, 0);
-	else if (cmd >= IDM_TRAY_UNMOUNT_BASE)
-	{
-		dokan_mount *m = dokanfs_get ((size_t) (cmd - IDM_TRAY_UNMOUNT_BASE));
-		if (m)
-			do_dokan_unmount (m);
 	}
 }
 
@@ -2180,7 +1874,7 @@ on_command (int id)
 		break;
 #if FSROVER_EMBED_DOKAN
 	case IDM_DOKAN_INSTALL:
-		do_dokan_install ();
+		show_dokan_install (g_main, g_status);
 		break;
 #endif
 
@@ -2248,14 +1942,8 @@ on_command (int id)
 LRESULT CALLBACK
 main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-	/* Registered at run time, so it is no constant and cannot join
-	   the switch.  Zero until tray_add has run, which is why the id
-	   is tested rather than just compared.  */
-	if (g_taskbar_msg && msg == g_taskbar_msg)
-	{
-		Shell_NotifyIconW (NIM_ADD, &g_tray);
+	if (g_tray.handle_message (msg, lp))
 		return 0;
-	}
 
 	switch (msg)
 	{
@@ -2271,7 +1959,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 			return -1;
 		}
 		dokanfs_init (wnd);
-		tray_add (wnd);
+		g_tray.add (wnd, do_dokan_unmount);
 		enable_file_drop (wnd);
 		/* Grow the default frame for a high-DPI creation monitor
 		   (WM_DPICHANGED takes over once it is on screen).  */
@@ -2403,12 +2091,6 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 			ShellExecuteW (nullptr, L"open", (dokanfs_letter (m) + L"\\").c_str (), nullptr, nullptr, SW_SHOWNORMAL);
 		return 0;
 	}
-	case WM_APP_TRAY:
-		if (lp == WM_LBUTTONDBLCLK)
-			show_main_window ();
-		else if (lp == WM_RBUTTONUP)
-			tray_menu ();
-		return 0;
 	case WM_CLOSE:
 		/* The tray Exit can arrive while a modal dialog holds
 		   the main window disabled; destroying the owner under
@@ -2428,7 +2110,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		DestroyWindow (wnd);
 		return 0;
 	case WM_DESTROY:
-		Shell_NotifyIconW (NIM_DELETE, &g_tray);
+		g_tray.remove ();
 		dokanfs_shutdown ();
 #if FSROVER_ENABLE_ADMIN_FEATURES
 		smart_shutdown ();

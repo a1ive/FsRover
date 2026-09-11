@@ -58,6 +58,15 @@
     <ClCompile Include="imageview.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="filedlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="mountdlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="tray.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
@@ -112,6 +121,15 @@
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="dokanfs.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="filedlg.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="mountdlg.h">
+      <Filter>SRC</Filter>
+    </ClInclude>
+    <ClInclude Include="tray.h">
       <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="gui.h">

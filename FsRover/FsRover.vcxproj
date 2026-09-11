@@ -186,6 +186,9 @@
     <ClCompile Include="helpdlg.cpp" />
     <ClCompile Include="hexview.cpp" />
     <ClCompile Include="imageview.cpp" />
+    <ClCompile Include="filedlg.cpp" />
+    <ClCompile Include="mountdlg.cpp" />
+    <ClCompile Include="tray.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="md4c\entity.c" />
     <ClCompile Include="md4c\md4c.c" />
@@ -210,6 +213,9 @@
     <ClInclude Include="dokan\fileinfo.h" />
     <ClInclude Include="dokan\public.h" />
     <ClInclude Include="dokanfs.h" />
+    <ClInclude Include="filedlg.h" />
+    <ClInclude Include="mountdlg.h" />
+    <ClInclude Include="tray.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="libcdi\libcdi.h" />
     <ClInclude Include="md4c\entity.h" />
