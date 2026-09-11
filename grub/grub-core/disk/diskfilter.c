@@ -533,44 +533,107 @@ grub_diskfilter_read_node (const struct grub_diskfilter_node *node,
 }
 
 
-static grub_err_t
-validate_segment (struct grub_diskfilter_segment *seg);
+/* Also bound acyclic graphs: readability and reads recurse through LVs. */
+#define GRUB_DISKFILTER_MAX_LV_DEPTH 16
+
+struct lv_validation
+{
+	struct grub_diskfilter_lv *lv;
+	/* Zero means that this LV is still on the active DFS path. */
+	unsigned int height;
+	struct lv_validation *next;
+};
 
 static grub_err_t
-validate_lv (struct grub_diskfilter_lv *lv)
+validate_segment (struct grub_diskfilter_segment *seg,
+		  struct lv_validation **visited, unsigned int depth,
+		  unsigned int *height);
+
+static grub_err_t
+validate_lv_inner (struct grub_diskfilter_lv *lv,
+		   struct lv_validation **visited, unsigned int depth,
+		   unsigned int *height)
 {
   unsigned int i;
+  struct lv_validation *entry;
+  grub_err_t err;
   if (!lv)
     return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "unknown volume");
 
   if (!lv->vg || lv->vg->extent_size == 0)
     return grub_error (GRUB_ERR_READ_ERROR, "invalid volume");
 
+  for (entry = *visited; entry; entry = entry->next)
+    if (entry->lv == lv)
+      {
+	if (entry->height == 0)
+	  return grub_error (GRUB_ERR_BAD_FS, "cyclic volume graph");
+	if (depth > GRUB_DISKFILTER_MAX_LV_DEPTH - entry->height)
+	  return grub_error (GRUB_ERR_BAD_FS, "volume graph depth exceeded");
+	*height = entry->height;
+	return GRUB_ERR_NONE;
+      }
+
+  if (depth >= GRUB_DISKFILTER_MAX_LV_DEPTH)
+    return grub_error (GRUB_ERR_BAD_FS, "volume graph depth exceeded");
+
+  entry = grub_malloc (sizeof (*entry));
+  if (!entry)
+    return grub_errno;
+  entry->lv = lv;
+  entry->height = 0;
+  entry->next = *visited;
+  *visited = entry;
+  *height = 1;
+
   for (i = 0; i < lv->segment_count; i++)
     {
-      grub_err_t err;
-      err = validate_segment (&lv->segments[i]);
+      unsigned int child_height = 0;
+      err = validate_segment (&lv->segments[i], visited, depth + 1,
+			      &child_height);
       if (err)
 	return err;
+      *height = grub_max (*height, child_height + 1);
     }
+  entry->height = *height;
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+validate_lv (struct grub_diskfilter_lv *lv)
+{
+	struct lv_validation *visited = NULL;
+	unsigned int height;
+	grub_err_t err;
+
+	err = validate_lv_inner (lv, &visited, 0, &height);
+	while (visited)
+	{
+		struct lv_validation *next = visited->next;
+		grub_free (visited);
+		visited = next;
+	}
+	return err;
+}
 
 static grub_err_t
-validate_node (const struct grub_diskfilter_node *node)
+validate_node (const struct grub_diskfilter_node *node,
+	       struct lv_validation **visited, unsigned int depth,
+	       unsigned int *height)
 {
   /* Check whether we actually know the physical volume we want to
      read from.  */
   if (node->pv)
     return GRUB_ERR_NONE;
   if (node->lv)
-    return validate_lv (node->lv);
+    return validate_lv_inner (node->lv, visited, depth, height);
   return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "unknown node '%s'", node->name);
 }
 
 static grub_err_t
-validate_segment (struct grub_diskfilter_segment *seg)
+validate_segment (struct grub_diskfilter_segment *seg,
+		  struct lv_validation **visited, unsigned int depth,
+		  unsigned int *height)
 {
   grub_err_t err;
 
@@ -621,9 +684,11 @@ validate_segment (struct grub_diskfilter_segment *seg)
   unsigned i;
   for (i = 0; i < seg->node_count; i++)
     {
-      err = validate_node (&seg->nodes[i]);
+      unsigned int child_height = 0;
+      err = validate_node (&seg->nodes[i], visited, depth, &child_height);
       if (err)
 	return err;
+      *height = grub_max (*height, child_height);
     }
   return GRUB_ERR_NONE;
 
