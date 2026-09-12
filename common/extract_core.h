@@ -8,6 +8,12 @@
 namespace rover_extract
 {
 
+#ifdef _WIN32
+using host_path = std::wstring;
+#else
+using host_path = std::string;
+#endif
+
 enum class progress_kind
 {
 	started,
@@ -42,7 +48,7 @@ struct result
 };
 
 bool extract (const std::vector<std::string> &sources,
-	const std::wstring &destination, const options &opts,
+	const host_path &destination, const options &opts,
 	result *stats, std::string *error);
 
 } /* namespace rover_extract */

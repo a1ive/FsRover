@@ -186,6 +186,9 @@
     <ClInclude Include="..\common\extract_core.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\extract_host.h">
+      <Filter>common</Filter>
+    </ClInclude>
     <ClInclude Include="..\common\fusefs.h">
       <Filter>common</Filter>
     </ClInclude>

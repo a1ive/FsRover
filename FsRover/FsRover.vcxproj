@@ -203,6 +203,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\extract_core.h" />
+    <ClInclude Include="..\common\extract_host.h" />
     <ClInclude Include="..\common\fusefs.h" />
     <ClInclude Include="..\common\fs_encoding.h" />
     <ClInclude Include="..\common\natural_sort.h" />

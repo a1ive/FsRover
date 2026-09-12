@@ -87,7 +87,8 @@ target_compile_options(rover-grub PRIVATE
 
 add_executable(LinuxRover
 	LinuxRover/main.cpp
-	common/fusefs.cpp)
+	common/fusefs.cpp
+	common/extract_core.cpp)
 target_include_directories(LinuxRover PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/common"
 	"${CMAKE_CURRENT_SOURCE_DIR}/FsRover"

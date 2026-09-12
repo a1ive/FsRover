@@ -20,6 +20,7 @@
 #include <fuse3/fuse.h>
 
 #include <errno.h>
+#include <signal.h>
 #include <getopt.h>
 #include <string.h>
 
@@ -31,6 +32,7 @@
 #include <rover.h>
 
 #include "fusefs.h"
+#include "../common/extract_core.h"
 
 namespace
 {
@@ -38,25 +40,35 @@ namespace
 constexpr const char *USAGE =
 	"Usage:\n"
 	"  LinuxRover [options] --list[=PATH]\n"
+	"  LinuxRover [options] --extract=PATH --output=DIR\n"
 	"  LinuxRover [options] --mount=DEVICE MOUNTPOINT\n\n"
 	"Options:\n"
 	"  -f, --file=IMAGE       Attach a host image as imgN (repeatable)\n"
 	"  -d, --file-dec=IMAGE   Attach and transparently decompress IMAGE\n"
+	"  -p, --loop=PATH       Attach a GRUB file as loopN (repeatable)\n"
+	"      --loop-dec=PATH   Attach and transparently decompress a GRUB file\n"
 	"  -l, --list[=PATH]      List devices, a directory, or a file\n"
+	"  -e, --extract=PATH     Extract a file or directory (repeatable)\n"
+	"  -o, --output=DIR       Destination directory for --extract\n"
+	"  -n, --no-times         Do not preserve extracted timestamps\n"
 	"  -m, --mount=DEVICE     Mount DEVICE through FUSE3\n"
 	"  -F, --foreground       Keep the FUSE process in the foreground\n"
 	"  -c, --fs-encoding=ENC  UTF-8, GBK, Big5, Shift-JIS, or EUC-KR\n"
 	"  -h, --help             Show this help\n";
 
-struct image_option
+struct mount_option
 {
 	std::string path;
 	bool decompress;
+	bool loopback;
 };
 
 struct options
 {
-	std::vector<image_option> images;
+	std::vector<mount_option> mounts;
+	std::vector<std::string> extracts;
+	std::string output;
+	bool preserve_times = true;
 	std::string list_path;
 	std::string mount_device;
 	std::string mountpoint;
@@ -105,11 +117,17 @@ parse_encoding (const char *name, unsigned int *encoding)
 bool
 parse_options (int argc, char **argv, options *out)
 {
+	constexpr int OPT_LOOP_DEC = 256;
 	static const option long_options[] =
 	{
 		{ "file", required_argument, nullptr, 'f' },
 		{ "file-dec", required_argument, nullptr, 'd' },
+		{ "loop", required_argument, nullptr, 'p' },
+		{ "loop-dec", required_argument, nullptr, OPT_LOOP_DEC },
 		{ "list", optional_argument, nullptr, 'l' },
+		{ "extract", required_argument, nullptr, 'e' },
+		{ "output", required_argument, nullptr, 'o' },
+		{ "no-times", no_argument, nullptr, 'n' },
 		{ "mount", required_argument, nullptr, 'm' },
 		{ "foreground", no_argument, nullptr, 'F' },
 		{ "fs-encoding", required_argument, nullptr, 'c' },
@@ -117,20 +135,49 @@ parse_options (int argc, char **argv, options *out)
 		{ nullptr, 0, nullptr, 0 }
 	};
 	int ch;
+	bool output_seen = false;
 
-	while ((ch = getopt_long (argc, argv, "f:d:l::m:Fc:h", long_options,
+	while ((ch = getopt_long (argc, argv, "f:d:p:l::e:o:nm:Fc:h", long_options,
 		nullptr)) != -1)
 	{
 		switch (ch)
 		{
 		case 'f':
 		case 'd':
-			out->images.push_back ({ optarg, ch == 'd' });
+		case 'p':
+		case OPT_LOOP_DEC:
+			if (!optarg[0])
+			{
+				std::cerr << "LinuxRover: image and loop options require a nonempty path\n";
+				return false;
+			}
+			out->mounts.push_back ({ optarg, ch == 'd' || ch == OPT_LOOP_DEC,
+				ch == 'p' || ch == OPT_LOOP_DEC });
 			break;
 		case 'l':
 			out->list = true;
 			if (optarg)
 				out->list_path = optarg;
+			break;
+		case 'e':
+			if (!optarg[0])
+			{
+				std::cerr << "LinuxRover: --extract requires a nonempty path\n";
+				return false;
+			}
+			out->extracts.push_back (optarg);
+			break;
+		case 'o':
+			if (output_seen || !optarg[0])
+			{
+				std::cerr << "LinuxRover: --output requires a nonempty directory and may only be specified once\n";
+				return false;
+			}
+			output_seen = true;
+			out->output = optarg;
+			break;
+		case 'n':
+			out->preserve_times = false;
 			break;
 		case 'm':
 			out->mount_device = strip_device_syntax (optarg);
@@ -153,9 +200,14 @@ parse_options (int argc, char **argv, options *out)
 			return false;
 		}
 	}
-	if (out->list == !out->mount_device.empty ())
+	if (int (out->list) + int (!out->extracts.empty ()) + int (!out->mount_device.empty ()) != 1)
 	{
-		std::cerr << "LinuxRover: specify exactly one of --list or --mount\n";
+		std::cerr << "LinuxRover: specify exactly one of --list, --extract or --mount\n";
+		return false;
+	}
+	if (out->extracts.empty () != out->output.empty ())
+	{
+		std::cerr << "LinuxRover: --extract and --output must be used together\n";
 		return false;
 	}
 	if (!out->mount_device.empty ())
@@ -169,7 +221,7 @@ parse_options (int argc, char **argv, options *out)
 	}
 	else if (optind != argc)
 	{
-		if (out->list_path.empty () && optind + 1 == argc)
+		if (out->list && out->list_path.empty () && optind + 1 == argc)
 			out->list_path = argv[optind];
 		else
 		{
@@ -325,6 +377,47 @@ run_list (const std::string &path)
 	return rover_dir_list (path.c_str (), print_entry, nullptr) ? 1 : 0;
 }
 
+volatile sig_atomic_t extract_cancelled = 0;
+
+void cancel_extract (int)
+{
+	extract_cancelled = 1;
+}
+
+int run_extract (const options &command)
+{
+	rover_extract::options opts;
+	rover_extract::result stats;
+	std::string error;
+	struct sigaction action = {}, old_int = {}, old_term = {};
+	action.sa_handler = cancel_extract;
+	sigemptyset (&action.sa_mask);
+	extract_cancelled = 0;
+	bool have_int = sigaction (SIGINT, &action, &old_int) == 0;
+	bool have_term = sigaction (SIGTERM, &action, &old_term) == 0;
+	opts.preserve_times = command.preserve_times;
+	opts.cancelled = [] () { return extract_cancelled != 0; };
+	opts.report_progress = [] (const rover_extract::progress &progress)
+	{
+		if (progress.kind != rover_extract::progress_kind::completed) return;
+		std::string path = progress.source;
+		for (char &c : path)
+			if (static_cast<unsigned char> (c) < 32 || c == 127) c = '?';
+		std::cerr << "Extracted [" << progress.file_index << '/'
+			<< progress.file_total << "] " << path << '\n';
+	};
+	bool ok = rover_extract::extract (command.extracts, command.output, opts, &stats, &error);
+	if (have_int) sigaction (SIGINT, &old_int, nullptr);
+	if (have_term) sigaction (SIGTERM, &old_term, nullptr);
+	for (const std::string &item : stats.errors)
+		std::cerr << "LinuxRover: " << item << '\n';
+	if (!error.empty ()) std::cerr << "LinuxRover: " << error << '\n';
+	std::cerr << "Extracted " << stats.files << " file(s), " << stats.bytes
+		<< " bytes; skipped " << stats.links << " symlink(s); failed "
+		<< stats.errors.size () << " file(s).\n";
+	return ok ? 0 : 1;
+}
+
 } // namespace
 
 int
@@ -342,15 +435,36 @@ main (int argc, char **argv)
 		std::cerr << '\n' << USAGE;
 		return 2;
 	}
-	rover_init (command.images.empty () ? 0 : ROVER_INIT_NO_HOSTDISK);
+	bool has_host_mount = std::any_of (command.mounts.begin (), command.mounts.end (),
+		[] (const mount_option &mount) { return !mount.loopback; });
+	size_t img_seq = 0;
+	size_t loop_seq = 0;
+	rover_init (has_host_mount ? ROVER_INIT_NO_HOSTDISK : 0);
 	if (rover_set_fs_char_encoding (command.encoding))
 		goto out;
-	for (size_t i = 0; i < command.images.size (); i++)
+	/* Preserve command-line order: a loop can depend on an earlier image or loop. */
+	for (const mount_option &mount : command.mounts)
 	{
-		std::string name = "img" + std::to_string (i);
-		if (rover_posixfile_add (name.c_str (), command.images[i].path.c_str (),
-			command.images[i].decompress ? 1 : 0))
+		std::string name = mount.loopback
+			? "loop" + std::to_string (loop_seq)
+			: "img" + std::to_string (img_seq);
+		int rc = mount.loopback
+			? rover_loopback_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0)
+			: rover_posixfile_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0);
+		if (rc)
+		{
+			std::cerr << "LinuxRover: cannot mount '" << mount.path << "' as (" << name << ")\n";
 			goto out;
+		}
+		if (mount.loopback)
+			loop_seq++;
+		else
+			img_seq++;
+	}
+	if (!command.extracts.empty ())
+	{
+		result = run_extract (command);
+		goto out;
 	}
 	if (command.list)
 	{
