@@ -68,6 +68,38 @@ jobs:
             throw "MSBuild failed with exit code $LASTEXITCODE."
           }
 
+      - name: Set up Python for product regression
+        if: matrix.architecture == 'x64'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build product regression probe
+        if: matrix.architecture == 'x64'
+        shell: pwsh
+        run: |
+          msbuild tests/product_probe.vcxproj /m /p:Configuration=Release /p:Platform=x64 "/p:SolutionDir=$env:GITHUB_WORKSPACE\"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Product probe build failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Product regression
+        if: matrix.architecture == 'x64'
+        shell: pwsh
+        run: |
+          python tests/run_product.py --cli build/x64/CliRover.exe --probe build/x64/product_probe.exe --output build/product-tests
+          if ($LASTEXITCODE -ne 0) {
+            throw "Product regression failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload failed product regression
+        if: failure() && matrix.architecture == 'x64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: product-regression-windows-x64
+          path: build/product-tests/
+          if-no-files-found: ignore
+
       - name: Package artifact
         shell: pwsh
         run: |

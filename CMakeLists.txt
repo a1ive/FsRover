@@ -97,3 +97,16 @@ target_compile_options(LinuxRover PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(LinuxRover PRIVATE rover-grub PkgConfig::FUSE3 pthread)
 
 install(TARGETS LinuxRover RUNTIME DESTINATION bin)
+
+include(CTest)
+if(BUILD_TESTING)
+	find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+	add_executable(product_probe tests/product_probe.cpp common/extract_core.cpp)
+	target_compile_options(product_probe PRIVATE -Wall -Wextra -Werror)
+	target_link_libraries(product_probe PRIVATE rover-grub)
+	add_test(NAME product-regression
+		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_product.py"
+			--cli $<TARGET_FILE:LinuxRover> --probe $<TARGET_FILE:product_probe>
+			--output "${CMAKE_CURRENT_BINARY_DIR}/product-tests")
+	set_tests_properties(product-regression PROPERTIES TIMEOUT 300)
+endif()

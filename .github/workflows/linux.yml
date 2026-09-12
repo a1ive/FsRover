@@ -32,6 +32,11 @@ jobs:
             libfuse3-dev \
             pkg-config
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Configure
         run: cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release
 
@@ -40,3 +45,14 @@ jobs:
 
       - name: Smoke test
         run: build/linux/LinuxRover --help
+
+      - name: Product regression
+        run: ctest --test-dir build/linux --verbose
+
+      - name: Upload failed product regression
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: product-regression-linux-x64
+          path: build/linux/product-tests/
+          if-no-files-found: ignore
