@@ -4600,7 +4600,7 @@ twp__STORAGE unsigned char *twp_read_from_memory(void *data, int data_len, int *
         // fill with 255 in case we want yuva but didn't have an alpha channel
         unsigned char *a;
         twp_unpack_yuv(result, *width, *height, NULL, NULL, NULL, &a, NULL, NULL, NULL);
-        memset(a, 255, *width * *height);
+        memset(a, 255, (size_t)*width * (size_t)*height);
     }
 
     return result;
