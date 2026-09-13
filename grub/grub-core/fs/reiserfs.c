@@ -534,7 +534,7 @@ grub_reiserfs_get_item (struct grub_reiserfs_data *data,
   do
     {
       grub_disk_read (data->disk,
-                      block_number * (block_size >> GRUB_DISK_SECTOR_BITS),
+                      ((grub_disk_addr_t) block_number) * (block_size >> GRUB_DISK_SECTOR_BITS),
                       (((grub_off_t) block_number * block_size)
                        & (GRUB_DISK_SECTOR_SIZE - 1)),
                       block_size, block_header);
@@ -762,7 +762,7 @@ grub_reiserfs_iterate_dir (grub_fshelp_node_t item,
       struct grub_reiserfs_item_header *item_headers;
 
       grub_disk_read (data->disk,
-                      block_number * (block_size >> GRUB_DISK_SECTOR_BITS),
+                      ((grub_disk_addr_t) block_number) * (block_size >> GRUB_DISK_SECTOR_BITS),
                       (((grub_off_t) block_number * block_size)
                        & (GRUB_DISK_SECTOR_SIZE - 1)),
                       block_size, (char *) block_header);
@@ -876,7 +876,7 @@ grub_reiserfs_iterate_dir (grub_fshelp_node_t item,
 		    {
 		      struct grub_reiserfs_stat_item_v1 entry_v1_stat;
 		      grub_disk_read (data->disk,
-				      entry_block_number * (block_size >> GRUB_DISK_SECTOR_BITS),
+				      ((grub_disk_addr_t) entry_block_number) * (block_size >> GRUB_DISK_SECTOR_BITS),
 				      grub_le_to_cpu16 (entry_item->header.item_location),
 				      sizeof (entry_v1_stat),
 				      (char *) &entry_v1_stat);
@@ -920,7 +920,7 @@ grub_reiserfs_iterate_dir (grub_fshelp_node_t item,
 		    {
 		      struct grub_reiserfs_stat_item_v2 entry_v2_stat;
 		      grub_disk_read (data->disk,
-				      entry_block_number * (block_size >> GRUB_DISK_SECTOR_BITS),
+				      ((grub_disk_addr_t) entry_block_number) * (block_size >> GRUB_DISK_SECTOR_BITS),
 				      grub_le_to_cpu16 (entry_item->header.item_location),
 				      sizeof (entry_v2_stat),
 				      (char *) &entry_v2_stat);
@@ -1159,7 +1159,7 @@ grub_reiserfs_read_real (struct grub_fshelp_node *node,
           if (! indirect_block_ptr)
             goto fail;
           grub_disk_read (found.data->disk,
-                          found.block_number * (block_size >> GRUB_DISK_SECTOR_BITS),
+                          ((grub_disk_addr_t) found.block_number) * (block_size >> GRUB_DISK_SECTOR_BITS),
                           grub_le_to_cpu16 (found.header.item_location),
                           item_size, indirect_block_ptr);
           if (grub_errno)
@@ -1171,7 +1171,7 @@ grub_reiserfs_read_real (struct grub_fshelp_node *node,
                  && current_position < final_position;
                indirect_block++)
             {
-              block = grub_le_to_cpu32 (indirect_block_ptr[indirect_block]) *
+              block = (grub_disk_addr_t) grub_le_to_cpu32 (indirect_block_ptr[indirect_block]) *
                       (block_size >> GRUB_DISK_SECTOR_BITS);
               grub_dprintf ("reiserfs_blocktype", "I: %u\n", (unsigned) block);
               if (current_position + block_size >= initial_position)
