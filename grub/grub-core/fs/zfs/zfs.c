@@ -2382,6 +2382,18 @@ zap_verify (zap_phys_t *zap, grub_zfs_endian_t endian)
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+zap_verify_leaf_size (int blksft)
+{
+  if ((1U << blksft) < sizeof (zap_leaf_phys_t))
+    return grub_error (GRUB_ERR_BAD_FS, "ZAP leaf is too small");
+
+  if (ZAP_LEAF_NUMCHUNKS (blksft) > 0xffff)
+    return grub_error (GRUB_ERR_BAD_FS, "ZAP leaf has too many chunks");
+
+  return GRUB_ERR_NONE;
+}
+
 /*
  * Fat ZAP lookup
  *
@@ -2413,8 +2425,9 @@ fzap_lookup (dnode_end_t * zap_dnode, zap_phys_t * zap,
   blkid = grub_zfs_to_cpu64 (((grub_uint64_t *) zap)[idx + (1 << (blksft - 3 - 1))], zap_dnode->endian);
 
   /* Get the leaf block */
-  if ((1U << blksft) < sizeof (zap_leaf_phys_t))
-    return grub_error (GRUB_ERR_BAD_FS, "ZAP leaf is too small");
+  err = zap_verify_leaf_size (blksft);
+  if (err)
+    return err;
   err = dmu_read (zap_dnode, blkid, &l, &leafendian, data);
   if (err)
     return err;
@@ -2438,7 +2451,7 @@ fzap_iterate (dnode_end_t * zap_dnode, zap_phys_t * zap,
   zap_leaf_phys_t *l;
   void *l_in;
   grub_uint64_t idx, idx2, blkid;
-  grub_uint16_t chunk;
+  int chunk;
   int blksft = zfs_log2 (grub_zfs_to_cpu16 (zap_dnode->dn.dn_datablkszsec,
 					    zap_dnode->endian) << DNODE_SHIFT);
   grub_err_t err;
@@ -2456,11 +2469,9 @@ fzap_iterate (dnode_end_t * zap_dnode, zap_phys_t * zap,
       return 0;
     }
   /* Get the leaf block */
-  if ((1U << blksft) < sizeof (zap_leaf_phys_t))
-    {
-      grub_error (GRUB_ERR_BAD_FS, "ZAP leaf is too small");
-      return 0;
-    }
+  err = zap_verify_leaf_size (blksft);
+  if (err)
+    return 0;
   for (idx = 0; idx < (1ULL << zap->zap_ptrtbl.zt_shift); idx++)
     {
       blkid = grub_zfs_to_cpu64 (((grub_uint64_t *) zap)[idx + (1 << (blksft - 3 - 1))],
