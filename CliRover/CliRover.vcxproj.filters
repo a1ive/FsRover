@@ -44,5 +44,11 @@
     <ClInclude Include="..\common\optparse.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\blocklist.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\filemap_format.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

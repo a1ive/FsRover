@@ -32,6 +32,7 @@
 #include "../common/natural_sort.h"
 #include "../common/optparse.h"
 #include "extract.h"
+#include "../common/blocklist.h"
 
 namespace
 {
@@ -47,6 +48,8 @@ struct command_options
 {
 	std::vector<mount_options> mounts;
 	bool list = false;
+	bool blocklist = false;
+	std::wstring blocklist_path;
 	bool preserve_times = true;
 	unsigned int fs_encoding = ROVER_FS_ENCODING_UTF8;
 	std::wstring list_path;
@@ -69,6 +72,7 @@ enum
 	OPT_EXTRACT,
 	OPT_OUTPUT,
 	OPT_LIST,
+	OPT_BLOCKLIST,
 	OPT_NO_TIMES,
 	OPT_FS_ENCODING,
 	OPT_HELP,
@@ -83,6 +87,7 @@ const struct optparse_option OPTIONS[] =
 	{ L"extract", L'e', OPTPARSE_REQUIRED },
 	{ L"output", L'o', OPTPARSE_REQUIRED },
 	{ L"list", L'l', OPTPARSE_OPTIONAL },
+	{ L"blocklist", L'b', OPTPARSE_REQUIRED },
 	{ L"no-times", L'n', OPTPARSE_NONE },
 	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
 	{ L"help", L'h', OPTPARSE_NONE },
@@ -97,6 +102,7 @@ const char USAGE[] =
 	"  -p, --loop=PATH       Mount a GRUB file as (loopN).\r\n"
 	"      --loop-dec=PATH   Mount a GRUB file after decompression.\r\n"
 	"  -l, --list[=PATH]     List devices, a directory, or a file.\r\n"
+	"  -b, --blocklist=PATH  Enumerate metadata mappings as byte-based TSV.\r\n"
 	"  -e, --extract=PATH    Extract a GRUB file or directory.\r\n"
 	"  -o, --output=DIR      Destination directory for --extract.\r\n"
 	"  -n, --no-times        Do not preserve extracted timestamps.\r\n"
@@ -140,14 +146,14 @@ widen (const std::string &text)
 	return wide;
 }
 
-void
+bool
 write_stream (DWORD stream, const std::string &text)
 {
 	HANDLE out = GetStdHandle (stream);
 	DWORD mode;
 
 	if (!out || out == INVALID_HANDLE_VALUE || text.empty ())
-		return;
+		return text.empty ();
 	if (GetConsoleMode (out, &mode))
 	{
 		std::wstring wide = widen (text);
@@ -158,10 +164,10 @@ write_stream (DWORD stream, const std::string &text)
 			DWORD written = 0;
 			if (!WriteConsoleW (out, wide.data () + offset, chunk, &written, nullptr)
 				|| !written)
-				break;
+				return false;
 			offset += written;
 		}
-		return;
+		return true;
 	}
 
 	size_t offset = 0;
@@ -170,9 +176,10 @@ write_stream (DWORD stream, const std::string &text)
 		DWORD chunk = static_cast<DWORD> (std::min<size_t> (text.size () - offset, MAXDWORD));
 		DWORD written = 0;
 		if (!WriteFile (out, text.data () + offset, chunk, &written, nullptr) || !written)
-			break;
+			return false;
 		offset += written;
 	}
+	return true;
 }
 
 int
@@ -250,6 +257,15 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 			if (parser.optarg)
 				options->list_path = parser.optarg;
 			break;
+		case OPT_BLOCKLIST:
+			if (options->blocklist || !parser.optarg[0])
+			{
+				*error = "--blocklist requires one nonempty path and may only be specified once";
+				return false;
+			}
+			options->blocklist = true;
+			options->blocklist_path = parser.optarg;
+			break;
 		case OPT_NO_TIMES:
 			options->preserve_times = false;
 			break;
@@ -291,9 +307,9 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 		*show_help = true;
 		return true;
 	}
-	if (options->list && !options->extracts.empty ())
+	if (int (options->list) + int (options->blocklist) + int (!options->extracts.empty ()) > 1)
 	{
-		*error = "--list and --extract are mutually exclusive";
+		*error = "--list, --blocklist and --extract are mutually exclusive";
 		return false;
 	}
 	if (!options->extracts.empty () && options->output.empty ())
@@ -306,9 +322,9 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 		*error = "--output requires --extract";
 		return false;
 	}
-	if (!options->list && options->extracts.empty ())
+	if (!options->list && !options->blocklist && options->extracts.empty ())
 	{
-		*error = "no operation specified; use --list or --extract";
+		*error = "no operation specified; use --list, --blocklist or --extract";
 		return false;
 	}
 	return true;
@@ -613,7 +629,13 @@ wmain (int argc, wchar_t **argv)
 			img_seq++;
 	}
 
-	if (options.list)
+	if (options.blocklist)
+	{
+		if (!rover_blocklist::run (narrow (options.blocklist_path),
+			[] (const std::string &line) { return write_stream (STD_OUTPUT_HANDLE, line); }, &error))
+			result = report_error (error);
+	}
+	else if (options.list)
 	{
 		if (!run_list (narrow (options.list_path), &error))
 			result = report_error (error);
