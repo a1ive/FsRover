@@ -70,7 +70,7 @@ jobs:
 
       - name: Set up Python for product regression
         if: matrix.architecture == 'x64'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
