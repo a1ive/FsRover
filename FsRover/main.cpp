@@ -109,6 +109,7 @@ constexpr int IDM_UNMOUNT = 3;
 constexpr int IDM_DOKAN_MOUNT = 4;
 constexpr int IDM_DOKAN_UNMOUNT = 5;
 constexpr int IDM_PROPS = 6;
+constexpr int IDM_FILE_MAP = 30;
 constexpr int IDM_HEX = 7;
 constexpr int IDM_COPY_NAME = 8;
 constexpr int IDM_COPY_PATH = 9;
@@ -814,6 +815,7 @@ on_list_rclick (NMITEMACTIVATE *ia)
 		AppendMenuW (menu, MF_STRING | busy, IDM_MARKDOWN, res_str (IDS_MENU_MARKDOWN).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_TEXT, res_str (IDS_MENU_TEXT).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
+	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_FILE_MAP, res_str (IDS_MAP_TITLE).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING, IDM_COPY_NAME, res_str (IDS_MENU_COPY_NAME).c_str ());
@@ -838,6 +840,8 @@ on_list_rclick (NMITEMACTIVATE *ia)
 		show_text (join_path (g_path, g_entries[(size_t) file_item].name));
 	else if (cmd == IDM_HEX && file_item >= 0)
 		show_hex (join_path (g_path, g_entries[(size_t) file_item].name));
+	else if (cmd == IDM_FILE_MAP && file_item >= 0)
+		show_file_map (join_path (g_path, g_entries[(size_t) file_item].name));
 	else if (cmd == IDM_PROPS && file_item >= 0)
 		show_props (join_path (g_path, g_entries[(size_t) file_item].name));
 	else if (cmd == IDM_COPY_NAME || cmd == IDM_COPY_PATH)
@@ -1289,6 +1293,9 @@ on_task_done (backend_result *raw)
 	case backend_task_type::winfile_add:
 	case backend_task_type::winfile_del:
 		break;
+	case backend_task_type::file_map:
+		file_map_done (res.get ());
+		return;
 	case backend_task_type::file_props:
 		props_on_type (res.get ());
 		return;

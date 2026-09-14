@@ -29,6 +29,9 @@
     <Filter Include="common">
       <UniqueIdentifier>{679c75d6-2807-4033-8af8-c477c5baab13}</UniqueIdentifier>
     </Filter>
+    <ClInclude Include="..\common\filemap_format.h">
+      <Filter>common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="backend.cpp">
@@ -81,6 +84,9 @@
     </ClCompile>
     <ClCompile Include="md4c\md4c.c">
       <Filter>SRC\md4c</Filter>
+    </ClCompile>
+    <ClCompile Include="mapview.cpp">
+      <Filter>SRC</Filter>
     </ClCompile>
     <ClCompile Include="propsdlg.cpp">
       <Filter>SRC</Filter>

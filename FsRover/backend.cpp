@@ -22,6 +22,7 @@
  */
 
 #include "backend.h"
+#include "../common/filemap_format.h"
 
 #include <bcrypt.h>
 #include <process.h>
@@ -919,6 +920,48 @@ run_payload (const winfile_del_task &task, UINT, backend_result *res)
 	res->path = task.path;
 	if (rover_winfile_del (task.path.c_str ()))
 		set_error (res, "cannot unmount device");
+}
+
+int
+file_map_cancelled (void *opaque)
+{
+	auto *state = static_cast<std::pair<const file_map_task *, backend_result *> *> (opaque);
+	return state->first->cancelled->load ();
+}
+
+int
+file_map_collect (const rover_map_extent *e, void *opaque)
+{
+	auto *state = static_cast<std::pair<const file_map_task *, backend_result *> *> (opaque);
+	auto *res = state->second;
+	if (state->first->cancelled->load () || res->map_rows.size () >= 100000)
+		return 1;
+	const std::string group = std::to_string (++res->map_groups);
+	for (unsigned i = 0; i < (e->storage_count ? e->storage_count : 1); i++)
+	{
+		if (res->map_rows.size () >= 100000) return 1;
+		res->map_rows.push_back (file_map_columns (*e, i,
+			res->path.substr (0, res->path.find (')') + 1), group));
+	}
+	return 0;
+}
+
+void
+run_payload (const file_map_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::file_map;
+	res->path = task.path;
+	if (task.cancelled->load ()) { res->map_stopped = true; return; }
+	rover_file *f = rover_file_open (task.path.c_str ());
+	if (!f) { set_error (res, "cannot open file for mapping"); return; }
+	res->file_size = rover_file_size (f);
+	std::pair<const file_map_task *, backend_result *> state { &task, res };
+	int stopped = 0;
+	if (rover_file_map_range_ex (f, 0, res->file_size, file_map_collect, &state,
+		file_map_cancelled, &state, &stopped))
+		set_error (res, "file mapping failed");
+	res->map_stopped = stopped != 0;
+	rover_file_close (f);
 }
 
 void
