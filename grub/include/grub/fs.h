@@ -51,6 +51,8 @@ typedef int (*grub_fs_dir_hook_t) (const char *filename,
 				   const struct grub_dirhook_info *info,
 				   void *data);
 
+struct grub_file_map_context;
+
 /* Filesystem descriptor.  */
 struct grub_fs
 {
@@ -73,6 +75,10 @@ struct grub_fs
 
   /* Read LEN bytes data from FILE into BUF.  */
   grub_ssize_t (*fs_read) (struct grub_file *file, char *buf, grub_size_t len);
+
+  /* Enumerate metadata only; never fall back to reading file contents. */
+  grub_err_t (*fs_map_range) (struct grub_file *file,
+			    struct grub_file_map_context *ctx);
 
   /* Close the file FILE.  */
   grub_err_t (*fs_close) (struct grub_file *file);

@@ -19,6 +19,7 @@
 
 #include <grub/err.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -234,7 +235,9 @@ struct grub_xfs_inode
   grub_uint32_t nextents;
   grub_uint16_t unused3;
   grub_uint8_t fork_offset;
-  grub_uint8_t unused4[17]; /* Last member of inode v2. */
+  grub_uint8_t unused4[7];
+  grub_uint16_t flags;
+  grub_uint8_t unused4_tail[8]; /* Last member of inode v2. */
   grub_uint8_t unused5[20]; /* First member of inode v3. */
   grub_uint64_t flags2;
   grub_uint8_t unused6[48]; /* Last member of inode v3. */
@@ -1333,12 +1336,136 @@ grub_xfs_uuid (grub_device_t device, char **uuid)
 
 
 
+static grub_err_t
+grub_xfs_map_records (struct grub_xfs_data *data, struct grub_file_map_context *ctx, struct grub_xfs_extent *ext,
+	unsigned n, grub_uint64_t *pos)
+{
+	unsigned i;
+	unsigned shift = data->sblock.log2_bsize;
+
+	for (i = 0; i < n && *pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+	{
+		/* Cast before shifting: the high offset field exceeds 32 bits. */
+		grub_uint64_t start = (((grub_uint64_t) (grub_be_to_cpu32 (ext[i].raw[0]) & 0x7fffffff) << 23) |
+			(grub_be_to_cpu32 (ext[i].raw[1]) >> 9));
+		grub_uint64_t len = GRUB_XFS_EXTENT_SIZE (ext, i);
+		grub_uint64_t physical = GRUB_XFS_FSB_TO_BLOCK (data, GRUB_XFS_EXTENT_BLOCK (ext, i));
+		unsigned flags = (grub_be_to_cpu32 (ext[i].raw[0]) & 0x80000000U)
+			? GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN
+			: GRUB_FILE_MAP_DIRECT;
+		if (!len || start > (~0ULL >> shift) || len > (~0ULL >> shift) - start || physical > (~0ULL >> shift))
+			return grub_error (GRUB_ERR_BAD_FS, "invalid XFS map extent");
+		start <<= shift;
+		len <<= shift;
+		physical <<= shift;
+		if (start < *pos)
+			return grub_error (GRUB_ERR_BAD_FS, "overlapping XFS extents");
+		if (start > *pos &&
+			grub_file_map_simple (ctx, *pos, start - *pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0))
+			return grub_errno;
+		if (grub_file_map_simple (ctx, start, len, flags, physical))
+			return grub_errno;
+		*pos = start + len;
+	}
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_xfs_map_node (struct grub_xfs_data *data, struct grub_file_map_context *ctx, const char *keys, grub_size_t bytes,
+	unsigned n, unsigned level, grub_uint64_t *pos)
+{
+	void *buf = NULL;
+	unsigned i;
+	grub_size_t capacity = bytes / 16;
+
+	if (level > 16 || !n || n > capacity)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "invalid XFS map tree");
+		goto fail;
+	}
+	if (!level)
+		return grub_xfs_map_records (data, ctx, (struct grub_xfs_extent *) keys, n, pos);
+	buf = grub_malloc (data->bsize);
+	if (!buf)
+		goto fail;
+	for (i = 0; i < n && *pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+	{
+		struct grub_xfs_btree_node *node = buf;
+		grub_uint64_t block = get_fsb (keys, (int) (capacity + i));
+		grub_uint64_t physical = GRUB_XFS_FSB_TO_BLOCK (data, block);
+		const char *child;
+
+		if (physical > (~0ULL >> data->sblock.log2_bsize))
+			goto corrupt;
+		if (grub_disk_read (data->disk, physical << (data->sblock.log2_bsize - 9), 0, data->bsize, buf))
+			goto fail;
+		if (grub_memcmp (node->magic, data->hascrc ? "BMA3" : "BMAP", 4) ||
+			grub_be_to_cpu16 (node->level) != level - 1)
+			goto corrupt;
+		child = grub_xfs_btree_keys (data, node);
+		if (grub_xfs_map_node (data, ctx, child, data->bsize - (child - (char *) buf),
+			    grub_be_to_cpu16 (node->numrecs), level - 1, pos))
+			goto fail;
+	}
+	goto fail;
+corrupt:
+	grub_error (GRUB_ERR_BAD_FS, "invalid XFS map child");
+fail:
+	grub_free (buf);
+	return grub_errno;
+}
+
+static grub_err_t
+grub_xfs_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_xfs_data *data = file->data;
+	struct grub_xfs_inode *inode = &data->diropen.inode;
+	char *fork = grub_xfs_inode_data (inode);
+	grub_uint64_t pos = 0;
+	grub_uint64_t n;
+	grub_size_t bytes = grub_xfs_inode_size (data) - (fork - (char *) inode);
+	/* Realtime extents address a different device, absent from this handle. */
+	if (grub_be_to_cpu16 (inode->flags) & 1)
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_UNKNOWN, 0);
+	if (inode->fork_offset)
+	{
+		if (inode->fork_offset * 8U > bytes)
+			return grub_error (GRUB_ERR_BAD_FS, "invalid XFS fork size");
+		bytes = inode->fork_offset * 8U;
+	}
+	if (inode->format == XFS_INODE_FORMAT_EXT)
+	{
+		n = grub_xfs_get_inode_nextents (inode);
+		if (n > bytes / sizeof (struct grub_xfs_extent))
+			return grub_error (GRUB_ERR_BAD_FS, "invalid XFS extent count");
+		if (grub_xfs_map_records (data, ctx, (void *) fork, (unsigned) n, &pos))
+			goto fail;
+	}
+	else if (inode->format == XFS_INODE_FORMAT_BTREE)
+	{
+		struct grub_xfs_btree_root *root = (void *) fork;
+
+		if (bytes < 4)
+			return grub_error (GRUB_ERR_BAD_FS, "short XFS root");
+		if (grub_xfs_map_node (data, ctx, fork + 4, bytes - 4, grub_be_to_cpu16 (root->numrecs),
+			    grub_be_to_cpu16 (root->level), &pos))
+			goto fail;
+	}
+	else
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_UNKNOWN, 0);
+	if (pos < ctx->end && !grub_file_map_cancelled (ctx))
+		return grub_file_map_simple (ctx, pos, ctx->end - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0);
+fail:
+	return grub_errno;
+}
+
 static struct grub_fs grub_xfs_fs =
   {
     .name = "xfs",
     .fs_dir = grub_xfs_dir,
     .fs_open = grub_xfs_open,
     .fs_read = grub_xfs_read,
+    .fs_map_range = grub_xfs_map,
     .fs_close = grub_xfs_close,
     .fs_label = grub_xfs_label,
     .fs_uuid = grub_xfs_uuid,

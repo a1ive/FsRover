@@ -21,6 +21,7 @@
 #include <grub/mm.h>
 #include <grub/disk.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/misc.h>
 #include <grub/dl.h>
 #include <grub/fbfs.h>
@@ -261,12 +262,37 @@ grub_fbfs_close(grub_file_t file)
 	return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_fbfs_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_archelp_data *data = file->data;
+	grub_uint64_t pos = ctx->start;
+	grub_uint64_t base = data->p->data_start;
+
+	if (base < data->ofs)
+		return grub_error (GRUB_ERR_BAD_FS, "invalid fbfs data start");
+	base = (base - data->ofs) << 9;
+	if (data->p->data_start >= data->pri_size)
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_DIRECT, base);
+	while (pos < ctx->end && !grub_file_map_cancelled (ctx))
+	{
+		grub_uint64_t n = grub_min (510 - pos % 510, ctx->end - pos);
+
+		if (grub_file_map_simple (ctx, pos, n, GRUB_FILE_MAP_DIRECT, base + (pos / 510) * 512 + pos % 510))
+			goto fail;
+		pos += n;
+	}
+fail:
+	return grub_errno;
+}
+
 static struct grub_fs grub_fb_fs =
 {
 	.name = "ud",
 	.fs_dir = grub_fbfs_dir,
 	.fs_open = grub_fbfs_open,
 	.fs_read = grub_fbfs_read,
+	.fs_map_range = grub_fbfs_map,
 	.fs_close = grub_fbfs_close,
 	.next = 0
 };

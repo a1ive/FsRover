@@ -171,6 +171,56 @@ rover_file *rover_file_open (const char *path);	/* NULL on failure */
 long long rover_file_read (rover_file *f, void *buf, unsigned long long len);
 int rover_file_seek (rover_file *f, unsigned long long offset);
 unsigned long long rover_file_size (rover_file *f);
+/* Content and placement are independent flags. DIRECT means byte-for-byte
+ * readable at the reported address layer, not at the ultimate host device. */
+#define ROVER_MAP_DIRECT 1U
+#define ROVER_MAP_ZERO 2U
+#define ROVER_MAP_HOLE 4U
+#define ROVER_MAP_INLINE 8U
+#define ROVER_MAP_COMPRESSED 16U
+#define ROVER_MAP_UNWRITTEN 32U
+#define ROVER_MAP_UNKNOWN 64U
+#define ROVER_MAP_TRANSFORMED 128U
+#define ROVER_MAP_SHARED 256U
+#define ROVER_MAP_VOLUME 0U
+#define ROVER_MAP_FS_LOGICAL 1U
+
+struct rover_map_storage
+{
+	unsigned long long offset;
+	unsigned long long length;
+	unsigned int address_space;
+};
+struct rover_map_extent
+{
+	unsigned long long logical_offset;
+	unsigned long long logical_length;
+	/* Offset within the decoded storage object. For DIRECT this is zero;
+	 * for encoded objects this survives clipping the queried range. */
+	unsigned long long decoded_offset;
+	unsigned long long decoded_length;
+	unsigned int flags;
+	const char *encoding;
+	const struct rover_map_storage *storage;
+	unsigned int storage_count;
+};
+/* Optional per-query cancellation poll. No reentrant Rover calls. */
+typedef int (*rover_map_cancel_hook) (void *);
+/* All borrowed pointers expire when the callback returns. Return 0 to
+ * continue, nonzero to stop. No reentrant Rover/GRUB calls are allowed. */
+typedef int (*rover_map_hook) (const struct rover_map_extent *, void *);
+
+/* 0 = complete, nonzero = error; STOPPED distinguishes callback stop.
+ * Storage addresses are bytes relative to the opened filesystem volume,
+ * or explicitly FS_LOGICAL. No recursive host/device resolution. */
+/* Volume storage is checked against known partition/device bounds.
+ * Unknown device capacity retains the GRUB address ceiling. FS logical
+ * addresses are not device offsets. Cancellation returns 0 with stopped=1. */
+int rover_file_map_range_ex (rover_file *f, unsigned long long offset,
+	unsigned long long length, rover_map_hook hook, void *data,
+	rover_map_cancel_hook cancelled, void *cancel_data, int *stopped);
+int rover_file_map_range (rover_file *f, unsigned long long offset,
+	unsigned long long length, rover_map_hook hook, void *data, int *stopped);
 void rover_file_close (rover_file *f);
 
 /*

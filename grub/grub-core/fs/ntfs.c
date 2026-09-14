@@ -20,6 +20,7 @@
 #define grub_fshelp_node grub_ntfs_file
 
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -762,7 +763,7 @@ grub_ntfs_read_block (grub_fshelp_node_t node, grub_disk_addr_t block)
     {
       if (grub_ntfs_read_run_list (ctx))
 	return -1;
-      return ctx->curr_lcn;
+      return (ctx->flags & GRUB_NTFS_RF_BLNK) ? 0 : ctx->curr_lcn;
     }
   else
     return (ctx->flags & GRUB_NTFS_RF_BLNK) ? 0 : (block -
@@ -1089,9 +1090,16 @@ init_file (struct grub_ntfs_file *mft, grub_uint64_t mftno)
 			   (unsigned long long) mftno);
 
       if (!pa[8])
-	mft->size = res_attr_data_len (pa);
+	mft->initialized_size = mft->size = res_attr_data_len (pa);
       else
-	mft->size = u64at (pa, 0x30);
+	{
+	  if (pa >= mft->attr.end || mft->attr.end - pa < 64)
+	    return grub_error (GRUB_ERR_BAD_FS, "short nonresident data attribute");
+	  mft->size = u64at (pa, 0x30);
+	  mft->initialized_size = u64at (pa, 0x38);
+	  if (mft->initialized_size > mft->size)
+	    return grub_error (GRUB_ERR_BAD_FS, "invalid NTFS initialized size");
+	}
 
       if (ntfs_wof_init (mft))
 	return grub_errno;
@@ -1788,10 +1796,14 @@ grub_ntfs_read (grub_file_t file, char *buf, grub_size_t len)
     {
       if (file->read_hook)
 	mft->attr.save_pos = 1;
-      read_attr (&mft->attr, (grub_uint8_t *) buf, file->offset, len, 1,
-		 file->read_hook, file->read_hook_data);
+      grub_size_t initialized = file->offset < mft->initialized_size ?
+	(grub_size_t) grub_min ((grub_uint64_t) len, mft->initialized_size - file->offset) : 0;
+      if (initialized)
+	read_attr (&mft->attr, (grub_uint8_t *) buf, file->offset, initialized, 1,
+		   file->read_hook, file->read_hook_data);
       if (grub_errno)
 	return -1;
+      grub_memset (buf + initialized, 0, len - initialized);
     }
   return (grub_ssize_t) len;
 }
@@ -1924,12 +1936,287 @@ grub_ntfs_uuid (grub_device_t device, char **uuid)
   return grub_errno;
 }
 
+struct grub_ntfs_map_run
+{
+	grub_uint64_t start;
+	grub_uint64_t length;
+	grub_uint64_t physical;
+	int hole;
+};
+
+static grub_err_t
+grub_ntfs_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_ntfs_data *data = file->data;
+	struct grub_ntfs_attr at = { 0 };
+	struct grub_ntfs_map_run *runs = NULL;
+	struct grub_file_map_storage *storage = NULL;
+	grub_size_t count = 0;
+	grub_size_t capacity = 0;
+	grub_size_t i = 0;
+	grub_uint8_t *pa;
+	grub_uint64_t bs = 1ULL << (data->log_spc + 9);
+	grub_uint64_t vcn = 0;
+	grub_uint64_t initialized = 0;
+	grub_uint64_t unit_size = 0;
+	grub_uint64_t target = ctx->end;
+	grub_uint64_t pos;
+	unsigned attr_flags = 0;
+	unsigned segments = 0;
+
+	if (data->cmft.wof_algorithm != GRUB_NTFS_WOF_NONE)
+		return grub_file_map_simple (ctx, 0, file->size,
+			GRUB_FILE_MAP_COMPRESSED | GRUB_FILE_MAP_TRANSFORMED | GRUB_FILE_MAP_UNKNOWN, 0);
+	pa = locate_attr_unnamed (&at, &data->cmft, GRUB_NTFS_AT_DATA);
+	while (pa)
+	{
+		if (grub_file_map_cancelled (ctx))
+			goto fail;
+		grub_size_t bytes;
+		grub_uint8_t *run;
+		grub_uint8_t *end;
+		grub_uint64_t lcn = 0;
+
+		segments++;
+		if (segments > (1U << 20) || pa >= at.end || at.end - pa < 24)
+			goto corrupt;
+		bytes = u32at (pa, 4);
+		if (bytes < 24 || bytes > (grub_size_t) (at.end - pa))
+			goto corrupt;
+		if (!pa[8])
+		{
+			if (segments != 1 || u16at (pa, 20) > bytes || u32at (pa, 16) > bytes - u16at (pa, 20) ||
+				file->size > u32at (pa, 16))
+				goto corrupt;
+			grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_INLINE, 0);
+			goto fail;
+		}
+		if (bytes < 64 || u16at (pa, 32) < 64 || u16at (pa, 32) >= bytes || u64at (pa, 16) != vcn)
+			goto corrupt;
+		if (segments == 1)
+		{
+			attr_flags = u16at (pa, 12);
+			initialized = u64at (pa, 56);
+			if (initialized > file->size)
+				goto corrupt;
+			if (attr_flags & GRUB_NTFS_FLAG_ENCRYPTED)
+			{
+				grub_file_map_simple (
+					ctx, 0, file->size, GRUB_FILE_MAP_TRANSFORMED | GRUB_FILE_MAP_UNKNOWN, 0);
+				goto fail;
+			}
+			if (attr_flags & GRUB_NTFS_FLAG_COMPRESSED)
+			{
+				unsigned shift = u16at (pa, 34);
+
+				if (!shift || shift > 16 || bs > (~0ULL >> shift))
+					goto corrupt;
+				unit_size = bs << shift;
+				if (grub_add (target, unit_size - 1, &target))
+					goto corrupt;
+				target &= ~(unit_size - 1);
+			}
+		}
+		run = pa + u16at (pa, 32);
+		end = pa + bytes;
+		while (run < end && *run)
+		{
+			if (grub_file_map_cancelled (ctx))
+				goto fail;
+			unsigned a = *run & 15;
+			unsigned b = *run >> 4;
+			grub_uint64_t n = 0;
+			grub_uint64_t delta = 0;
+			grub_uint64_t next_vcn;
+			grub_uint64_t physical = 0;
+			unsigned j;
+			run++;
+			if (!a || a > 8 || b > 8 || (grub_size_t) (end - run) < a + b)
+				goto corrupt;
+			for (j = 0; j < a; j++)
+				n |= (grub_uint64_t) run[j] << (j * 8);
+			run += a;
+			for (j = 0; j < b; j++)
+				delta |= (grub_uint64_t) run[j] << (j * 8);
+			if (b && b < 8 && (run[b - 1] & 0x80))
+				delta |= ~0ULL << (b * 8);
+			run += b;
+			if (!n || grub_add (vcn, n, &next_vcn) || next_vcn > ~0ULL / bs)
+				goto corrupt;
+			if (b)
+			{
+				if (delta & (1ULL << 63))
+				{
+					grub_uint64_t magnitude = ~delta + 1;
+
+					if (magnitude > lcn)
+						goto corrupt;
+					lcn -= magnitude;
+				}
+				else if (grub_add (lcn, delta, &lcn))
+					goto corrupt;
+				if (lcn > ~0ULL / bs || n > ~0ULL / bs - lcn)
+					goto corrupt;
+				physical = lcn * bs;
+			}
+			if (count == capacity)
+			{
+				struct grub_ntfs_map_run *p;
+
+				if (capacity >= (1U << 22))
+					goto corrupt;
+				capacity = capacity ? capacity * 2 : 64;
+				p = grub_realloc (runs, capacity * sizeof (*runs));
+				if (!p)
+					goto fail;
+				runs = p;
+			}
+			runs[count].start = vcn * bs;
+			runs[count].length = n * bs;
+			runs[count].physical = physical;
+			runs[count].hole = b == 0;
+			count++;
+			vcn = next_vcn;
+			if (vcn * bs >= target)
+				break;
+		}
+		if (vcn * bs >= target || vcn * bs >= file->size)
+			break;
+		if (run >= end || !vcn || u64at (pa, 24) != vcn - 1)
+			goto corrupt;
+		pa = find_attr (&at, GRUB_NTFS_AT_DATA);
+	}
+	if (grub_errno)
+		goto fail;
+	if (vcn * bs < grub_min (ctx->end, initialized))
+		goto corrupt;
+	if (unit_size)
+	{
+		storage = grub_calloc (count ? count : 1, sizeof (*storage));
+		if (!storage)
+			goto fail;
+	}
+	pos = ctx->start;
+	while (pos < ctx->end && !grub_file_map_cancelled (ctx))
+	{
+		grub_uint64_t n;
+
+		while (i < count && runs[i].start + runs[i].length <= pos)
+			i++;
+		if (i == count)
+		{
+			if (pos < initialized)
+				goto corrupt;
+			grub_file_map_simple (ctx, pos, ctx->end - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNKNOWN, 0);
+			break;
+		}
+		if (!unit_size)
+		{
+			unsigned flags;
+
+			if (runs[i].hole)
+				flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE;
+			else if (pos >= initialized)
+				flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN;
+			else
+				flags = GRUB_FILE_MAP_DIRECT;
+			n = grub_min (runs[i].start + runs[i].length - pos,
+				(pos < initialized ? initialized : ctx->end) - pos);
+			if (grub_file_map_simple (ctx, pos, n, flags, runs[i].physical + pos - runs[i].start))
+				goto fail;
+			pos += n;
+		}
+		else
+		{
+			grub_uint64_t base = pos & ~(unit_size - 1);
+			grub_uint64_t end = base + unit_size;
+			grub_uint64_t allocated = 0;
+			grub_size_t j = i;
+			grub_size_t used = 0;
+			struct grub_file_map_extent e = { 0 };
+			int seen_hole = 0;
+
+			while (j && runs[j].start > base)
+				j--;
+			for (; j < count && runs[j].start < end; j++)
+			{
+				grub_uint64_t a = grub_max (base, runs[j].start);
+				grub_uint64_t b = grub_min (end, runs[j].start + runs[j].length);
+
+				if (runs[j].hole)
+				{
+					seen_hole = 1;
+					continue;
+				}
+				if (seen_hole)
+					goto corrupt;
+				storage[used].offset = runs[j].physical + a - runs[j].start;
+				storage[used].length = b - a;
+				storage[used].address_space = GRUB_FILE_MAP_VOLUME;
+				used++;
+				allocated += b - a;
+			}
+			n = grub_min (end, pos < initialized ? initialized : ctx->end) - pos;
+			if (!allocated)
+			{
+				if (grub_file_map_simple (ctx, pos, n, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0))
+					goto fail;
+			}
+			else if (allocated == unit_size)
+			{
+				/* Full units are stored uncompressed; emit the actual runs. */
+				grub_uint64_t p = base;
+
+				for (j = 0; j < used && !grub_file_map_cancelled (ctx); j++)
+				{
+					grub_uint64_t a = grub_max (p, pos);
+					grub_uint64_t b = grub_min (p + storage[j].length, pos + n);
+
+					if (b > a &&
+						grub_file_map_simple (ctx, a, b - a,
+							pos >= initialized
+								? GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN
+								: GRUB_FILE_MAP_DIRECT,
+							storage[j].offset + a - p))
+						goto fail;
+					p += storage[j].length;
+				}
+			}
+			else
+			{
+				e.logical_offset = pos;
+				e.logical_length = n;
+				e.decoded_offset = pos - base;
+				e.decoded_length = unit_size;
+				e.flags = GRUB_FILE_MAP_COMPRESSED | GRUB_FILE_MAP_TRANSFORMED;
+				if (pos >= initialized)
+					e.flags |= GRUB_FILE_MAP_ZERO;
+				e.encoding = "LZNT1";
+				e.storage = storage;
+				e.storage_count = (unsigned) used;
+				if (grub_file_map_emit (ctx, &e))
+					goto fail;
+			}
+			pos += n;
+		}
+	}
+	goto fail;
+corrupt:
+	grub_error (GRUB_ERR_BAD_FS, "invalid NTFS mapping pairs or compression unit");
+fail:
+	free_attr (&at);
+	grub_free (storage);
+	grub_free (runs);
+	return grub_errno;
+}
+
 static struct grub_fs grub_ntfs_fs =
   {
     .name = "ntfs",
     .fs_dir = grub_ntfs_dir,
     .fs_open = grub_ntfs_open,
     .fs_read = grub_ntfs_read,
+    .fs_map_range = grub_ntfs_map,
     .fs_close = grub_ntfs_close,
     .fs_label = grub_ntfs_label,
     .fs_uuid = grub_ntfs_uuid,
