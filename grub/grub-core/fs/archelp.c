@@ -146,6 +146,12 @@ grub_archelp_dir (struct grub_archelp_data *data,
 		  const char *path_in,
 		  grub_fs_dir_hook_t hook, void *hook_data)
 {
+	struct directory_entry
+	{
+		struct directory_entry *next;
+		char *name;
+	};
+	struct directory_entry *directories = NULL;
   char *prev, *name, *path, *ptr;
   grub_size_t len;
   int symlinknest = 0;
@@ -201,6 +207,35 @@ grub_archelp_dir (struct grub_archelp_data *data,
 	      grub_memset (&info, 0, sizeof (info));
 	      info.dir = (p != NULL) || ((mode & GRUB_ARCHELP_ATTR_TYPE)
 					 == GRUB_ARCHELP_ATTR_DIR);
+		/* Archive children need not follow their explicit directory entry. */
+		if (info.dir)
+		  {
+			struct directory_entry *entry;
+
+			for (entry = directories; entry; entry = entry->next)
+			  if (grub_strcmp (entry->name, name) == 0)
+			    break;
+			if (entry)
+			  {
+				grub_free (name);
+				continue;
+			  }
+			entry = grub_malloc (sizeof (*entry));
+			if (!entry)
+			  {
+				grub_free (name);
+				goto fail;
+			  }
+			entry->name = grub_strdup (name);
+			if (!entry->name)
+			  {
+				grub_free (entry);
+				grub_free (name);
+				goto fail;
+			  }
+			entry->next = directories;
+			directories = entry;
+		  }
 	      info.symlink = ((mode & GRUB_ARCHELP_ATTR_TYPE) == GRUB_ARCHELP_ATTR_LNK);
 	      if (!info.dir && !info.symlink && arcops->get_size)
 		{
@@ -249,6 +284,14 @@ fail:
 
   grub_free (path);
   grub_free (prev);
+	while (directories)
+	  {
+		struct directory_entry *next = directories->next;
+
+		grub_free (directories->name);
+		grub_free (directories);
+		directories = next;
+	  }
 
   return grub_errno;
 }

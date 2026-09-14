@@ -6,12 +6,10 @@ sufficient; no image downloads, mounts, administrator privileges or third-party
 Python packages are required. All images, extracted files and logs stay in
 build/run directories. No binary fixtures or encoded image dumps belong in Git.
 
-**Known failure:** noncontiguous TAR directory entries currently produce duplicate
-directories through `archelp`. The suite reports this as one explicit `XFAIL`,
-separate from passing tests. It tolerates only the exact known duplicate listing
-and extracted tree; other errors fail. When the driver is fixed, remove the
-exemption and assert the correct tree. This is not a claim that all TAR layouts
-pass. The normal TAR case uses contiguous directory entries and children.
+TAR regressions cover contiguous and noncontiguous explicit directory entries,
+plus interleaved children with implicit directories at multiple depths. Each case
+requires unique directory listings and the exact extracted tree with SHA-256
+checks; duplicate directories fail the suite.
 
 ## Run on Windows
 

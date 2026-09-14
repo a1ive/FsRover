@@ -16,6 +16,15 @@ FILES = {
     "nested/data.bin": bytes(range(256)) * 4097 + b"tail",
 }
 DIRS = {"nested", "empty-dir"}
+INTERLEAVED_FILES = {
+    "alpha/deep/first.txt": b"first nested child",
+    "beta/first.txt": b"other directory",
+    "root.txt": b"separator",
+    "alpha/peer.txt": b"parent child",
+    "beta/second.txt": b"second other child",
+    "alpha/deep/last.txt": b"last nested child",
+}
+INTERLEAVED_DIRS = {"alpha", "alpha/deep", "beta"}
 FAT_FILES = {"hello.txt": b"FAT12 payload\n" * 60, "empty.bin": b"",
              "dir/child.txt": b"child\n"}
 COLLISIONS = {"same.txt": b"lower", "SAME.TXT": b"upper",
@@ -268,6 +277,8 @@ def generate(root):
     root.mkdir(parents=True, exist_ok=True)
     make_tar(root / "basic.tar", FILES, DIRS)
     make_tar(root / "noncontiguous.tar", FILES, DIRS, grouped=False)
+    make_tar(root / "interleaved.tar", INTERLEAVED_FILES, INTERLEAVED_DIRS, grouped=False)
+    make_tar(root / "implicit.tar", INTERLEAVED_FILES, grouped=False)
     with zipfile.ZipFile(root / "basic.zip", "w") as archive:
         for name, data in [(d + "/", b"") for d in sorted(DIRS)] + list(FILES.items()):
             info = zipfile.ZipInfo(name, (2000, 1, 1, 0, 0, 0))
