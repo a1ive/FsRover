@@ -18,6 +18,9 @@ from fixtures import (COLLISIONS, DIRS, EXT2_DIRS, EXT2_FILES, EXT2_LINKS, FAT_F
                       FILES, MTIME, SIGNAL_FILES, generate)
 
 
+from filemap import default_mapping, external_mapping, generate_mapping, mapping_errors
+
+
 class Skipped(Exception):
     pass
 
@@ -53,8 +56,9 @@ def check_tree(path, files, dirs=()):
 
 
 class Suite:
-    def __init__(self, cli, probe, root):
+    def __init__(self, cli, probe, root, filemap_fixtures=None):
         self.cli, self.probe, self.root = cli, probe, root
+        self.filemap_fixtures = filemap_fixtures
         self.fixtures = root / "fixtures"
         self.results, self.commands = [], []
 
@@ -325,6 +329,7 @@ class Suite:
 
     def run(self):
         generate(self.fixtures)
+        generate_mapping(self.fixtures)
         before = {p.name: digest(p.read_bytes()) for p in self.fixtures.iterdir()}
         self.case("zip list/extract", lambda: self.basic("basic.zip", FILES, DIRS))
         self.case("tar list/extract", lambda: self.basic("basic.tar", FILES, DIRS))
@@ -343,6 +348,10 @@ class Suite:
                                ("loopback mounts and decompression", self.loops),
                                ("CLI errors", self.errors)]:
             self.case(name, function)
+        self.case("metadata mapping, range/stop/read and corruption", lambda: default_mapping(self))
+        self.case("mapping CLI errors", lambda: mapping_errors(self))
+        if self.filemap_fixtures is not None:
+            self.case("external mapping matrix", lambda: external_mapping(self, self.filemap_fixtures))
         self.case("OS signal cancellation", self.signal_cancellation)
         self.case("same-process recovery and cancellation", lambda: self.command(
             [self.probe, self.fixtures, self.root / "probe"]))
@@ -369,13 +378,15 @@ def main():
     parser.add_argument("--probe", required=True, type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path,
                         help="Parent for a unique run directory; existing files are never deleted")
+    parser.add_argument("--filemap-fixtures", type=pathlib.Path,
+                        help="Optional existing full mapping fixture matrix; missing images fail")
     args = parser.parse_args()
     cli, probe = args.cli.resolve(), args.probe.resolve()
     require(cli.is_file() and probe.is_file(), "build both the CLI and product probe first")
     args.output.mkdir(parents=True, exist_ok=True)
     root = pathlib.Path(tempfile.mkdtemp(prefix="run-", dir=args.output.resolve()))
     print(f"Results and generated fixtures: {root}", flush=True)
-    return Suite(cli, probe, root).run()
+    return Suite(cli, probe, root, args.filemap_fixtures).run()
 
 
 if __name__ == "__main__":

@@ -38,6 +38,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="product_probe.cpp" />
+    <ClCompile Include="filemap_probe.c">
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ForcedIncludeFiles>$(ProjectDir)..\grub\rover\config.h</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\grub\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="..\common\extract_core.cpp" />
     <ProjectReference Include="..\grub\grub.vcxproj">
       <Project>{430BEE0D-4066-42B9-BBC8-5FFF43A75AD3}</Project>
