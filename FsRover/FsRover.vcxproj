@@ -195,6 +195,7 @@
     <ClCompile Include="mdrtf.cpp" />
     <ClCompile Include="mdview.cpp" />
     <ClCompile Include="propsdlg.cpp" />
+    <ClCompile Include="mapview.cpp" />
     <ClCompile Include="smartdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />
@@ -205,6 +206,7 @@
     <ClInclude Include="..\common\extract_core.h" />
     <ClInclude Include="..\common\extract_host.h" />
     <ClInclude Include="..\common\fusefs.h" />
+    <ClInclude Include="..\common\filemap_format.h" />
     <ClInclude Include="..\common\fs_encoding.h" />
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />

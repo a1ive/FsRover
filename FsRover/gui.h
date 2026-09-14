@@ -138,6 +138,10 @@ std::wstring format_mtime (INT64 mtime);
 std::string join_path (const std::string &dir, const std::string &name);
 void clipboard_set_text (HWND owner, const std::wstring &text);
 
+/* mapview.cpp */
+void show_file_map (const std::string &path);
+void file_map_done (backend_result *res);
+
 /* propsdlg.cpp */
 void show_props (const std::string &path);
 void props_on_type (backend_result *res);

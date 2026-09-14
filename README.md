@@ -14,7 +14,7 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 - Browse physical disks, optical discs, disk images, partitions, RAID, and logical volumes.
 - Extract files or mount a filesystem as a Windows drive through WinFsp or Dokany.
 - Open nested and compressed disk images as virtual disks.
-- Inspect files with built-in properties, hashes, text, image, and hex views.
+- Inspect files with built-in properties, hashes, text, image, hex, and metadata storage-map views.
 - Unlock LUKS1, LUKS2, BitLocker, GELI, VeraCrypt/TrueCrypt, and plain dm-crypt volumes.
 
 ## Download

@@ -33,6 +33,9 @@
 #include <windows.h>
 
 #include <functional>
+#include <atomic>
+#include <memory>
+#include <array>
 #include <string>
 #include <variant>
 #include <vector>
@@ -60,6 +63,7 @@ enum class backend_task_type
 	loopback_del,	/* path = device name */
 	winfile_add,	/* dest (Windows file) -> result.path = "imgN" */
 	winfile_del,	/* path = device name */
+	file_map,
 	file_props,	/* path -> result.text (libmagic description) */
 	hash_file,	/* path + hash_mask -> result.hash[] */
 	read_chunk,	/* path + offset/length -> result.data, file_size */
@@ -151,6 +155,12 @@ struct winfile_del_task
 	std::string path;	/* device name */
 };
 
+struct file_map_task
+{
+	std::string path;
+	std::shared_ptr<std::atomic<bool>> cancelled;
+};
+
 struct file_props_task
 {
 	std::string path;
@@ -200,7 +210,7 @@ struct plainmount_unlock_task
 
 using backend_task = std::variant<enum_disks_task, list_dir_task,
 	list_sizes_task, extract_task, export_image_task, loopback_add_task,
-	loopback_del_task, winfile_add_task, winfile_del_task, file_props_task,
+	loopback_del_task, winfile_add_task, winfile_del_task, file_props_task, file_map_task,
 	hash_file_task, read_chunk_task, crypto_unlock_task,
 	veracrypt_unlock_task, plainmount_unlock_task>;
 
@@ -271,6 +281,9 @@ struct backend_result
 	UINT64 stat_links = 0;	/* extract: symlinks skipped */
 	UINT64 stat_errors = 0;	/* extract: files that could not be written */
 	std::string extract_error;	/* extract: first per-file error */
+	std::vector<std::array<std::string, 11>> map_rows;
+	UINT64 map_groups = 0;
+	bool map_stopped = false;
 	std::string text;	/* file_props: libmagic description */
 	bool inode_set = false;	/* file_props: the driver reported an inode */
 	UINT64 inode = 0;
