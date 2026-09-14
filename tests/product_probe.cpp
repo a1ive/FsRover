@@ -6,6 +6,9 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+extern "C" int product_filemap_probe (int argc, const char **argv);
 
 static void require (bool value, const char *message)
 {
@@ -117,6 +120,19 @@ int wmain (int argc, wchar_t **argv)
 int main (int argc, char **argv)
 #endif
 {
+	if (argc >= 2 && std::filesystem::path (argv[1]) == "--filemap")
+	{
+		std::vector<std::string> values;
+		std::vector<const char *> arguments;
+		for (int i = 2; i < argc; i++)
+		{
+			const auto utf8 = std::filesystem::path (argv[i]).u8string ();
+			values.emplace_back (reinterpret_cast<const char *> (utf8.c_str ()));
+		}
+		for (const auto &value : values)
+			arguments.push_back (value.c_str ());
+		return product_filemap_probe ((int) arguments.size (), arguments.data ());
+	}
 	if (argc != 3)
 		return 2;
 	rover_init (ROVER_INIT_NO_HOSTDISK);
