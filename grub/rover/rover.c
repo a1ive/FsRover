@@ -32,6 +32,7 @@
 #include <grub/disk.h>
 #include <grub/fs.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/partition.h>
 #include <grub/diskfilter.h>
 #include <grub/cryptodisk.h>
@@ -940,4 +941,114 @@ rover_set_crypto_progress (rover_progress_hook cb, void *data)
 	crypto_progress_data = data;
 	grub_cryptodisk_kdf_progress = cb ? crypto_progress_shim : 0;
 	grub_cryptodisk_kdf_progress_data = 0;
+}
+
+_Static_assert (ROVER_MAP_DIRECT == GRUB_FILE_MAP_DIRECT, "mapping DIRECT mismatch");
+_Static_assert (ROVER_MAP_ZERO == GRUB_FILE_MAP_ZERO, "mapping ZERO mismatch");
+_Static_assert (ROVER_MAP_HOLE == GRUB_FILE_MAP_HOLE, "mapping HOLE mismatch");
+_Static_assert (ROVER_MAP_INLINE == GRUB_FILE_MAP_INLINE, "mapping INLINE mismatch");
+_Static_assert (ROVER_MAP_COMPRESSED == GRUB_FILE_MAP_COMPRESSED, "mapping COMPRESSED mismatch");
+_Static_assert (ROVER_MAP_UNWRITTEN == GRUB_FILE_MAP_UNWRITTEN, "mapping UNWRITTEN mismatch");
+_Static_assert (ROVER_MAP_UNKNOWN == GRUB_FILE_MAP_UNKNOWN, "mapping UNKNOWN mismatch");
+_Static_assert (ROVER_MAP_TRANSFORMED == GRUB_FILE_MAP_TRANSFORMED, "mapping TRANSFORMED mismatch");
+_Static_assert (ROVER_MAP_SHARED == GRUB_FILE_MAP_SHARED, "mapping SHARED mismatch");
+_Static_assert (ROVER_MAP_VOLUME == GRUB_FILE_MAP_VOLUME, "mapping VOLUME mismatch");
+_Static_assert (ROVER_MAP_FS_LOGICAL == GRUB_FILE_MAP_FS_LOGICAL, "mapping FS_LOGICAL mismatch");
+
+struct rover_map_context
+{
+	rover_map_hook hook;
+	rover_map_cancel_hook cancelled;
+	void *cancel_data;
+	void *data;
+	struct rover_map_storage *storage;
+	unsigned int capacity;
+	grub_err_t error;
+};
+
+static int
+rover_map_callback (const struct grub_file_map_extent *input, void *data)
+{
+	struct rover_map_context *ctx = data;
+	struct rover_map_storage single;
+	struct rover_map_storage *storage = &single;
+	struct rover_map_extent extent = { 0 };
+	unsigned int i;
+
+	if (input->storage_count > 1)
+	{
+		if (input->storage_count > ctx->capacity)
+		{
+			grub_size_t bytes;
+			struct rover_map_storage *buffer;
+			if (grub_mul ((grub_size_t) input->storage_count, sizeof (*buffer), &bytes))
+			{
+				grub_error (GRUB_ERR_OUT_OF_MEMORY, "mapping storage too large");
+				goto fail;
+			}
+			buffer = grub_realloc (ctx->storage, bytes);
+			if (!buffer)
+				goto fail;
+			ctx->storage = buffer;
+			ctx->capacity = input->storage_count;
+		}
+		storage = ctx->storage;
+	}
+	for (i = 0; i < input->storage_count; i++)
+	{
+		storage[i].offset = input->storage[i].offset;
+		storage[i].length = input->storage[i].length;
+		storage[i].address_space = input->storage[i].address_space;
+	}
+	extent.logical_offset = input->logical_offset;
+	extent.logical_length = input->logical_length;
+	extent.decoded_offset = input->decoded_offset;
+	extent.decoded_length = input->decoded_length;
+	extent.flags = input->flags;
+	extent.encoding = input->encoding;
+	extent.storage = input->storage_count ? storage : NULL;
+	extent.storage_count = input->storage_count;
+	return ctx->hook (&extent, ctx->data);
+
+fail:
+	ctx->error = grub_errno;
+	return 1;
+}
+
+static int
+rover_map_cancelled (void *data)
+{
+	struct rover_map_context *ctx = data;
+	return ctx->cancelled (ctx->cancel_data);
+}
+
+int
+rover_file_map_range_ex (rover_file *f, unsigned long long offset,
+	unsigned long long length, rover_map_hook hook, void *data,
+	rover_map_cancel_hook cancelled, void *cancel_data, int *stopped)
+{
+	struct rover_map_context ctx = { 0 };
+	grub_err_t err;
+	grub_errno = GRUB_ERR_NONE;
+	ctx.hook = hook;
+	ctx.data = data;
+	ctx.cancelled = cancelled;
+	ctx.cancel_data = cancel_data;
+	err = grub_file_map_range_ex (f->file, offset, length,
+		hook ? rover_map_callback : NULL, &ctx,
+		cancelled ? rover_map_cancelled : NULL, &ctx, stopped);
+	grub_free (ctx.storage);
+	if (ctx.error)
+	{
+		*stopped = 0;
+		return grub_errno = ctx.error;
+	}
+	return err;
+}
+
+int
+rover_file_map_range (rover_file *f, unsigned long long offset,
+	unsigned long long length, rover_map_hook hook, void *data, int *stopped)
+{
+	return rover_file_map_range_ex (f, offset, length, hook, data, NULL, NULL, stopped);
 }

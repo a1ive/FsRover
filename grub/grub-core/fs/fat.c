@@ -20,6 +20,7 @@
 #include <grub/fs.h>
 #include <grub/disk.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/types.h>
 #include <grub/misc.h>
 #include <grub/mm.h>
@@ -200,6 +201,7 @@ struct grub_fshelp_node {
   grub_uint32_t file_size;
 #else
   grub_uint64_t file_size;
+  grub_uint64_t valid_size;
 #endif
   grub_uint32_t file_cluster;
   grub_uint32_t cur_cluster_num;
@@ -329,8 +331,7 @@ grub_fat_mount (grub_disk_t disk)
 #ifdef MODE_EXFAT
   data->cluster_sector = (grub_le_to_cpu32 (bpb.cluster_offset)
 			  << data->logical_sector_bits);
-  data->num_clusters = (grub_le_to_cpu32 (bpb.cluster_count)
-			  << data->logical_sector_bits);
+  data->num_clusters = grub_le_to_cpu32 (bpb.cluster_count) + 2;
 #else
   data->cluster_sector = data->root_sector + data->num_root_sectors;
   data->num_clusters = (((data->num_sectors - data->cluster_sector)
@@ -966,6 +967,7 @@ static grub_err_t lookup_file (grub_fshelp_node_t node,
 	  (*foundnode)->attr = ctxt.dir.attr;
 #ifdef MODE_EXFAT
 	  (*foundnode)->file_size = ctxt.dir.file_size;
+	  (*foundnode)->valid_size = ctxt.dir.valid_size;
 	  (*foundnode)->file_cluster = ctxt.dir.first_cluster;
 	  (*foundnode)->is_contiguous = ctxt.dir.is_contiguous;
 #else
@@ -1139,9 +1141,25 @@ grub_fat_open (grub_file_t file, const char *name)
 static grub_ssize_t
 grub_fat_read (grub_file_t file, char *buf, grub_size_t len)
 {
+#ifdef MODE_EXFAT
+	grub_fshelp_node_t node = file->data;
+	grub_size_t initialized = file->offset < node->valid_size ?
+		(grub_size_t) grub_min ((grub_uint64_t) len, node->valid_size - file->offset) : 0;
+	if (node->valid_size > file->size)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "invalid exFAT valid data length");
+		return -1;
+	}
+	if (initialized && grub_fat_read_data (file->device->disk, node,
+		file->read_hook, file->read_hook_data, file->offset, initialized, buf) != (grub_ssize_t) initialized)
+		return -1;
+	grub_memset (buf + initialized, 0, len - initialized);
+	return len;
+#else
   return grub_fat_read_data (file->device->disk, file->data,
 			     file->read_hook, file->read_hook_data,
 			     file->offset, len, buf);
+#endif
 }
 
 static grub_err_t
@@ -1326,6 +1344,112 @@ grub_disk_addr_t
 }
 #endif
 
+static grub_err_t
+grub_fat_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	grub_fshelp_node_t node = file->data;
+	struct grub_fat_data *d = node->data;
+	grub_uint64_t pos = 0;
+	grub_uint64_t limit = ctx->end;
+	grub_uint64_t size;
+	grub_uint32_t cluster = node->file_cluster;
+	grub_uint32_t anchor = cluster;
+	grub_uint64_t power = 1;
+	grub_uint64_t hops = 0;
+	grub_uint64_t count = 0;
+
+	if (d->cluster_bits < 0 || d->cluster_bits > 31)
+		return grub_error (GRUB_ERR_BAD_FS, "invalid FAT cluster size");
+	size = 1ULL << (d->cluster_bits + 9);
+#ifdef MODE_EXFAT
+	if (node->valid_size > file->size)
+		return grub_error (GRUB_ERR_BAD_FS, "invalid exFAT valid data length");
+
+	if (node->is_contiguous && limit > ctx->start)
+	{
+		if (cluster < 2 || cluster >= d->num_clusters || (limit - 1) / size >= d->num_clusters - cluster)
+			return grub_error (GRUB_ERR_BAD_FS, "invalid contiguous exFAT range");
+		grub_uint64_t base = ((grub_uint64_t) d->cluster_sector << 9) + (cluster - 2ULL) * size;
+		grub_uint64_t valid = grub_min (limit, node->valid_size);
+
+		if (valid && grub_file_map_simple (ctx, 0, valid, GRUB_FILE_MAP_DIRECT, base))
+			goto fail;
+		if (valid < limit &&
+			grub_file_map_simple (
+				ctx, valid, limit - valid, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN, base + valid))
+			goto fail;
+		pos = limit;
+	}
+#endif
+	while (pos < limit && limit > ctx->start && !grub_file_map_cancelled (ctx))
+	{
+		grub_uint64_t n = grub_min (size, limit - pos);
+		grub_uint64_t fat_offset;
+		grub_uint32_t next_cluster = 0;
+
+		if (cluster < 2 || cluster >= d->num_clusters || cluster >= d->cluster_eof_mark ||
+			++count > d->num_clusters)
+		{
+			grub_error (GRUB_ERR_BAD_FS, "invalid or truncated FAT chain");
+			goto fail;
+		}
+		grub_uint64_t base = ((grub_uint64_t) d->cluster_sector << 9) + (cluster - 2ULL) * size;
+#ifdef MODE_EXFAT
+		grub_uint64_t valid = pos < node->valid_size ? grub_min (n, node->valid_size - pos) : 0;
+
+		if (valid && grub_file_map_simple (ctx, pos, valid, GRUB_FILE_MAP_DIRECT, base))
+			goto fail;
+		if (valid < n &&
+			grub_file_map_simple (ctx, pos + valid, n - valid, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN,
+				base + valid))
+			goto fail;
+#else
+		if (grub_file_map_simple (ctx, pos, n, GRUB_FILE_MAP_DIRECT, base))
+			goto fail;
+#endif
+		pos += n;
+		if (pos >= limit || grub_file_map_cancelled (ctx))
+			break;
+		fat_offset = d->fat_size == 32 ? cluster * 4ULL
+			: d->fat_size == 16    ? cluster * 2ULL
+			: cluster + cluster / 2ULL;
+		if (fat_offset + ((d->fat_size + 7) >> 3) > ((grub_uint64_t) d->sectors_per_fat << 9))
+		{
+			grub_error (GRUB_ERR_BAD_FS, "FAT entry outside table");
+			goto fail;
+		}
+		if (grub_disk_read (node->disk, d->fat_sector, fat_offset, (d->fat_size + 7) >> 3, &next_cluster))
+			goto fail;
+		next_cluster = grub_le_to_cpu32 (next_cluster);
+		if (d->fat_size == 12)
+			next_cluster = (next_cluster >> ((cluster & 1) ? 4 : 0)) & 0xfff;
+		else if (d->fat_size == 16)
+			next_cluster &= 0xffff;
+#ifndef MODE_EXFAT
+		else
+			next_cluster &= 0x0fffffff;
+#endif
+		cluster = next_cluster;
+		if (cluster == anchor)
+		{
+			grub_error (GRUB_ERR_BAD_FS, "cyclic FAT chain");
+			goto fail;
+		}
+		if (++hops == power)
+		{
+			anchor = cluster;
+			power *= 2;
+			hops = 0;
+		}
+	}
+#ifdef MODE_EXFAT
+	if (limit < ctx->end && !grub_file_map_cancelled (ctx))
+		return grub_file_map_simple (ctx, limit, ctx->end - limit, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0);
+#endif
+fail:
+	return grub_errno;
+}
+
 static struct grub_fs grub_fat_fs =
   {
 #ifdef MODE_EXFAT
@@ -1336,6 +1460,7 @@ static struct grub_fs grub_fat_fs =
     .fs_dir = grub_fat_dir,
     .fs_open = grub_fat_open,
     .fs_read = grub_fat_read,
+	.fs_map_range = grub_fat_map,
     .fs_close = grub_fat_close,
     .fs_label = grub_fat_label,
     .fs_uuid = grub_fat_uuid,

@@ -864,6 +864,9 @@
     <ClInclude Include="include\grub\file.h">
       <Filter>include\grub</Filter>
     </ClInclude>
+    <ClInclude Include="include\grub\filemap.h">
+      <Filter>include\grub</Filter>
+    </ClInclude>
     <ClInclude Include="include\grub\fs.h">
       <Filter>include\grub</Filter>
     </ClInclude>

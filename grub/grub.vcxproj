@@ -669,6 +669,7 @@
     <ClInclude Include="include\grub\fat.h" />
     <ClInclude Include="include\grub\fbfs.h" />
     <ClInclude Include="include\grub\file.h" />
+    <ClInclude Include="include\grub\filemap.h" />
     <ClInclude Include="include\grub\fs.h" />
     <ClInclude Include="include\grub\fshelp.h" />
     <ClInclude Include="include\grub\gcry\types.h" />

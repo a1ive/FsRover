@@ -19,6 +19,7 @@
 
 #include <grub/err.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -2115,11 +2116,144 @@ grub_udf_uuid (grub_device_t device, char **uuid)
   return grub_errno;
 }
 
+static grub_err_t
+grub_udf_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	grub_fshelp_node_t node = file->data;
+	struct grub_udf_data *data = node->data;
+	char *ptr, *end, *buf = NULL;
+	grub_ssize_t len;
+	grub_uint64_t pos = 0;
+	unsigned continuations = 0;
+	unsigned type = U16 (node->block.fe.icbtag.flags) & GRUB_UDF_ICBTAG_FLAG_AD_MASK;
+	grub_uint32_t bs = U32 (data->lvd.bsize);
+
+	if (U16 (node->block.fe.tag.tag_ident) == GRUB_UDF_TAG_IDENT_FE)
+	{
+		ptr = (char *) node->block.fe.ext_attr + U32 (node->block.fe.ext_attr_length);
+		len = U32 (node->block.fe.alloc_descs_length);
+	}
+	else if (U16 (node->block.fe.tag.tag_ident) == GRUB_UDF_TAG_IDENT_EFE)
+	{
+		ptr = (char *) node->block.efe.ext_attr + U32 (node->block.efe.ext_attr_length);
+		len = U32 (node->block.efe.alloc_descs_length);
+	}
+	else
+		goto corrupt;
+	end = (char *) node + get_fshelp_size (data);
+	if (ptr < (char *) &node->block || ptr > end || len < 0 || len > end - ptr)
+		goto corrupt;
+	end = ptr + len;
+	if (type == GRUB_UDF_ICBTAG_FLAG_AD_IN_ICB)
+	{
+		if (file->size > (grub_uint64_t) len)
+			goto corrupt;
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_INLINE, 0);
+	}
+	if (type != GRUB_UDF_ICBTAG_FLAG_AD_SHORT && type != GRUB_UDF_ICBTAG_FLAG_AD_LONG)
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_UNKNOWN, 0);
+	while (pos < ctx->end && !grub_file_map_cancelled (ctx))
+	{
+		grub_uint32_t size;
+		grub_uint32_t kind;
+		grub_uint32_t block;
+		grub_uint32_t part;
+		grub_size_t desc_size = type == GRUB_UDF_ICBTAG_FLAG_AD_SHORT ? sizeof (struct grub_udf_short_ad)
+			: sizeof (struct grub_udf_long_ad);
+		grub_uint64_t within = 0;
+
+		if (ptr > end || (grub_size_t) (end - ptr) < desc_size)
+			goto corrupt;
+		if (type == GRUB_UDF_ICBTAG_FLAG_AD_SHORT)
+		{
+			struct grub_udf_short_ad *ad = (void *) ptr;
+			size = U32 (ad->length);
+			block = U32 (ad->position);
+			part = node->part_ref;
+		}
+		else
+		{
+			struct grub_udf_long_ad *ad = (void *) ptr;
+			size = U32 (ad->length);
+			block = U32 (ad->block.block_num);
+			part = U16 (ad->block.part_ref);
+		}
+		kind = size >> 30;
+		size &= 0x3fffffff;
+		if (part >= (grub_uint32_t) data->npm || !size)
+			goto corrupt;
+		if (kind == 3)
+		{
+			grub_uint32_t sec;
+
+			if (++continuations > 4096)
+				goto corrupt;
+			sec = grub_udf_get_block (data, part, block, 0);
+			if (grub_errno || grub_udf_read_aed (node, &buf, &end, sec, size, &len))
+				goto fail;
+			ptr = buf + sizeof (struct grub_udf_aed);
+			end = ptr + len;
+			continue;
+		}
+		if (size > ~0ULL - pos)
+			goto corrupt;
+		/* Skip descriptors before the requested range without mapping their data. */
+		if (pos + size <= ctx->start)
+		{
+			pos += size;
+			ptr += desc_size;
+			continue;
+		}
+		within = ctx->start > pos ? ctx->start - pos : 0;
+		while (within < size && pos + within < ctx->end && !grub_file_map_cancelled (ctx))
+		{
+			grub_uint64_t n = size - within;
+			grub_uint64_t physical = 0;
+			unsigned flags = GRUB_FILE_MAP_DIRECT;
+
+			if (kind == 2)
+				flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE;
+			else
+			{
+				grub_uint64_t index = (grub_uint64_t) block + within / bs;
+				grub_uint32_t sector;
+
+				if (index > 0xffffffffU)
+					goto corrupt;
+				sector = grub_udf_get_block (data, part, (grub_uint32_t) index, 0);
+				if (grub_errno)
+					goto fail;
+				physical = (grub_uint64_t) sector * bs + within % bs;
+				/* VAT, sparing and metadata partitions may break at each block. */
+				if (data->parts[part].type != GRUB_UDF_PMAP_PHYSICAL)
+					n = grub_min (n, bs - within % bs);
+				else if (index >= data->parts[part].length ||
+					(n + within % bs - 1) / bs >= data->parts[part].length - index)
+					goto corrupt;
+				if (kind == 1)
+					flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN;
+			}
+			if (grub_file_map_simple (ctx, pos + within, n, flags, physical))
+				goto fail;
+			within += n;
+		}
+		pos += size;
+		ptr += desc_size;
+	}
+	goto fail;
+corrupt:
+	grub_error (GRUB_ERR_BAD_FS, "invalid UDF allocation mapping");
+fail:
+	grub_free (buf);
+	return grub_errno;
+}
+
 static struct grub_fs grub_udf_fs = {
   .name = "udf",
   .fs_dir = grub_udf_dir,
   .fs_open = grub_udf_open,
   .fs_read = grub_udf_read,
+	.fs_map_range = grub_udf_map,
   .fs_close = grub_udf_close,
   .fs_label = grub_udf_label,
   .fs_uuid = grub_udf_uuid,

@@ -40,6 +40,7 @@
 
 #include <grub/err.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -1140,12 +1141,180 @@ grub_ext2_mtime (grub_device_t device, grub_int64_t *tm)
 
 
 
+/* Traverse each extent leaf once; decreasing depth bounds corrupt cycles. */
+static grub_err_t
+grub_ext_map_tree (struct grub_ext2_data *data, struct grub_file_map_context *ctx,
+	const struct grub_ext4_extent_header *h, grub_size_t bytes, int depth, grub_uint64_t *last)
+{
+	grub_uint16_t n = grub_le_to_cpu16 (h->entries);
+	grub_uint64_t bs = EXT2_BLOCK_SIZE (data);
+	grub_uint64_t prev = 0;
+	unsigned i;
+	void *buf = NULL;
+
+	if (depth < 0 || depth > 5 || grub_le_to_cpu16 (h->depth) != depth ||
+		h->magic != grub_cpu_to_le16_compile_time (EXT4_EXT_MAGIC) || bytes < sizeof (*h) ||
+		n > (bytes - sizeof (*h)) / 12 || n > grub_le_to_cpu16 (h->max))
+	{
+		grub_error (GRUB_ERR_BAD_FS, "invalid ext extent node");
+		goto fail;
+	}
+	for (i = 0; i < n && !grub_file_map_cancelled (ctx) && *last < ctx->end; i++)
+	{
+		const struct grub_ext4_extent *e = (const void *) (h + 1);
+		grub_uint64_t start = (grub_uint64_t) grub_le_to_cpu32 (e[i].block) * bs;
+
+		if (i && start <= prev)
+		{
+			grub_error (GRUB_ERR_BAD_FS, "unordered ext extent keys");
+			goto fail;
+		}
+		prev = start;
+		if (depth)
+		{
+			const struct grub_ext4_extent_idx *ix = (const void *) (h + 1);
+			grub_uint64_t block = ((grub_uint64_t) grub_le_to_cpu16 (ix[i].leaf_hi) << 32) |
+				grub_le_to_cpu32 (ix[i].leaf);
+			if (i + 1 < n && (grub_uint64_t) grub_le_to_cpu32 (ix[i + 1].block) * bs <= ctx->start)
+				continue;
+			if (!buf)
+				buf = grub_malloc ((grub_size_t) bs);
+			if (!buf || !block)
+			{
+				if (!block)
+					grub_error (GRUB_ERR_BAD_FS, "null ext tree block");
+				goto fail;
+			}
+			if (grub_disk_read (data->disk, block * (bs >> 9), 0, (grub_size_t) bs, buf) ||
+				grub_ext_map_tree (data, ctx, buf, (grub_size_t) bs, depth - 1, last))
+				goto fail;
+		}
+		else
+		{
+			unsigned raw = grub_le_to_cpu16 (e[i].len);
+			unsigned flags =
+				raw > 32768 ? GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN : GRUB_FILE_MAP_DIRECT;
+			grub_uint64_t length = (raw > 32768 ? raw - 32768 : raw) * bs;
+			grub_uint64_t block = ((grub_uint64_t) grub_le_to_cpu16 (e[i].start_hi) << 32) |
+				grub_le_to_cpu32 (e[i].start);
+			if (!length || start < *last)
+			{
+				grub_error (GRUB_ERR_BAD_FS, "invalid ext extent");
+				goto fail;
+			}
+			if (start > *last &&
+				grub_file_map_simple (
+					ctx, *last, start - *last, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0))
+				goto fail;
+			if (grub_file_map_simple (ctx, start, length, flags, block * bs))
+				goto fail;
+			*last = start + length;
+		}
+	}
+fail:
+	grub_free (buf);
+	return grub_errno;
+}
+
+/* Pointer layouts use one metadata buffer per level and skip absent subtrees. */
+static grub_err_t
+grub_ext_map_indirect (struct grub_ext2_data *data, struct grub_file_map_context *ctx, grub_uint64_t block, int depth,
+	grub_uint64_t pos, grub_uint64_t span)
+{
+	grub_uint32_t *buf = NULL;
+	grub_uint64_t bs = EXT2_BLOCK_SIZE (data);
+	grub_uint64_t n = bs / 4;
+	grub_uint64_t step;
+	grub_uint64_t i;
+
+	if (pos >= ctx->end || pos + span <= ctx->start || grub_file_map_cancelled (ctx))
+		return GRUB_ERR_NONE;
+	if (!block || !depth)
+		return grub_file_map_simple (ctx, pos, span,
+			block ? GRUB_FILE_MAP_DIRECT : GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, block * bs);
+	buf = grub_malloc ((grub_size_t) bs);
+	if (!buf || grub_disk_read (data->disk, block * (bs >> 9), 0, (grub_size_t) bs, buf))
+		goto fail;
+	step = span / n;
+	for (i = 0; i < n && !grub_file_map_cancelled (ctx) && pos < ctx->end; i++)
+	{
+		if (grub_ext_map_indirect (data, ctx, grub_le_to_cpu32 (buf[i]), depth - 1, pos, step))
+			goto fail;
+		pos += step;
+	}
+fail:
+	grub_free (buf);
+	return grub_errno;
+}
+
+static grub_err_t
+grub_ext2_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_ext2_data *data = file->data;
+	struct grub_ext2_inode *ino = &data->diropen.inode;
+	grub_uint64_t pos = 0;
+	grub_uint64_t bs = EXT2_BLOCK_SIZE (data);
+	grub_uint64_t span = bs;
+	unsigned i;
+	/* Inline/encrypted/compressed layouts are never ordinary block pointers. */
+	if (grub_le_to_cpu32 (ino->flags) & 0x10000000U)
+		return grub_file_map_simple (ctx, 0, file->size, GRUB_FILE_MAP_INLINE, 0);
+	if (grub_le_to_cpu32 (ino->flags) & (EXT4_ENCRYPT_FLAG | 4U))
+		return grub_file_map_simple (ctx, 0, file->size,
+			GRUB_FILE_MAP_UNKNOWN | GRUB_FILE_MAP_TRANSFORMED |
+				((grub_le_to_cpu32 (ino->flags) & 4U) ? GRUB_FILE_MAP_COMPRESSED : 0),
+			0);
+	if (ino->flags & grub_cpu_to_le32_compile_time (EXT4_EXTENTS_FLAG))
+	{
+		struct grub_ext4_extent_header *h = (void *) ino->blocks.dir_blocks;
+
+		if (grub_ext_map_tree (data, ctx, h, sizeof (ino->blocks), grub_le_to_cpu16 (h->depth), &pos))
+			goto fail;
+		if (pos < ctx->end && !grub_file_map_cancelled (ctx))
+			return grub_file_map_simple (
+				ctx, pos, ctx->end - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0);
+		return GRUB_ERR_NONE;
+	}
+	for (i = 0; i < INDIRECT_BLOCKS && pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+	{
+		if (grub_ext_map_indirect (data, ctx, grub_le_to_cpu32 (ino->blocks.dir_blocks[i]), 0, pos, bs))
+			goto fail;
+		pos += bs;
+	}
+	for (i = 1; i <= 3 && pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+	{
+		grub_uint32_t block = 0;
+
+		/* Select the root for single, double or triple indirection. */
+		switch (i)
+		{
+		case 1:
+			block = ino->blocks.indir_block;
+			break;
+		case 2:
+			block = ino->blocks.double_indir_block;
+			break;
+		case 3:
+			block = ino->blocks.triple_indir_block;
+			break;
+		}
+
+		span *= bs / 4;
+		if (grub_ext_map_indirect (data, ctx, grub_le_to_cpu32 (block), (int) i, pos, span))
+			goto fail;
+		pos += span;
+	}
+fail:
+	return grub_errno;
+}
+
 static struct grub_fs grub_ext2_fs =
   {
     .name = "ext2",
     .fs_dir = grub_ext2_dir,
     .fs_open = grub_ext2_open,
     .fs_read = grub_ext2_read,
+	.fs_map_range = grub_ext2_map,
     .fs_close = grub_ext2_close,
     .fs_label = grub_ext2_label,
     .fs_uuid = grub_ext2_uuid,

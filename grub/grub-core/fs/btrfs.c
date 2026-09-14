@@ -25,8 +25,10 @@
  */
 #define ZSTD_STATIC_LINKING_ONLY
 
+#include <stddef.h>
 #include <grub/err.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -382,16 +384,18 @@ save_ref (struct grub_btrfs_leaf_descriptor *desc,
 }
 
 static int
-next (struct grub_btrfs_data *data,
+next_map (struct grub_btrfs_data *data,
       struct grub_btrfs_leaf_descriptor *desc,
       grub_disk_addr_t * outaddr, grub_size_t * outsize,
-      struct grub_btrfs_key *key_out)
+      struct grub_btrfs_key *key_out, struct grub_file_map_context *ctx)
 {
   grub_err_t err;
   struct grub_btrfs_leaf_node leaf;
 
   for (; desc->depth > 0; desc->depth--)
     {
+		if (ctx && grub_file_map_cancelled (ctx))
+			return 0;
       desc->data[desc->depth - 1].iter++;
       if (desc->data[desc->depth - 1].iter
 	  < desc->data[desc->depth - 1].maxiter)
@@ -403,6 +407,8 @@ next (struct grub_btrfs_data *data,
     {
       struct grub_btrfs_internal_node node;
       struct btrfs_header head;
+		if (ctx && grub_file_map_cancelled (ctx))
+			return 0;
 
       err = grub_btrfs_read_logical (data, desc->data[desc->depth - 1].iter
 				     * sizeof (node)
@@ -435,14 +441,21 @@ next (struct grub_btrfs_data *data,
   return 1;
 }
 
+static int
+next (struct grub_btrfs_data *data, struct grub_btrfs_leaf_descriptor *desc,
+	grub_disk_addr_t *outaddr, grub_size_t *outsize, struct grub_btrfs_key *key_out)
+{
+	return next_map (data, desc, outaddr, outsize, key_out, NULL);
+}
+
 static grub_err_t
-lower_bound (struct grub_btrfs_data *data,
+lower_bound_map (struct grub_btrfs_data *data,
 	     const struct grub_btrfs_key *key_in,
 	     struct grub_btrfs_key *key_out,
 	     grub_uint64_t root,
 	     grub_disk_addr_t *outaddr, grub_size_t *outsize,
 	     struct grub_btrfs_leaf_descriptor *desc,
-	     int recursion_depth)
+	     int recursion_depth, struct grub_file_map_context *ctx)
 {
   grub_disk_addr_t addr = grub_le_to_cpu64 (root);
   int depth = -1;
@@ -472,6 +485,8 @@ lower_bound (struct grub_btrfs_data *data,
       struct btrfs_header head;
 
     reiter:
+		if (ctx && grub_file_map_cancelled (ctx))
+			return GRUB_ERR_NONE;
       depth++;
       /* FIXME: preread few nodes into buffer. */
       err = grub_btrfs_read_logical (data, addr, &head, sizeof (head),
@@ -488,6 +503,8 @@ lower_bound (struct grub_btrfs_data *data,
 	  grub_memset (&node_last, 0, sizeof (node_last));
 	  for (i = 0; i < grub_le_to_cpu32 (head.nitems); i++)
 	    {
+		if (ctx && grub_file_map_cancelled (ctx))
+			return GRUB_ERR_NONE;
 	      err = grub_btrfs_read_logical (data, addr + i * sizeof (node),
 					     &node, sizeof (node),
 					     recursion_depth + 1);
@@ -541,6 +558,8 @@ lower_bound (struct grub_btrfs_data *data,
 	int have_last = 0;
 	for (i = 0; i < grub_le_to_cpu32 (head.nitems); i++)
 	  {
+		if (ctx && grub_file_map_cancelled (ctx))
+			return GRUB_ERR_NONE;
 	    err = grub_btrfs_read_logical (data, addr + i * sizeof (leaf),
 					   &leaf, sizeof (leaf),
 					   recursion_depth + 1);
@@ -600,6 +619,16 @@ struct find_device_ctx
 };
 
 /* Helper for find_device.  */
+static grub_err_t
+lower_bound (struct grub_btrfs_data *data, const struct grub_btrfs_key *key_in,
+	struct grub_btrfs_key *key_out, grub_uint64_t root,
+	grub_disk_addr_t *outaddr, grub_size_t *outsize,
+	struct grub_btrfs_leaf_descriptor *desc, int recursion_depth)
+{
+	return lower_bound_map (data, key_in, key_out, root, outaddr, outsize,
+		desc, recursion_depth, NULL);
+}
+
 static int
 find_device_iter (const char *name, void *data)
 {
@@ -2917,11 +2946,139 @@ grub_btrfs_get_default_subvol (const char *name, grub_uint64_t *ret_subvolid, ch
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_btrfs_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_btrfs_data *data = file->data;
+	struct grub_btrfs_key key = { 0 }, out;
+	struct grub_btrfs_leaf_descriptor desc = { 0 };
+	grub_disk_addr_t addr;
+	grub_size_t bytes;
+	grub_uint64_t pos = 0;
+	/* Bound the number of extent items visited by a mapping query. */
+	const unsigned max_extent_items = 1U << 22;
+	unsigned extent_items = 0;
+	grub_err_t err;
+
+	key.object_id = data->inode;
+	key.type = GRUB_BTRFS_ITEM_TYPE_EXTENT_ITEM;
+	key.offset = grub_cpu_to_le64 (ctx->start);
+	err = lower_bound_map (data, &key, &out, data->tree, &addr, &bytes, &desc, 0, ctx);
+	if (err)
+		goto fail;
+	while (!grub_file_map_cancelled (ctx) && pos < ctx->end)
+	{
+		if (out.object_id == data->inode && out.type == GRUB_BTRFS_ITEM_TYPE_EXTENT_ITEM)
+		{
+			struct grub_btrfs_extent_data ext = { 0 };
+			struct grub_file_map_storage storage = { 0 };
+			struct grub_file_map_extent e = { 0 };
+			grub_uint64_t end;
+
+			extent_items++;
+			if (extent_items > max_extent_items)
+				goto corrupt;
+
+			/* Inline and regular extents share the header before the payload. */
+			if (bytes < offsetof (struct grub_btrfs_extent_data, inl))
+				goto corrupt;
+			if (grub_btrfs_read_logical (data, addr, &ext, grub_min (bytes, sizeof (ext)), 0))
+				goto fail;
+			e.logical_offset = grub_le_to_cpu64 (out.offset);
+			e.logical_length = ext.type == GRUB_BTRFS_EXTENT_INLINE ? grub_le_to_cpu64 (ext.size)
+				: grub_le_to_cpu64 (ext.filled);
+			if (ext.type != GRUB_BTRFS_EXTENT_INLINE && bytes < sizeof (ext))
+				goto corrupt;
+			if (!e.logical_length || grub_add (e.logical_offset, e.logical_length, &end) ||
+				e.logical_offset < pos)
+				goto corrupt;
+			if (e.logical_offset > pos &&
+				grub_file_map_simple (
+					ctx, pos, e.logical_offset - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0))
+				goto fail;
+			e.decoded_length = grub_le_to_cpu64 (ext.size);
+			e.flags = ext.type == GRUB_BTRFS_EXTENT_INLINE ? GRUB_FILE_MAP_INLINE : GRUB_FILE_MAP_DIRECT;
+			if (ext.type != GRUB_BTRFS_EXTENT_INLINE)
+			{
+				storage.address_space = GRUB_FILE_MAP_FS_LOGICAL;
+				storage.offset = grub_le_to_cpu64 (ext.laddr);
+				storage.length = grub_le_to_cpu64 (ext.compressed_size);
+				e.decoded_offset = grub_le_to_cpu64 (ext.offset);
+				e.storage = &storage;
+				e.storage_count = 1;
+				if (!storage.offset)
+				{
+					e.flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE;
+					e.storage_count = 0;
+				}
+				else if (ext.type == 2)
+					e.flags = GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_UNWRITTEN;
+				else if (ext.type != GRUB_BTRFS_EXTENT_REGULAR)
+				{
+					e.flags = GRUB_FILE_MAP_UNKNOWN | GRUB_FILE_MAP_TRANSFORMED;
+				}
+			}
+			if (ext.compression || ext.encryption || ext.encoding)
+			{
+				e.flags &= ~GRUB_FILE_MAP_DIRECT;
+				e.flags |= GRUB_FILE_MAP_TRANSFORMED;
+				if (ext.compression)
+					e.flags |= GRUB_FILE_MAP_COMPRESSED;
+				switch (ext.compression)
+				{
+				case 1:
+					e.encoding = "zlib";
+					break;
+				case 2:
+					e.encoding = "LZO";
+					break;
+				case 3:
+					e.encoding = "ZSTD";
+					break;
+				default:
+					e.encoding = "unknown";
+					break;
+				}
+			}
+			else if (e.storage_count)
+			{
+				if (e.decoded_offset > storage.length ||
+					e.logical_length > storage.length - e.decoded_offset ||
+					grub_add (storage.offset, e.decoded_offset, &storage.offset))
+					goto corrupt;
+				storage.length = e.logical_length;
+				e.decoded_offset = 0;
+				e.decoded_length = 0;
+			}
+			if (grub_file_map_emit (ctx, &e))
+				goto fail;
+			pos = end;
+		}
+		else if (grub_le_to_cpu64 (out.object_id) > grub_le_to_cpu64 (data->inode) ||
+			(out.object_id == data->inode && out.type > GRUB_BTRFS_ITEM_TYPE_EXTENT_ITEM))
+			break;
+		err = next_map (data, &desc, &addr, &bytes, &out, ctx);
+		if ((int) err < 0)
+			goto fail;
+		if (!err)
+			break;
+	}
+	if (pos < ctx->end && !grub_file_map_cancelled (ctx))
+		grub_file_map_simple (ctx, pos, ctx->end - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0);
+	goto fail;
+corrupt:
+	grub_error (GRUB_ERR_BAD_FS, "invalid Btrfs extent mapping");
+fail:
+	grub_free (desc.data);
+	return grub_errno;
+}
+
 static struct grub_fs grub_btrfs_fs = {
   .name = "btrfs",
   .fs_dir = grub_btrfs_dir,
   .fs_open = grub_btrfs_open,
   .fs_read = grub_btrfs_read,
+  .fs_map_range = grub_btrfs_map,
   .fs_close = grub_btrfs_close,
   .fs_uuid = grub_btrfs_uuid,
   .fs_label = grub_btrfs_label,

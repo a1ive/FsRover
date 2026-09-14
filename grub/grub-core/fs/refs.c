@@ -29,6 +29,7 @@
 #include <grub/mm.h>
 #include <grub/disk.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/misc.h>
 #include <grub/charset.h>
 #include <grub/fshelp.h>
@@ -2095,12 +2096,254 @@ grub_refs_uuid(grub_device_t device, char **uuid)
 	return grub_errno;
 }
 
+/* In-place heapsort keeps memory bounded and polls during metadata ordering. */
+static void
+grub_refs_sort_extents (struct grub_refs_extent *ext, grub_size_t count,
+	struct grub_file_map_context *ctx)
+{
+	grub_size_t start = count / 2;
+	grub_size_t end = count;
+
+	while (end > 1)
+	{
+		grub_size_t root;
+		struct grub_refs_extent value;
+
+		if (grub_file_map_cancelled (ctx))
+			return;
+		if (start)
+			start--;
+		else
+		{
+			end--;
+			value = ext[end];
+			ext[end] = ext[0];
+			ext[0] = value;
+		}
+		root = start;
+		value = ext[root];
+		while (root < end / 2)
+		{
+			grub_size_t child = root * 2 + 1;
+
+			if (grub_file_map_cancelled (ctx))
+				return;
+			if (child + 1 < end && ext[child].vcn < ext[child + 1].vcn)
+				child++;
+			if (value.vcn >= ext[child].vcn)
+				break;
+			ext[root] = ext[child];
+			root = child;
+		}
+		ext[root] = value;
+	}
+}
+
+static grub_err_t
+grub_refs_map_storage (struct grub_refs_data *data, struct grub_file_map_context *ctx, grub_uint64_t pos,
+	grub_uint64_t length, grub_uint64_t block)
+{
+	if (ctx->start > pos)
+	{
+		grub_uint64_t skip = (ctx->start - pos) & ~((grub_uint64_t) data->cluster_size - 1);
+
+		if (skip >= length)
+			return GRUB_ERR_NONE;
+		pos += skip;
+		length -= skip;
+		block += skip >> data->cluster_shift;
+	}
+	while (length && pos < ctx->end && !grub_file_map_cancelled (ctx))
+	{
+		struct grub_refs_map_entry *entry;
+		struct grub_refs_compression_range *range;
+		grub_uint64_t physical;
+		grub_uint64_t offset = (block & data->bpc_mask) << data->cluster_shift;
+		grub_uint64_t step =
+			grub_min (length, ((data->bpc_mask + 1 - (block & data->bpc_mask)) << data->cluster_shift));
+		grub_uint32_t range_index = 0;
+		int compressed;
+
+		if (!grub_refs_lookup_map (data, block, &entry, &physical))
+			return grub_error (GRUB_ERR_BAD_FS, "unmapped ReFS extent");
+		compressed = entry && grub_refs_container_is_compressed (data, entry->id);
+		if (compressed)
+		{
+			grub_uint32_t cluster = (grub_uint32_t) (block & data->bpc_mask);
+			grub_uint32_t byte_index = cluster >> 3;
+			grub_uint32_t bit = cluster & 7;
+			grub_uint32_t rank;
+			grub_uint8_t byte;
+
+			if (!entry->compact_bitmap || !entry->compact_rank)
+				return grub_error (GRUB_ERR_BAD_FS, "missing ReFS compact map");
+			byte = entry->compact_bitmap[byte_index];
+			if (!(byte & (1U << bit)))
+				return grub_error (GRUB_ERR_BAD_FS, "unallocated ReFS compressed cluster");
+			rank = entry->compact_rank[byte_index] +
+				grub_refs_popcount8 ((grub_uint8_t) (byte & ((1U << bit) - 1)));
+			offset = (grub_uint64_t) rank << data->cluster_shift;
+			step = grub_min (step, data->cluster_size);
+		}
+		range = entry ? grub_refs_find_compression (data, entry->id, offset, &range_index) : NULL;
+		if (range)
+		{
+			struct grub_file_map_storage *storage;
+			struct grub_file_map_extent e = { 0 };
+			grub_uint64_t within = offset - range->plain_start;
+			grub_uint32_t unit = (grub_uint32_t) (within / data->compression_unit_size);
+			grub_uint32_t in_unit = (grub_uint32_t) (within % data->compression_unit_size);
+			grub_uint32_t first = unit ? range->ends[unit - 1] : 0;
+			grub_uint64_t byte = (entry->start << data->cluster_shift) + range->stored_start + first;
+			grub_uint64_t remaining = range->ends[unit] - first;
+			unsigned count = 0;
+			grub_err_t err;
+
+			if (!remaining || remaining > data->compression_unit_size)
+				return grub_error (GRUB_ERR_BAD_FS, "invalid ReFS compressed size");
+			storage = grub_calloc ((grub_size_t) (remaining / data->cluster_size + 2), sizeof (*storage));
+			if (!storage)
+				return grub_errno;
+			while (remaining)
+			{
+				if (grub_file_map_cancelled (ctx))
+				{
+					grub_free (storage);
+					return GRUB_ERR_NONE;
+				}
+				struct grub_refs_map_entry *back;
+				grub_uint64_t b = byte >> data->cluster_shift;
+				grub_uint64_t p;
+				grub_uint64_t in = byte & (data->cluster_size - 1);
+				grub_uint64_t n = grub_min (remaining,
+					((data->bpc_mask + 1 - (b & data->bpc_mask)) << data->cluster_shift) - in);
+				if (!grub_refs_lookup_map (data, b, &back, &p) ||
+					(back && grub_refs_container_is_compressed (data, back->id)))
+				{
+					grub_free (storage);
+					return grub_error (GRUB_ERR_BAD_FS, "invalid ReFS compression backing");
+				}
+				storage[count].offset = (p << data->cluster_shift) + in;
+				storage[count].length = n;
+				storage[count].address_space = GRUB_FILE_MAP_VOLUME;
+				count++;
+				byte += n;
+				remaining -= n;
+			}
+			step = grub_min (step, data->compression_unit_size - in_unit);
+			step = grub_min (step, range->plain_size - within);
+			e.logical_offset = pos;
+			e.logical_length = step;
+			e.decoded_offset = in_unit;
+			e.decoded_length =
+				grub_min (data->compression_unit_size, range->plain_size - (within - in_unit));
+			e.flags = GRUB_FILE_MAP_COMPRESSED | GRUB_FILE_MAP_TRANSFORMED;
+			e.encoding = data->compression_format == REFS_COMPRESSION_ZSTD ? "ZSTD" : "LZ4";
+			if (unit + 1 == range->unit_count && (range->flags & REFS_COMPRESSION_LAST_RAW))
+				e.encoding = "raw unit";
+			e.storage = storage;
+			e.storage_count = count;
+			err = grub_file_map_emit (ctx, &e);
+			grub_free (storage);
+			if (err)
+				return err;
+		}
+		else
+		{
+			if (compressed)
+				return grub_error (GRUB_ERR_BAD_FS, "missing ReFS compressed range");
+			if (grub_file_map_simple (
+				    ctx, pos, step, GRUB_FILE_MAP_DIRECT, physical << data->cluster_shift))
+				return grub_errno;
+		}
+		if (!step || step % data->cluster_size)
+		{
+			/* The final file fragment may end within a cluster. */
+			if (step == length)
+				return GRUB_ERR_NONE;
+			return grub_error (GRUB_ERR_BAD_FS, "unaligned ReFS map unit");
+		}
+		pos += step;
+		length -= step;
+		block += step >> data->cluster_shift;
+	}
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+grub_refs_file_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_refs_stream *st = file->data;
+	struct grub_refs_extent *ext = NULL;
+	grub_uint64_t pos = 0;
+	grub_uint32_t i;
+
+	if (st->is_resident)
+	{
+		if (st->resident_size && grub_file_map_simple (ctx, 0, st->resident_size, GRUB_FILE_MAP_INLINE, 0))
+			goto fail;
+		pos = st->resident_size;
+	}
+	else
+	{
+		ext = grub_calloc (st->ext_len ? st->ext_len : 1, sizeof (*ext));
+		if (!ext)
+			goto fail;
+		for (i = 0; i < st->ext_len; i++)
+		{
+			if (grub_file_map_cancelled (ctx))
+				goto fail;
+			ext[i] = st->ext[i];
+		}
+		grub_refs_sort_extents (ext, st->ext_len, ctx);
+		for (i = 0; i < st->ext_len && pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+		{
+			grub_uint64_t start = ext[i].vcn << st->data->cluster_shift;
+			grub_uint64_t n = ext[i].count << st->data->cluster_shift;
+
+			if (start < pos)
+			{
+				grub_error (GRUB_ERR_BAD_FS, "overlapping ReFS extents");
+				goto fail;
+			}
+			if (start > pos)
+			{
+				if (!st->node->sparse)
+				{
+					grub_error (GRUB_ERR_BAD_FS, "missing ReFS extent");
+					goto fail;
+				}
+				if (grub_file_map_simple (
+					    ctx, pos, start - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0))
+					goto fail;
+			}
+			if (start < ctx->end && start + n > ctx->start)
+				if (grub_refs_map_storage (st->data, ctx, start, n, ext[i].block))
+					goto fail;
+			pos = start + n;
+		}
+	}
+	if (pos < ctx->end && !grub_file_map_cancelled (ctx))
+	{
+		if (!st->node->sparse)
+		{
+			grub_error (GRUB_ERR_BAD_FS, "short ReFS allocation");
+			goto fail;
+		}
+		grub_file_map_simple (ctx, pos, ctx->end - pos, GRUB_FILE_MAP_ZERO | GRUB_FILE_MAP_HOLE, 0);
+	}
+fail:
+	grub_free (ext);
+	return grub_errno;
+}
+
 static struct grub_fs grub_refs_fs =
 {
 	.name = "refs",
 	.fs_dir = grub_refs_dir,
 	.fs_open = grub_refs_open,
 	.fs_read = grub_refs_read,
+	.fs_map_range = grub_refs_file_map,
 	.fs_close = grub_refs_close,
 	.fs_label = grub_refs_label,
 	.fs_uuid = grub_refs_uuid,

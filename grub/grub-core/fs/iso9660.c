@@ -20,6 +20,7 @@
 
 #include <grub/err.h>
 #include <grub/file.h>
+#include <grub/filemap.h>
 #include <grub/mm.h>
 #include <grub/misc.h>
 #include <grub/disk.h>
@@ -1298,12 +1299,37 @@ grub_iso9660_mtime (grub_device_t device, grub_int64_t *timebuf)
 
 
 
+static grub_err_t
+grub_iso9660_map (grub_file_t file, struct grub_file_map_context *ctx)
+{
+	struct grub_iso9660_data *data = file->data;
+	grub_uint64_t pos = 0;
+	grub_size_t i;
+
+	for (i = 0; i < data->node->have_dirents && pos < ctx->end && !grub_file_map_cancelled (ctx); i++)
+	{
+		struct grub_iso9660_dir *d = &data->node->dirents[i];
+		grub_uint64_t n = grub_le_to_cpu32 (d->size);
+		/* Interleaved files require a separate mapping policy. */
+		unsigned flags = (d->unused2[0] || d->unused2[1]) ? GRUB_FILE_MAP_UNKNOWN | GRUB_FILE_MAP_TRANSFORMED
+			: GRUB_FILE_MAP_DIRECT;
+		grub_uint64_t physical = ((grub_uint64_t) grub_le_to_cpu32 (d->first_sector) + d->ext_sectors)
+			<< (GRUB_ISO9660_LOG2_BLKSZ + 9);
+		if (n && grub_file_map_simple (ctx, pos, n, flags, physical))
+			goto fail;
+		pos += n;
+	}
+fail:
+	return grub_errno;
+}
+
 static struct grub_fs grub_iso9660_fs =
   {
     .name = "iso9660",
     .fs_dir = grub_iso9660_dir,
     .fs_open = grub_iso9660_open,
     .fs_read = grub_iso9660_read,
+	.fs_map_range = grub_iso9660_map,
     .fs_close = grub_iso9660_close,
     .fs_label = grub_iso9660_label,
     .fs_uuid = grub_iso9660_uuid,
