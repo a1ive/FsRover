@@ -32,6 +32,7 @@
 #include <rover.h>
 
 #include "fusefs.h"
+#include "../common/blocklist.h"
 #include "../common/extract_core.h"
 
 namespace
@@ -48,6 +49,7 @@ constexpr const char *USAGE =
 	"  -p, --loop=PATH       Attach a GRUB file as loopN (repeatable)\n"
 	"      --loop-dec=PATH   Attach and transparently decompress a GRUB file\n"
 	"  -l, --list[=PATH]      List devices, a directory, or a file\n"
+	"  -b, --blocklist=PATH   Enumerate metadata mappings as byte-based TSV\n"
 	"  -e, --extract=PATH     Extract a file or directory (repeatable)\n"
 	"  -o, --output=DIR       Destination directory for --extract\n"
 	"  -n, --no-times         Do not preserve extracted timestamps\n"
@@ -74,6 +76,8 @@ struct options
 	std::string mountpoint;
 	unsigned int encoding = ROVER_FS_ENCODING_UTF8;
 	bool list = false;
+	bool blocklist = false;
+	std::string blocklist_path;
 	bool foreground = false;
 };
 
@@ -125,6 +129,7 @@ parse_options (int argc, char **argv, options *out)
 		{ "loop", required_argument, nullptr, 'p' },
 		{ "loop-dec", required_argument, nullptr, OPT_LOOP_DEC },
 		{ "list", optional_argument, nullptr, 'l' },
+		{ "blocklist", required_argument, nullptr, 'b' },
 		{ "extract", required_argument, nullptr, 'e' },
 		{ "output", required_argument, nullptr, 'o' },
 		{ "no-times", no_argument, nullptr, 'n' },
@@ -137,7 +142,7 @@ parse_options (int argc, char **argv, options *out)
 	int ch;
 	bool output_seen = false;
 
-	while ((ch = getopt_long (argc, argv, "f:d:p:l::e:o:nm:Fc:h", long_options,
+	while ((ch = getopt_long (argc, argv, "f:d:p:l::b:e:o:nm:Fc:h", long_options,
 		nullptr)) != -1)
 	{
 		switch (ch)
@@ -158,6 +163,15 @@ parse_options (int argc, char **argv, options *out)
 			out->list = true;
 			if (optarg)
 				out->list_path = optarg;
+			break;
+		case 'b':
+			if (out->blocklist || !optarg[0])
+			{
+				std::cerr << "LinuxRover: --blocklist requires one nonempty path and may only be specified once\n";
+				return false;
+			}
+			out->blocklist = true;
+			out->blocklist_path = optarg;
 			break;
 		case 'e':
 			if (!optarg[0])
@@ -200,9 +214,9 @@ parse_options (int argc, char **argv, options *out)
 			return false;
 		}
 	}
-	if (int (out->list) + int (!out->extracts.empty ()) + int (!out->mount_device.empty ()) != 1)
+	if (int (out->list) + int (out->blocklist) + int (!out->extracts.empty ()) + int (!out->mount_device.empty ()) != 1)
 	{
-		std::cerr << "LinuxRover: specify exactly one of --list, --extract or --mount\n";
+		std::cerr << "LinuxRover: specify exactly one of --list, --blocklist, --extract or --mount\n";
 		return false;
 	}
 	if (out->extracts.empty () != out->output.empty ())
@@ -464,6 +478,14 @@ main (int argc, char **argv)
 	if (!command.extracts.empty ())
 	{
 		result = run_extract (command);
+		goto out;
+	}
+	if (command.blocklist)
+	{
+		std::string error;
+		result = rover_blocklist::run (command.blocklist_path,
+			[] (const std::string &line) { std::cout << line; return bool (std::cout); }, &error) ? 0 : 1;
+		if (result) std::cerr << "LinuxRover: " << error << '\n';
 		goto out;
 	}
 	if (command.list)
