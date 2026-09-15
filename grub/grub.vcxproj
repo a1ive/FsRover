@@ -203,6 +203,7 @@
     <ClCompile Include="grub-core\partmap\sun.c" />
     <ClCompile Include="grub-core\partmap\sunpc.c" />
     <ClCompile Include="grub-core\partmap\unixware.c" />
+    <ClCompile Include="grub-core\partmap\xenix.c" />
     <ClCompile Include="grub-core\fs\adfs.c" />
     <ClCompile Include="grub-core\fs\affs.c" />
     <ClCompile Include="grub-core\fs\afs.c" />

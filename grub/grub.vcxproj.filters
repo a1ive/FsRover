@@ -249,6 +249,9 @@
     <ClCompile Include="grub-core\partmap\unixware.c">
       <Filter>grub-core\partmap</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\partmap\xenix.c">
+      <Filter>grub-core\partmap</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\adfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

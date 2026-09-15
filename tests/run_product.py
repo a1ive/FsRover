@@ -19,6 +19,9 @@ from fixtures import (COLLISIONS, DIRS, EXT2_DIRS, EXT2_FILES, EXT2_LINKS, FAT_F
 
 
 from filemap import default_mapping, external_mapping, generate_mapping, mapping_errors
+from sysv import generate_sysv, check_sysv
+from xenix import generate_xenix, check_xenix
+from eafs import generate_eafs, check_eafs
 
 
 class Skipped(Exception):
@@ -322,6 +325,9 @@ class Suite:
     def run(self):
         generate(self.fixtures)
         generate_mapping(self.fixtures)
+        generate_sysv(self.fixtures)
+        generate_xenix(self.fixtures)
+        generate_eafs(self.fixtures)
         before = {p.name: digest(p.read_bytes()) for p in self.fixtures.iterdir()}
         self.case("zip list/extract", lambda: self.basic("basic.zip", FILES, DIRS))
         self.case("tar list/extract", lambda: self.basic("basic.tar", FILES, DIRS))
@@ -341,6 +347,9 @@ class Suite:
                                ("CLI errors", self.errors)]:
             self.case(name, function)
         self.case("metadata mapping, range/stop/read and corruption", lambda: default_mapping(self))
+        self.case("System V/Xenix/V7/Coherent list, read and corruption", lambda: check_sysv(self))
+        self.case("Xenix divisions, geometry, nested extraction and corruption", lambda: check_xenix(self))
+        self.case("SCO EAFS/ES51K extended directories and corruption", lambda: check_eafs(self))
         self.case("mapping CLI errors", lambda: mapping_errors(self))
         if self.filemap_fixtures is not None:
             self.case("external mapping matrix", lambda: external_mapping(self, self.filemap_fixtures))
