@@ -353,6 +353,18 @@ tables used for native non-ASCII case folding.
 MINIX v1, v2 and v3. The `_be` drivers are the big-endian variants of the same
 on-disk format (m68k, SPARC, PowerPC hosts).
 
+#### System V / SCO EAFS / Xenix / V7 / Coherent — `sysv`
+
+> Origin: FsRover · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved
+
+Supported variants:
+
+- System V R2/R4: little or big endian, 512/1024/2048-byte blocks;
+- SCO AFS/EAFS/ES51K: EAFS/ES51K names can occupy multiple directory entries and contain up to 255 bytes;
+- Xenix: little or big endian, 512/1024-byte blocks;
+- V7: PDP-11 or PC/IX little-endian format, 512-byte blocks;
+- Coherent: PDP byte order, 512-byte blocks.
+
 #### QNX 4 — `qnx4`
 
 > Origin: third-party GRUB module · Label: no · UUID: no · Timestamps: per-file · Symlinks: resolved

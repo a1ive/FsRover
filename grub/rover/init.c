@@ -160,6 +160,7 @@
 	mod (sfs)	\
 	mod (sqlitefs)	\
 	mod (squash4)	\
+	mod (sysv)	\
 	mod (tar)	\
 	mod (tibfs)	\
 	mod (ubifs)	\
