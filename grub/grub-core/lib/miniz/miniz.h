@@ -997,12 +997,18 @@ extern "C"
     } tinfl_status;
 
 /* Initializes the decompressor to its initial state. */
-#define tinfl_init(r)     \
-    do                    \
-    {                     \
-        (r)->m_state = 0; \
-    }                     \
+#define tinfl_init(r)           \
+    do                          \
+    {                           \
+        (r)->m_state = 0;       \
+        (r)->m_nsis_mode = 0;   \
+    }                           \
     MZ_MACRO_END
+
+/* NSIS' modified zlib writes stored (uncompressed) blocks without the
+   one's complement of LEN.  Set m_nsis_mode after tinfl_init() to accept
+   that layout. */
+#define tinfl_set_nsis_mode(r) ((r)->m_nsis_mode = 1)
 #define tinfl_get_adler32(r) (r)->m_check_adler32
 
     /* Main low-level decompressor coroutine function. This is the only function actually needed for decompression. All the other functions are just high-level helpers for improved usability. */
@@ -1036,7 +1042,7 @@ typedef mz_uint32 tinfl_bit_buf_t;
 
     struct tinfl_decompressor_tag
     {
-        mz_uint32 m_state, m_num_bits, m_zhdr0, m_zhdr1, m_z_adler32, m_final, m_type, m_check_adler32, m_dist, m_counter, m_num_extra, m_table_sizes[TINFL_MAX_HUFF_TABLES];
+        mz_uint32 m_state, m_num_bits, m_zhdr0, m_zhdr1, m_z_adler32, m_final, m_type, m_check_adler32, m_dist, m_counter, m_num_extra, m_table_sizes[TINFL_MAX_HUFF_TABLES], m_nsis_mode;
         tinfl_bit_buf_t m_bit_buf;
         size_t m_dist_from_out_buf_start;
         mz_int16 m_look_up[TINFL_MAX_HUFF_TABLES][TINFL_FAST_LOOKUP_SIZE];

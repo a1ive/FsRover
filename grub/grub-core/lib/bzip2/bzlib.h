@@ -128,6 +128,14 @@ BZ_EXTERN int BZ_API(BZ2_bzDecompressInit) (
       int       small
    );
 
+/* NSIS uses a trimmed bzip2 stream: no "BZh" header, no block CRCs and
+   no combined CRC.  The block size is fixed at 9. */
+BZ_EXTERN int BZ_API(BZ2_bzDecompressInitNSis) (
+      bz_stream *strm,
+      int       verbosity,
+      int       small
+   );
+
 BZ_EXTERN int BZ_API(BZ2_bzDecompress) (
       bz_stream* strm
    );

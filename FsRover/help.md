@@ -530,6 +530,15 @@ Names are stored in an OEM code page and use the selected filename encoding.
 **Not supported:** garbled (password-protected) entries and entries continued in
 another volume.
 
+#### NSIS installer — `nsis`
+
+> Origin: 7-Zip · Label: no · UUID: no · Timestamps: per-file + volume · Symlinks: none
+
+**Methods:** Copy, Deflate, BZip2 and LZMA, optionally through the x86 BCJ filter.
+Both solid and per-file packed layouts are supported.
+
+**Not supported:** patched uninstallers that need the original EXE stub, and encrypted installers.
+
 #### FsArchiver FSA — `fsa`
 
 > Origin: FsRover · Label: yes · UUID: no · Timestamps: per-file + volume · Symlinks: resolved

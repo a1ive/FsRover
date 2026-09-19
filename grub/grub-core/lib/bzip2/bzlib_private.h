@@ -331,6 +331,14 @@ BZ2_hbMakeCodeLengths ( UChar*, Int32*, Int32, Int32 );
 #define BZ_X_CCRC_3      49
 #define BZ_X_CCRC_4      50
 
+/* NSIS uses a trimmed bzip2 stream: no stream header, no per-block CRC
+   and no end-of-stream combined CRC.  The block size is fixed at 9. */
+#define BZ_X_NSIS_START  51
+#define BZ_X_NSIS_BLKHDR 52
+#define BZ_X_NSIS_ORIGPTR_1 53
+#define BZ_X_NSIS_ORIGPTR_2 54
+#define BZ_X_NSIS_ORIGPTR_3 55
+
 
 
 /*-- Constants for the fast MTF decoder. --*/
@@ -363,6 +371,7 @@ typedef
       /* misc administratium */
       Int32    blockSize100k;
       Bool     smallDecompress;
+      Bool     nsis;          /* trimmed NSIS bzip2 stream */
       Int32    currBlockNo;
       Int32    verbosity;
 

@@ -144,6 +144,7 @@
 	mod (minix3_be)	\
 	mod (newc)	\
 	mod (nilfs2)	\
+	mod (nsis)	\
 	mod (ntfs)	\
 	mod (ntfscomp)	\
 	mod (odc)	\

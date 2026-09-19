@@ -497,10 +497,11 @@ int BZ_API(BZ2_bzCompressEnd)  ( bz_stream *strm )
 /*---------------------------------------------------*/
 
 /*---------------------------------------------------*/
-int BZ_API(BZ2_bzDecompressInit)
-                     ( bz_stream* strm,
-                       int        verbosity,
-                       int        small )
+static
+int bz_decompress_init ( bz_stream* strm,
+                         int        verbosity,
+                         int        small,
+                         Bool       nsis )
 {
    DState* s;
 
@@ -517,7 +518,7 @@ int BZ_API(BZ2_bzDecompressInit)
    if (s == NULL) return BZ_MEM_ERROR;
    s->strm                  = strm;
    strm->state              = s;
-   s->state                 = BZ_X_MAGIC_1;
+   s->state                 = nsis ? BZ_X_NSIS_START : BZ_X_MAGIC_1;
    s->bsLive                = 0;
    s->bsBuff                = 0;
    s->calculatedCombinedCRC = 0;
@@ -526,6 +527,7 @@ int BZ_API(BZ2_bzDecompressInit)
    strm->total_out_lo32     = 0;
    strm->total_out_hi32     = 0;
    s->smallDecompress       = (Bool)small;
+   s->nsis                  = nsis;
    s->ll4                   = NULL;
    s->ll16                  = NULL;
    s->tt                    = NULL;
@@ -533,6 +535,22 @@ int BZ_API(BZ2_bzDecompressInit)
    s->verbosity             = verbosity;
 
    return BZ_OK;
+}
+
+int BZ_API(BZ2_bzDecompressInit)
+                     ( bz_stream* strm,
+                       int        verbosity,
+                       int        small )
+{
+   return bz_decompress_init ( strm, verbosity, small, False );
+}
+
+int BZ_API(BZ2_bzDecompressInitNSis)
+                     ( bz_stream* strm,
+                       int        verbosity,
+                       int        small )
+{
+   return bz_decompress_init ( strm, verbosity, small, True );
 }
 
 
@@ -830,18 +848,23 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
             corrupt = unRLE_obuf_to_output_FAST  ( s );
          if (corrupt) return BZ_DATA_ERROR;
          if (s->nblock_used == s->save_nblock+1 && s->state_out_len == 0) {
-            BZ_FINALISE_CRC ( s->calculatedBlockCRC );
-            if (s->verbosity >= 3)
-               VPrintf2 ( " {0x%08x, 0x%08x}", s->storedBlockCRC,
-                          s->calculatedBlockCRC );
-            if (s->verbosity >= 2) VPrintf0 ( "]" );
-            if (s->calculatedBlockCRC != s->storedBlockCRC)
-               return BZ_DATA_ERROR;
-            s->calculatedCombinedCRC
-               = (s->calculatedCombinedCRC << 1) |
-                    (s->calculatedCombinedCRC >> 31);
-            s->calculatedCombinedCRC ^= s->calculatedBlockCRC;
-            s->state = BZ_X_BLKHDR_1;
+            if (s->nsis) {
+               /* trimmed NSIS stream has no block or combined CRCs */
+               s->state = BZ_X_NSIS_BLKHDR;
+            } else {
+               BZ_FINALISE_CRC ( s->calculatedBlockCRC );
+               if (s->verbosity >= 3)
+                  VPrintf2 ( " {0x%08x, 0x%08x}", s->storedBlockCRC,
+                             s->calculatedBlockCRC );
+               if (s->verbosity >= 2) VPrintf0 ( "]" );
+               if (s->calculatedBlockCRC != s->storedBlockCRC)
+                  return BZ_DATA_ERROR;
+               s->calculatedCombinedCRC
+                  = (s->calculatedCombinedCRC << 1) |
+                       (s->calculatedCombinedCRC >> 31);
+               s->calculatedCombinedCRC ^= s->calculatedBlockCRC;
+               s->state = BZ_X_BLKHDR_1;
+            }
          } else {
             return BZ_OK;
          }
@@ -849,11 +872,13 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
       if (s->state >= BZ_X_MAGIC_1) {
          Int32 r = BZ2_decompress ( s );
          if (r == BZ_STREAM_END) {
-            if (s->verbosity >= 3)
-               VPrintf2 ( "\n    combined CRCs: stored = 0x%08x, computed = 0x%08x",
-                          s->storedCombinedCRC, s->calculatedCombinedCRC );
-            if (s->calculatedCombinedCRC != s->storedCombinedCRC)
-               return BZ_DATA_ERROR;
+            if (!s->nsis) {
+               if (s->verbosity >= 3)
+                  VPrintf2 ( "\n    combined CRCs: stored = 0x%08x, computed = 0x%08x",
+                             s->storedCombinedCRC, s->calculatedCombinedCRC );
+               if (s->calculatedCombinedCRC != s->storedCombinedCRC)
+                  return BZ_DATA_ERROR;
+            }
             return r;
          }
          if (s->state != BZ_X_OUTPUT) return r;

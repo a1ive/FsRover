@@ -363,6 +363,9 @@
     <ClCompile Include="grub-core\fs\nilfs2.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\nsis.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\ntfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

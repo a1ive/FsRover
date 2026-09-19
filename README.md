@@ -30,7 +30,7 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 - **macOS:** APFS, HFS, HFS+
 - **Unix and other:** ADFS, AFFS, AFS, BFS, SGI EFS, FATX/XTAF, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, System V, UFS1/2, UnixWare BFS, VxFS, ZFS
 - **Optical media:** ISO9660, UDF, Xbox XDVDFS, CUE/BIN, Nero NRG, CloneCD CCD/IMG/SUB, Alcohol 120% MDS
-- **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, CAB, MSI, LZH/LHA, ARJ, FsArchiver FSA, Proxmox VMA, DEB, RPM, XAR
+- **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, CAB, MSI, NSIS installers, LZH/LHA, ARJ, FsArchiver FSA, Proxmox VMA, DEB, RPM, XAR
 - **Firmware:** UEFI capsules, firmware volumes (FFS1/2/3), Intel flash descriptor images, coreboot CBFS
 
 File-level or filesystem-native encryption is not supported.

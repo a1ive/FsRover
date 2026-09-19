@@ -2496,14 +2496,16 @@ extern "C"
             if (r->m_type == 0)
             {
                 TINFL_SKIP_BITS(5, num_bits & 7);
-                for (counter = 0; counter < 4; ++counter)
+                /* NSIS' altered deflate emits only LEN for stored blocks */
+                for (counter = 0; counter < (r->m_nsis_mode ? 2u : 4u); ++counter)
                 {
                     if (num_bits)
                         TINFL_GET_BITS(6, r->m_raw_header[counter], 8);
                     else
                         TINFL_GET_BYTE(7, r->m_raw_header[counter]);
                 }
-                if ((counter = (r->m_raw_header[0] | (r->m_raw_header[1] << 8))) != (mz_uint)(0xFFFF ^ (r->m_raw_header[2] | (r->m_raw_header[3] << 8))))
+                counter = (r->m_raw_header[0] | (r->m_raw_header[1] << 8));
+                if (!r->m_nsis_mode && (counter != (mz_uint)(0xFFFF ^ (r->m_raw_header[2] | (r->m_raw_header[3] << 8)))))
                 {
                     TINFL_CR_RETURN_FOREVER(39, TINFL_STATUS_FAILED);
                 }

@@ -136,7 +136,7 @@ Int32 BZ2_decompress ( DState* s )
    Int32* gBase;
    Int32* gPerm;
 
-   if (s->state == BZ_X_MAGIC_1) {
+   if (s->state == BZ_X_MAGIC_1 || s->state == BZ_X_NSIS_START) {
       /*initialise the save area*/
       s->save_i           = 0;
       s->save_j           = 0;
@@ -262,6 +262,42 @@ Int32 BZ2_decompress ( DState* s )
          RETURN(BZ_DATA_ERROR);
       if (s->origPtr > 10 + 100000*s->blockSize100k)
          RETURN(BZ_DATA_ERROR);
+
+      /* NSIS trimmed stream: no "BZh" header and no block CRCs.  The case
+         labels jump into this block; standard decoding skips it. */
+      if (s->nsis) {
+      case BZ_X_NSIS_START:
+      s->blockSize100k = 9;
+      if (s->smallDecompress) {
+         s->ll16 = BZALLOC( s->blockSize100k * 100000 * sizeof(UInt16) );
+         s->ll4  = BZALLOC(
+                      ((1 + s->blockSize100k * 100000) >> 1) * sizeof(UChar)
+                   );
+         if (s->ll16 == NULL || s->ll4 == NULL) RETURN(BZ_MEM_ERROR);
+      } else {
+         s->tt  = BZALLOC( s->blockSize100k * 100000 * sizeof(Int32) );
+         if (s->tt == NULL) RETURN(BZ_MEM_ERROR);
+      }
+
+      GET_UCHAR(BZ_X_NSIS_BLKHDR, uc);
+      if (uc == 0x17) { s->state = BZ_X_IDLE; RETURN(BZ_STREAM_END); }
+      if (uc != 0x31) RETURN(BZ_DATA_ERROR);
+      s->currBlockNo++;
+      s->blockRandomised = False;
+
+      s->origPtr = 0;
+      GET_UCHAR(BZ_X_NSIS_ORIGPTR_1, uc);
+      s->origPtr = (s->origPtr << 8) | ((Int32)uc);
+      GET_UCHAR(BZ_X_NSIS_ORIGPTR_2, uc);
+      s->origPtr = (s->origPtr << 8) | ((Int32)uc);
+      GET_UCHAR(BZ_X_NSIS_ORIGPTR_3, uc);
+      s->origPtr = (s->origPtr << 8) | ((Int32)uc);
+
+      if (s->origPtr < 0)
+         RETURN(BZ_DATA_ERROR);
+      if (s->origPtr > 10 + 100000*s->blockSize100k)
+         RETURN(BZ_DATA_ERROR);
+      }
 
       /*--- Receive the mapping table ---*/
       for (i = 0; i < 16; i++) {
