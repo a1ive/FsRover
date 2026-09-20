@@ -363,6 +363,7 @@ typedef
       /* misc administratium */
       Int32    blockSize100k;
       Bool     smallDecompress;
+      Bool     nsisMode;
       Int32    currBlockNo;
       Int32    verbosity;
 

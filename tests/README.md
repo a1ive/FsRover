@@ -13,6 +13,18 @@ checks; duplicate directories fail the suite.
 
 ## Run on Windows
 
+The optional NSIS BZip2 regression requires `makensis` only when generating
+fixtures. It covers solid/non-solid multi-block payloads, empty files, malformed
+and truncated streams, plus standard bzip2 extraction and block-CRC rejection:
+
+```sh
+python tests/nsis_bzip2.py --generate build/nsis-bzip2
+python tests/nsis_bzip2.py --cli build/x64/CliRover.exe build/nsis-bzip2
+```
+
+Generation may run under WSL; pass the same fixture directory to Windows Python.
+For Linux validation, substitute the built `LinuxRover` path.
+
 From the repository root, after restoring the normal solution packages:
 
 ```powershell

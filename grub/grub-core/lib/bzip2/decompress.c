@@ -191,6 +191,11 @@ Int32 BZ2_decompress ( DState* s )
    gPerm       = s->save_gPerm;
 
    retVal = BZ_OK;
+	/* NSIS keeps the Huffman/MTF/BWT payload but replaces stream framing. */
+	if (s->nsisMode && s->state == BZ_X_MAGIC_1) {
+		s->blockSize100k = 9;
+		goto allocate_block;
+	}
 
    switch (s->state) {
 
@@ -208,6 +213,7 @@ Int32 BZ2_decompress ( DState* s )
           s->blockSize100k > (BZ_HDR_0 + 9)) RETURN(BZ_DATA_ERROR_MAGIC);
       s->blockSize100k -= BZ_HDR_0;
 
+    allocate_block:
       if (s->smallDecompress) {
          s->ll16 = BZALLOC( s->blockSize100k * 100000 * sizeof(UInt16) );
          s->ll4  = BZALLOC(
@@ -223,6 +229,11 @@ Int32 BZ2_decompress ( DState* s )
 
       if (uc == 0x17) goto endhdr_2;
       if (uc != 0x31) RETURN(BZ_DATA_ERROR);
+		if (s->nsisMode) {
+			s->storedBlockCRC = 0;
+			s->blockRandomised = False;
+			goto read_origptr;
+		}
       GET_UCHAR(BZ_X_BLKHDR_2, uc);
       if (uc != 0x41) RETURN(BZ_DATA_ERROR);
       GET_UCHAR(BZ_X_BLKHDR_3, uc);
@@ -250,6 +261,7 @@ Int32 BZ2_decompress ( DState* s )
 
       GET_BITS(BZ_X_RANDBIT, s->blockRandomised, 1);
 
+    read_origptr:
       s->origPtr = 0;
       GET_UCHAR(BZ_X_ORIGPTR_1, uc);
       s->origPtr = (s->origPtr << 8) | ((Int32)uc);
@@ -586,6 +598,11 @@ Int32 BZ2_decompress ( DState* s )
 
 
     endhdr_2:
+		if (s->nsisMode) {
+			s->storedCombinedCRC = 0;
+			s->state = BZ_X_IDLE;
+			RETURN(BZ_STREAM_END);
+		}
 
       GET_UCHAR(BZ_X_ENDHDR_2, uc);
       if (uc != 0x72) RETURN(BZ_DATA_ERROR);

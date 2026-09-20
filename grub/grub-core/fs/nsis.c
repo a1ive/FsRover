@@ -31,6 +31,7 @@
 #include <Bra.h>
 #include <miniz.h>
 #include <zstd.h>
+#include <bzlib.h>
 
 #include "fscharset.h"
 
@@ -536,6 +537,61 @@ out:
 }
 
 static int
+nsis_bzip2_decode (struct nsis_input *in, struct nsis_sink *sink)
+{
+	bz_stream stream;
+	grub_uint8_t out[NSIS_IO_SIZE];
+	int result;
+	int ok = 0;
+
+	grub_memset (&stream, 0, sizeof (stream));
+	result = BZ2_bzDecompressInitNSis (&stream, 0, 0);
+	if (result != BZ_OK)
+	{
+		grub_error (result == BZ_MEM_ERROR ? GRUB_ERR_OUT_OF_MEMORY
+			: GRUB_ERR_BAD_COMPRESSED_DATA, "cannot initialize nsis bzip2 stream");
+		return 0;
+	}
+	while (!sink->done)
+	{
+		unsigned consumed;
+		unsigned produced;
+
+		if (in->next == in->size && nsis_input_fill (in) < 0)
+			goto fail;
+		stream.next_in = (char *) in->buf + in->next;
+		stream.avail_in = (unsigned) (in->size - in->next);
+		consumed = stream.avail_in;
+		stream.next_out = (char *) out;
+		stream.avail_out = sizeof (out);
+		result = BZ2_bzDecompress (&stream);
+		consumed -= stream.avail_in;
+		produced = sizeof (out) - stream.avail_out;
+		in->next += consumed;
+		if (result != BZ_OK && result != BZ_STREAM_END)
+		{
+			grub_error (result == BZ_MEM_ERROR ? GRUB_ERR_OUT_OF_MEMORY
+				: GRUB_ERR_BAD_COMPRESSED_DATA, "corrupt nsis bzip2 stream");
+			goto fail;
+		}
+		if (!nsis_sink_write (sink, out, produced))
+			goto fail;
+		if (result == BZ_STREAM_END)
+		{
+			ok = sink->done || sink->dynamic;
+			goto fail;
+		}
+		if (consumed == 0 && produced == 0)
+			goto fail;
+	}
+	ok = 1;
+
+fail:
+	BZ2_bzDecompressEnd (&stream);
+	return ok;
+}
+
+static int
 nsis_decode (struct grub_nsis_data *data, grub_uint64_t pos,
 	grub_uint64_t packed_size, enum nsis_method method, int filter_flag, struct nsis_sink *sink)
 {
@@ -563,8 +619,11 @@ nsis_decode (struct grub_nsis_data *data, grub_uint64_t pos,
 	case NSIS_METHOD_ZSTD:
 		ok = nsis_zstd_decode (&in, sink);
 		break;
+	case NSIS_METHOD_BZIP2:
+		ok = nsis_bzip2_decode (&in, sink);
+		break;
 	default:
-		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "nsis bzip2 streams are not supported");
+		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "unsupported nsis compression");
 		return 0;
 	}
 	if (!ok && !grub_errno)

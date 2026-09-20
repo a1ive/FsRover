@@ -526,6 +526,7 @@ int BZ_API(BZ2_bzDecompressInit)
    strm->total_out_lo32     = 0;
    strm->total_out_hi32     = 0;
    s->smallDecompress       = (Bool)small;
+   s->nsisMode              = False;
    s->ll4                   = NULL;
    s->ll16                  = NULL;
    s->tt                    = NULL;
@@ -537,9 +538,18 @@ int BZ_API(BZ2_bzDecompressInit)
 
 
 /*---------------------------------------------------*/
-/* Return  True iff data corruption is discovered.
-   Returns False if there is no problem.
-*/
+/* Explicit opt-in for the NSIS framing described by 7-Zip CNsisDecoder. */
+int BZ_API(BZ2_bzDecompressInitNSis)
+                     ( bz_stream* strm, int verbosity, int small )
+{
+	int result = BZ2_bzDecompressInit (strm, verbosity, small);
+
+	if (result == BZ_OK)
+		((DState*)strm->state)->nsisMode = True;
+	return result;
+}
+
+/* Return True iff data corruption is discovered. */
 static
 Bool unRLE_obuf_to_output_FAST ( DState* s )
 {
@@ -835,7 +845,7 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
                VPrintf2 ( " {0x%08x, 0x%08x}", s->storedBlockCRC,
                           s->calculatedBlockCRC );
             if (s->verbosity >= 2) VPrintf0 ( "]" );
-            if (s->calculatedBlockCRC != s->storedBlockCRC)
+            if (!s->nsisMode && s->calculatedBlockCRC != s->storedBlockCRC)
                return BZ_DATA_ERROR;
             s->calculatedCombinedCRC
                = (s->calculatedCombinedCRC << 1) |
@@ -852,7 +862,7 @@ int BZ_API(BZ2_bzDecompress) ( bz_stream *strm )
             if (s->verbosity >= 3)
                VPrintf2 ( "\n    combined CRCs: stored = 0x%08x, computed = 0x%08x",
                           s->storedCombinedCRC, s->calculatedCombinedCRC );
-            if (s->calculatedCombinedCRC != s->storedCombinedCRC)
+            if (!s->nsisMode && s->calculatedCombinedCRC != s->storedCombinedCRC)
                return BZ_DATA_ERROR;
             return r;
          }

@@ -132,6 +132,13 @@ BZ_EXTERN int BZ_API(BZ2_bzDecompress) (
       bz_stream* strm
    );
 
+/* NSIS framing: no BZh header, block CRCs or randomisation bit. */
+BZ_EXTERN int BZ_API(BZ2_bzDecompressInitNSis) (
+      bz_stream *strm,
+      int verbosity,
+      int small
+   );
+
 BZ_EXTERN int BZ_API(BZ2_bzDecompressEnd) (
       bz_stream *strm
    );
