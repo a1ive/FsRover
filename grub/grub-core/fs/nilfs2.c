@@ -312,7 +312,8 @@ static inline grub_uint64_t
 grub_nilfs2_palloc_group (struct grub_nilfs2_data *data,
 			  grub_uint64_t nr, grub_uint64_t * offset)
 {
-  *offset = nr & ((1 << grub_nilfs2_log_palloc_entries_per_group (data)) - 1);
+  *offset = nr & (((grub_uint64_t) 1
+		   << grub_nilfs2_log_palloc_entries_per_group (data)) - 1);
   return nr >> grub_nilfs2_log_palloc_entries_per_group (data);
 }
 
@@ -342,44 +343,45 @@ grub_nilfs2_blocks_per_group_log (struct grub_nilfs2_data *data,
 							 log_entry_size))) + 1;
 }
 
-static inline grub_uint32_t
+static inline grub_uint64_t
 grub_nilfs2_blocks_per_desc_block_log (struct grub_nilfs2_data *data,
 				       unsigned long log_entry_size)
 {
-  return(grub_nilfs2_blocks_per_group_log (data, log_entry_size)
+  return((grub_uint64_t) grub_nilfs2_blocks_per_group_log (data, log_entry_size)
 	 << grub_nilfs2_palloc_log_groups_per_desc_block (data)) + 1;
 }
 
-static inline grub_uint32_t
+static inline grub_uint64_t
 grub_nilfs2_palloc_desc_block_offset_log (struct grub_nilfs2_data *data,
-					  unsigned long group,
+					  grub_uint64_t group,
 					  unsigned long log_entry_size)
 {
-  grub_uint32_t desc_block =
+  grub_uint64_t desc_block =
     group >> grub_nilfs2_palloc_log_groups_per_desc_block (data);
   return desc_block * grub_nilfs2_blocks_per_desc_block_log (data,
 							     log_entry_size);
 }
 
-static inline grub_uint32_t
+static inline grub_uint64_t
 grub_nilfs2_palloc_bitmap_block_offset (struct grub_nilfs2_data *data,
-					unsigned long group,
+					grub_uint64_t group,
 					unsigned long log_entry_size)
 {
-  unsigned long desc_offset = group
-    & ((1 << grub_nilfs2_palloc_log_groups_per_desc_block (data)) - 1);
+  grub_uint64_t desc_offset = group
+    & (((grub_uint64_t) 1
+	<< grub_nilfs2_palloc_log_groups_per_desc_block (data)) - 1);
 
   return grub_nilfs2_palloc_desc_block_offset_log (data, group, log_entry_size)
     + 1
     + desc_offset * grub_nilfs2_blocks_per_group_log (data, log_entry_size);
 }
 
-static inline grub_uint32_t
+static inline grub_uint64_t
 grub_nilfs2_palloc_entry_offset_log (struct grub_nilfs2_data *data,
 				     grub_uint64_t nr,
 				     unsigned long log_entry_size)
 {
-  unsigned long group;
+  grub_uint64_t group;
   grub_uint64_t group_offset;
 
   group = grub_nilfs2_palloc_group (data, nr, &group_offset);
@@ -745,8 +747,9 @@ grub_nilfs2_valid_sb (struct grub_nilfs2_super_block *sbp)
   if (grub_le_to_cpu32 (sbp->s_rev_level) != NILFS_SUPORT_REV)
     return 0;
 
-  /* 20 already means 1GiB blocks. We don't want to deal with blocks overflowing int32. */
-  if (grub_le_to_cpu32 (sbp->s_log_block_size) > 20)
+  /* NILFS blocks are 1 KiB..64 KiB (NILFS_MAX_BLOCK_SIZE); larger values
+     would overflow the int shifts used for palloc geometry.  */
+  if (grub_le_to_cpu32 (sbp->s_log_block_size) > 6)
     return 0;
 
   return 1;
