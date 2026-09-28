@@ -37,12 +37,15 @@ union printf_arg
     {
       INT, LONG, LONGLONG,
       UNSIGNED_INT = 3, UNSIGNED_LONG, UNSIGNED_LONGLONG,
+      POINTER,
       STRING,
       UUID,
       DOUBLE,
       UNUSED
     } type;
   long long ll;
+  unsigned long long ull;
+  const void *ptr;
   double d;
 };
 
@@ -976,10 +979,9 @@ width:
 	if (**fmt == 'z')
 	{
 		(*fmt)++;
-		if (sizeof (size_t) == sizeof (unsigned long))
-			spec->longfmt = 1;
-		else if (sizeof (size_t) == sizeof (unsigned long long))
-			spec->longfmt = 2;
+		/* Equal widths do not make different integer types compatible. */
+		spec->longfmt = _Generic ((size_t) 0,
+			unsigned int: 0, unsigned long: 1, unsigned long long: 2);
 	}
 	else if (**fmt == 'l')
 	{
@@ -1011,7 +1013,7 @@ width:
 		spec->type = INT + spec->longfmt;
 		break;
 	case 'p':
-		spec->type = sizeof (void *) == sizeof (long long) ? UNSIGNED_LONGLONG : UNSIGNED_INT;
+		spec->type = POINTER;
 		if (**fmt == 'G')
 		{
 			(*fmt)++;
@@ -1068,11 +1070,9 @@ parse_printf_arg_fmt (const char *fmt0, struct printf_args *args,
 	COMPILE_TIME_ASSERT (sizeof (int) == sizeof (grub_uint32_t));
 	COMPILE_TIME_ASSERT (sizeof (int) <= sizeof (long long));
 	COMPILE_TIME_ASSERT (sizeof (long) <= sizeof (long long));
-	COMPILE_TIME_ASSERT (sizeof (long long) == sizeof (void *)
-			     || sizeof (int) == sizeof (void *));
-	COMPILE_TIME_ASSERT (sizeof (size_t) == sizeof (unsigned)
-			     || sizeof (size_t) == sizeof (unsigned long)
-			     || sizeof (size_t) == sizeof (unsigned long long));
+	/* Only %p rendering converts a pointer to an integer, after va_arg. */
+	COMPILE_TIME_ASSERT (sizeof (grub_addr_t) >= sizeof (void *));
+	COMPILE_TIME_ASSERT (sizeof (grub_addr_t) <= sizeof (unsigned long long));
 	COMPILE_TIME_ASSERT (sizeof (double) == sizeof (long long));
 
 	fmt = fmt0;
@@ -1148,42 +1148,48 @@ fail:
 static void
 parse_printf_args (const char *fmt0, struct printf_args *args, va_list args_in)
 {
-  grub_size_t n;
+	grub_size_t n;
 
-  parse_printf_arg_fmt (fmt0, args, 0, 0);
+	parse_printf_arg_fmt (fmt0, args, 0, 0);
 
-  for (n = 0; n < args->count; n++)
-    switch (args->ptr[n].type)
-      {
-      case INT:
-	args->ptr[n].ll = va_arg (args_in, int);
-	break;
-      case LONG:
-	args->ptr[n].ll = va_arg (args_in, long);
-	break;
-      case UNSIGNED_INT:
-	args->ptr[n].ll = va_arg (args_in, unsigned int);
-	break;
-      case UNSIGNED_LONG:
-	args->ptr[n].ll = va_arg (args_in, unsigned long);
-	break;
-      case LONGLONG:
-      case UNSIGNED_LONGLONG:
-	args->ptr[n].ll = va_arg (args_in, long long);
-	break;
-      case STRING:
-      case UUID:
-	if (sizeof (void *) == sizeof (long long))
-	  args->ptr[n].ll = va_arg (args_in, long long);
-	else
-	  args->ptr[n].ll = va_arg (args_in, unsigned int);
-	break;
-      case DOUBLE:
-	args->ptr[n].d = va_arg (args_in, double);
-	break;
-      case UNUSED:
-	break;
-      }
+	for (n = 0; n < args->count; n++)
+	{
+		switch (args->ptr[n].type)
+		{
+		case INT:
+			args->ptr[n].ll = va_arg (args_in, int);
+			break;
+		case LONG:
+			args->ptr[n].ll = va_arg (args_in, long);
+			break;
+		case LONGLONG:
+			args->ptr[n].ll = va_arg (args_in, long long);
+			break;
+		case UNSIGNED_INT:
+			args->ptr[n].ull = va_arg (args_in, unsigned int);
+			break;
+		case UNSIGNED_LONG:
+			args->ptr[n].ull = va_arg (args_in, unsigned long);
+			break;
+		case UNSIGNED_LONGLONG:
+			args->ptr[n].ull = va_arg (args_in, unsigned long long);
+			break;
+		case POINTER:
+			args->ptr[n].ptr = va_arg (args_in, void *);
+			break;
+		case STRING:
+			args->ptr[n].ptr = va_arg (args_in, const char *);
+			break;
+		case UUID:
+			args->ptr[n].ptr = va_arg (args_in, const grub_packed_guid_t *);
+			break;
+		case DOUBLE:
+			args->ptr[n].d = va_arg (args_in, double);
+			break;
+		case UNUSED:
+			break;
+		}
+	}
 }
 
 static inline void __attribute__ ((always_inline))
@@ -1876,7 +1882,6 @@ grub_vsnprintf_real (char *str, grub_size_t max_len, const char *fmt0,
 	while (*fmt)
 	{
 		struct printf_format spec;
-		unsigned long long curarg;
 		char c = *fmt++;
 
 		if (c != '%')
@@ -1920,13 +1925,12 @@ grub_vsnprintf_real (char *str, grub_size_t max_len, const char *fmt0,
 			if (spec.have_precision)
 				spec.precision = (unsigned) precision;
 		}
-		curarg = args->ptr[spec.arg].ll;
 		switch (c)
 		{
 		case 'p':
 			if (spec.type == UUID)
 			{
-				const grub_packed_guid_t *guid = (const grub_packed_guid_t *) (grub_addr_t) curarg;
+				const grub_packed_guid_t *guid = args->ptr[spec.arg].ptr;
 				struct printf_format field;
 				unsigned i;
 
@@ -1954,24 +1958,29 @@ grub_vsnprintf_real (char *str, grub_size_t max_len, const char *fmt0,
 				}
 				break;
 			}
-			/* Fall through. */
+			write_number (str, &count, max_len, &spec,
+				(grub_addr_t) args->ptr[spec.arg].ptr);
+			break;
+		case 'd':
+			write_number (str, &count, max_len, &spec,
+				(unsigned long long) args->ptr[spec.arg].ll);
+			break;
 		case 'x':
 		case 'X':
 		case 'u':
-		case 'd':
 		case 'o':
-			write_number (str, &count, max_len, &spec, curarg);
+			write_number (str, &count, max_len, &spec, args->ptr[spec.arg].ull);
 			break;
 		case 'c':
 		{
-			char ch = curarg & 0xff;
+			char ch = args->ptr[spec.arg].ll & 0xff;
 
 			write_text (str, &count, max_len, &spec, &ch, 1);
 			break;
 		}
 		case 'C':
 		{
-			grub_uint32_t code = curarg;
+			grub_uint32_t code = args->ptr[spec.arg].ll;
 			int shift;
 			unsigned mask;
 			char encoded[4];
@@ -2020,7 +2029,10 @@ grub_vsnprintf_real (char *str, grub_size_t max_len, const char *fmt0,
 		case 's':
 		{
 			grub_size_t len = 0;
-			const char *p = curarg ? (const char *) (grub_addr_t) curarg : "(null)";
+			const char *p = args->ptr[spec.arg].ptr;
+
+			if (!p)
+				p = "(null)";
 
 			while ((!spec.have_precision || len < spec.precision) && p[len])
 				len++;

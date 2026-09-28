@@ -200,7 +200,7 @@ product_printf_probe (const char *mode)
 			goto fail;
 	}
 	else if (!strcmp (mode, "null"))
-		expect ("(null)", "%pG", (void *) NULL);
+		expect ("(null)", "%pG", (const grub_packed_guid_t *) NULL);
 	else if (!strcmp (mode, "minimum"))
 		compare ("%lld", LLONG_MIN);
 	else
@@ -220,6 +220,23 @@ product_printf_probe (const char *mode)
 		compare ("%.*s|%8.3s|%-8s|%.s", 3, "abcdef", "abcdef", "xyz", "hidden");
 		compare ("%ld:%lu:%lld:%llu:%llx", LONG_MIN, ULONG_MAX, LLONG_MIN, ULLONG_MAX, ULLONG_MAX);
 		compare ("%zd:%zu:%zx", (grub_ssize_t) -1, (size_t) -1, (size_t) 0xdeadbeef);
+		compare ("%llu|%llx|%llo", (unsigned long long) LLONG_MAX + 1,
+			ULLONG_MAX, ULLONG_MAX);
+		compare ("%zu|%zx|%zo", (grub_size_t) -1,
+			(grub_size_t) -1, (grub_size_t) -1);
+		expect ("18446744073709551615/ffffffffffffffff",
+			"%1$llu/%1$llx", ULLONG_MAX);
+		/* Interleave pointer, floating-point and integer arguments, including
+		   enough arguments to exercise both registers and stack slots. */
+		expect ("0x0|str|18446744073709551615|-7|1.5|0x0|tail|2.5|9|3.5",
+			"%p|%s|%llu|%lld|%.1f|%p|%s|%.1f|%u|%.1f",
+			(void *) NULL, "str", ULLONG_MAX, -7LL, 1.5,
+			(void *) NULL, "tail", 2.5, 9U, 3.5);
+		expect ("str|0x0|18446744073709551615|1.5|0x0",
+			"%3$s|%2$p|%1$llu|%4$.1f|%2$p",
+			ULLONG_MAX, (void *) NULL, "str", 1.5);
+		expect ("|", "%1$p|%1$llu", (void *) NULL);
+		expect ("|", "%1$p|%1$s", (void *) NULL);
 		compare ("%d%%|%%|%d", 10, 20);
 		expect ("3 2 1", "%3$d %2$lld %1$d", 1, 2LL, 3);
 		expect ("    0023|end", "%3$*1$.*2$d|%4$s", 8, 4, 23, "end");
@@ -244,6 +261,17 @@ product_printf_probe (const char *mode)
 		check_format ("%.*1$d", "%d %d", 0);
 		check_format ("%pG", "%s", 0);
 		check_format ("%pG", "%pG", 1);
+		check_format ("%p", "%p", 1);
+		check_format ("%p", "%llu", 0);
+		check_format ("%llu", "%p", 0);
+		check_format ("%p", "%u", 0);
+		check_format ("%u", "%p", 0);
+		check_format ("%p", "%s", 0);
+		check_format ("%pG", "%p", 0);
+		check_format ("%p", "%pG", 0);
+		check_format ("%zu", _Generic ((size_t) 0,
+			unsigned int: "%u", unsigned long: "%lu",
+			unsigned long long: "%llu"), 1);
 		check_format ("%% %s", "%s %d", 1);
 		check_format ("%q", "", 0);
 		compare ("%f", 0.0);

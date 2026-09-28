@@ -87,6 +87,11 @@ The printf probe also runs in the default suite. To run it alone, use
 `--printf minimum`. Incomplete conversions stop at NUL without consuming
 arguments; `grub_printf_fmt_check` rejects them. `%C` widths count emitted UTF-8
 bytes, matching `%s` width units. Existing `n == 0` behavior is unchanged.
+The probe also covers unsigned values above `LLONG_MAX`, native `size_t` type
+classification for `%z`, mixed pointer/integer/double arguments, repeated
+positions, and rejection of pointer/integer format substitutions. These runtime
+checks establish output compatibility; correct `va_arg` types must also be
+verified in source, since equal ABI argument slots can hide type mismatches.
 
 ## Coverage and results
 
