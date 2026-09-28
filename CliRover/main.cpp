@@ -33,13 +33,21 @@
 #include "../common/optparse.h"
 #include "extract.h"
 #include "../common/blocklist.h"
+#include "../common/lostpart.h"
 
 namespace
 {
 
+enum class mount_kind
+{
+	image,
+	loop,
+	lost,
+};
+
 struct mount_options
 {
-	bool loopback;
+	mount_kind kind;
 	std::wstring file;
 	bool decompress;
 };
@@ -50,6 +58,9 @@ struct command_options
 	bool list = false;
 	bool blocklist = false;
 	std::wstring blocklist_path;
+	bool scan_lost = false;
+	std::wstring scan_lost_device;
+	unsigned int scan_lost_flags = 0;
 	bool preserve_times = true;
 	unsigned int fs_encoding = ROVER_FS_ENCODING_UTF8;
 	std::wstring list_path;
@@ -69,10 +80,14 @@ enum
 	OPT_FILE_DEC,
 	OPT_LOOP,
 	OPT_LOOP_DEC,
+	OPT_LOST,
 	OPT_EXTRACT,
 	OPT_OUTPUT,
 	OPT_LIST,
 	OPT_BLOCKLIST,
+	OPT_SCAN_LOST,
+	OPT_SCAN_EXT_BACKUP,
+	OPT_SCAN_DEEP,
 	OPT_NO_TIMES,
 	OPT_FS_ENCODING,
 	OPT_HELP,
@@ -84,10 +99,14 @@ const struct optparse_option OPTIONS[] =
 	{ L"file-dec", L'd', OPTPARSE_REQUIRED },
 	{ L"loop", L'p', OPTPARSE_REQUIRED },
 	{ L"loop-dec", 0, OPTPARSE_REQUIRED },
+	{ L"lost", L'w', OPTPARSE_REQUIRED },
 	{ L"extract", L'e', OPTPARSE_REQUIRED },
 	{ L"output", L'o', OPTPARSE_REQUIRED },
 	{ L"list", L'l', OPTPARSE_OPTIONAL },
 	{ L"blocklist", L'b', OPTPARSE_REQUIRED },
+	{ L"scan-lost", L's', OPTPARSE_REQUIRED },
+	{ L"scan-ext-backup", 0, OPTPARSE_NONE },
+	{ L"scan-deep", 0, OPTPARSE_NONE },
 	{ L"no-times", L'n', OPTPARSE_NONE },
 	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
 	{ L"help", L'h', OPTPARSE_NONE },
@@ -101,8 +120,16 @@ const char USAGE[] =
 	"  -d, --file-dec=FILE   Mount an image after decompression.\r\n"
 	"  -p, --loop=PATH       Mount a GRUB file as (loopN).\r\n"
 	"      --loop-dec=PATH   Mount a GRUB file after decompression.\r\n"
+	"  -w, --lost=DEV:OFFSET:SIZE[:REMAPS]\r\n"
+	"                        Mount SIZE bytes at byte OFFSET of device DEV\r\n"
+	"                         as (lostN), e.g. a --scan-lost window.\r\n"
 	"  -l, --list[=PATH]     List devices, a directory, or a file.\r\n"
 	"  -b, --blocklist=PATH  Enumerate metadata mappings as byte-based TSV.\r\n"
+	"  -s, --scan-lost=DEV   Search device DEV for lost partitions; results\r\n"
+	"                         are printed as TSV.\r\n"
+	"      --scan-ext-backup Also look for ext backup superblocks (slower).\r\n"
+	"      --scan-deep       Examine every sector, also inside volumes found\r\n"
+	"                         (much slower).\r\n"
 	"  -e, --extract=PATH    Extract a GRUB file or directory.\r\n"
 	"  -o, --output=DIR      Destination directory for --extract.\r\n"
 	"  -n, --no-times        Do not preserve extracted timestamps.\r\n"
@@ -227,13 +254,25 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 		{
 		case OPT_FILE:
 		case OPT_FILE_DEC:
-			options->mounts.push_back ({ false, full_path (parser.optarg),
+			options->mounts.push_back ({ mount_kind::image, full_path (parser.optarg),
 				opt == OPT_FILE_DEC });
 			break;
 		case OPT_LOOP:
 		case OPT_LOOP_DEC:
-			options->mounts.push_back ({ true, parser.optarg, opt == OPT_LOOP_DEC });
+			options->mounts.push_back ({ mount_kind::loop, parser.optarg, opt == OPT_LOOP_DEC });
 			break;
+		case OPT_LOST:
+		{
+			rover_lostpart::window window;
+			if (!rover_lostpart::parse_window (narrow (parser.optarg), &window))
+			{
+				*error = "invalid --lost '" + narrow (parser.optarg)
+					+ "' (expected DEVICE:OFFSET:SIZE[:TARGET=SOURCE+LENGTH,...] in bytes)";
+				return false;
+			}
+			options->mounts.push_back ({ mount_kind::lost, parser.optarg, false });
+			break;
+		}
 		case OPT_EXTRACT:
 			options->extracts.push_back (parser.optarg);
 			break;
@@ -265,6 +304,21 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 			}
 			options->blocklist = true;
 			options->blocklist_path = parser.optarg;
+			break;
+		case OPT_SCAN_LOST:
+			if (options->scan_lost || !parser.optarg[0])
+			{
+				*error = "--scan-lost requires one nonempty device and may only be specified once";
+				return false;
+			}
+			options->scan_lost = true;
+			options->scan_lost_device = parser.optarg;
+			break;
+		case OPT_SCAN_EXT_BACKUP:
+			options->scan_lost_flags |= ROVER_LOST_SCAN_EXT_BACKUP;
+			break;
+		case OPT_SCAN_DEEP:
+			options->scan_lost_flags |= ROVER_LOST_SCAN_DEEP;
 			break;
 		case OPT_NO_TIMES:
 			options->preserve_times = false;
@@ -307,9 +361,15 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 		*show_help = true;
 		return true;
 	}
-	if (int (options->list) + int (options->blocklist) + int (!options->extracts.empty ()) > 1)
+	if (int (options->list) + int (options->blocklist) + int (options->scan_lost)
+		+ int (!options->extracts.empty ()) > 1)
 	{
-		*error = "--list, --blocklist and --extract are mutually exclusive";
+		*error = "--list, --blocklist, --scan-lost and --extract are mutually exclusive";
+		return false;
+	}
+	if (options->scan_lost_flags && !options->scan_lost)
+	{
+		*error = "--scan-ext-backup and --scan-deep require --scan-lost";
 		return false;
 	}
 	if (!options->extracts.empty () && options->output.empty ())
@@ -322,9 +382,9 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 		*error = "--output requires --extract";
 		return false;
 	}
-	if (!options->list && !options->blocklist && options->extracts.empty ())
+	if (!options->list && !options->blocklist && !options->scan_lost && options->extracts.empty ())
 	{
-		*error = "no operation specified; use --list, --blocklist or --extract";
+		*error = "no operation specified; use --list, --blocklist, --scan-lost or --extract";
 		return false;
 	}
 	return true;
@@ -570,6 +630,18 @@ run_list (const std::string &path, std::string *error)
 	return true;
 }
 
+/* Percentage on the console only, so redirected stderr stays clean.  */
+void
+scan_progress (unsigned long long done, unsigned long long total)
+{
+	DWORD mode;
+
+	if (!total || !GetConsoleMode (GetStdHandle (STD_ERROR_HANDLE), &mode))
+		return;
+	write_stream (STD_ERROR_HANDLE, "\rScanning " + std::to_string (done * 100 / total)
+		+ "%" + (done >= total ? "\r\n" : ""));
+}
+
 } // namespace
 
 int
@@ -592,7 +664,7 @@ wmain (int argc, wchar_t **argv)
 	}
 
 	bool has_host_mount = std::any_of (options.mounts.begin (), options.mounts.end (),
-		[] (const mount_options &mount) { return !mount.loopback; });
+		[] (const mount_options &mount) { return mount.kind == mount_kind::image; });
 	rover_init (has_host_mount ? ROVER_INIT_NO_WINDISK : 0);
 	int result = 0;
 	if (rover_set_fs_char_encoding (options.fs_encoding))
@@ -604,17 +676,24 @@ wmain (int argc, wchar_t **argv)
 	}
 	size_t img_seq = 0;
 	size_t loop_seq = 0;
+	size_t lost_seq = 0;
 	for (size_t i = 0; i < options.mounts.size (); i++)
 	{
 		const mount_options &mount = options.mounts[i];
-		std::string name = mount.loopback
-			? "loop" + std::to_string (loop_seq)
+		std::string name = mount.kind == mount_kind::loop ? "loop" + std::to_string (loop_seq)
+			: mount.kind == mount_kind::lost ? "lost" + std::to_string (lost_seq)
 			: "img" + std::to_string (img_seq);
 		std::string file = narrow (mount.file);
-		int error_code = file.empty () ? 1
-			: mount.loopback
-				? rover_loopback_add (name.c_str (), file.c_str (), mount.decompress ? 1 : 0)
-				: rover_winfile_add (name.c_str (), file.c_str (), mount.decompress ? 1 : 0);
+		rover_lostpart::window window;
+		int error_code = 1;
+		if (file.empty ())
+			;
+		else if (mount.kind == mount_kind::loop)
+			error_code = rover_loopback_add (name.c_str (), file.c_str (), mount.decompress ? 1 : 0);
+		else if (mount.kind == mount_kind::image)
+			error_code = rover_winfile_add (name.c_str (), file.c_str (), mount.decompress ? 1 : 0);
+		else if (rover_lostpart::parse_window (file, &window))
+			error_code = rover_lostpart::add_window (name, window);
 		if (error_code)
 		{
 			const char *message = rover_last_error ();
@@ -623,13 +702,22 @@ wmain (int argc, wchar_t **argv)
 			result = report_error (error);
 			goto out;
 		}
-		if (mount.loopback)
+		if (mount.kind == mount_kind::loop)
 			loop_seq++;
+		else if (mount.kind == mount_kind::lost)
+			lost_seq++;
 		else
 			img_seq++;
 	}
 
-	if (options.blocklist)
+	if (options.scan_lost)
+	{
+		if (!rover_lostpart::run (narrow (options.scan_lost_device), options.scan_lost_flags,
+			[] (const std::string &line) { return write_stream (STD_OUTPUT_HANDLE, line); },
+			scan_progress, &error))
+			result = report_error (error);
+	}
+	else if (options.blocklist)
 	{
 		if (!rover_blocklist::run (narrow (options.blocklist_path),
 			[] (const std::string &line) { return write_stream (STD_OUTPUT_HANDLE, line); }, &error))

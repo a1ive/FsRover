@@ -64,6 +64,7 @@
 	/* disks: the platform host disk is optional and rover_init calls it */	\
 	/* itself; here come the rest, then volume managers / RAID */	\
 	mod (loopdisk)	\
+	mod (lostdisk)	\
 	ROVER_HOSTFILE_MODULE (mod)	\
 	mod (diskfilter)	\
 	mod (ldm)	\

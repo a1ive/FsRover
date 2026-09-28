@@ -93,6 +93,7 @@ std::atomic<bool> g_cancel;
 std::atomic<UINT> g_latest_list_seq;	/* newest GUI directory generation */
 UINT g_loop_seq;	/* backend thread only: next "loopN" suffix */
 UINT g_img_seq;	/* backend thread only: next "imgN" suffix */
+UINT g_lost_seq;	/* backend thread only: next "lostN" suffix */
 int g_init_flags;	/* ROVER_INIT_*, set before the thread starts */
 
 /* Backend thread: run every pending backend_call().  Called between
@@ -142,8 +143,19 @@ static_assert (BACKEND_DEV_OTHER == ROVER_DEV_OTHER
 	&& BACKEND_DEV_DISKFILTER == ROVER_DEV_DISKFILTER
 	&& BACKEND_DEV_CRYPTODISK == ROVER_DEV_CRYPTODISK
 	&& BACKEND_DEV_PROCFS == ROVER_DEV_PROCFS
-	&& BACKEND_DEV_WINFILE == ROVER_DEV_WINFILE,
+	&& BACKEND_DEV_WINFILE == ROVER_DEV_WINFILE
+	&& BACKEND_DEV_LOST == ROVER_DEV_LOST,
 	"BACKEND_DEV_* must match ROVER_DEV_*");
+
+static_assert (BACKEND_LOST_SCAN_EXT_BACKUP == ROVER_LOST_SCAN_EXT_BACKUP
+	&& BACKEND_LOST_SCAN_DEEP == ROVER_LOST_SCAN_DEEP
+	&& BACKEND_LOST_BACKUP == ROVER_LOST_BACKUP
+	&& BACKEND_LOST_VERIFIED == ROVER_LOST_VERIFIED
+	&& BACKEND_LOST_EXISTING == ROVER_LOST_EXISTING
+	&& BACKEND_LOST_OVERLAP == ROVER_LOST_OVERLAP
+	&& BACKEND_LOST_TRUNCATED == ROVER_LOST_TRUNCATED
+	&& BACKEND_LOST_TABLE == ROVER_LOST_TABLE,
+	"BACKEND_LOST_* must match ROVER_LOST_*");
 
 static_assert (BACKEND_VC_PRF_AUTO == ROVER_VC_PRF_AUTO
 	&& BACKEND_VC_PRF_SHA512 == ROVER_VC_PRF_SHA512
@@ -919,6 +931,97 @@ run_payload (const winfile_del_task &task, UINT, backend_result *res)
 	res->type = backend_task_type::winfile_del;
 	res->path = task.path;
 	if (rover_winfile_del (task.path.c_str ()))
+		set_error (res, "cannot unmount device");
+}
+
+int
+lost_collect (const rover_lost_part *part, void *data)
+{
+	backend_lost_part p;
+
+	p.offset = part->offset;
+	p.size = part->size;
+	p.type = part->type;
+	p.fs = part->fs ? part->fs : "";
+	p.label = part->label ? part->label : "";
+	p.fs_uuid = part->fs_uuid ? part->fs_uuid : "";
+	p.flags = part->flags;
+	p.window = part->window;
+	for (unsigned int i = 0; i < part->remap_count; i++)
+		p.remap.push_back ({ part->remap[i].target, part->remap[i].source,
+			part->remap[i].length });
+	static_cast<backend_result *> (data)->lost_parts.push_back (std::move (p));
+	return 0;
+}
+
+/* One slice of a lost partition search; the first also opens it.  */
+void
+run_payload (const lost_scan_task &task, UINT, backend_result *res)
+{
+	/* Bytes of the device one slice covers: a few dozen candidate
+	   reads where nothing is found, so the queue keeps moving.  */
+	constexpr unsigned long long slice = 64ULL << 20;
+	backend_lost_scan &state = *task.state;
+	auto *scan = static_cast<rover_lost_scan *> (state.scan);
+	int more = 0;
+
+	res->type = backend_task_type::lost_scan;
+	res->path = task.device;
+	if (state.cancelled.load ())
+		goto done;
+	if (!state.started)
+	{
+		state.started = true;
+		scan = rover_lost_scan_begin (task.device.c_str (), task.flags);
+		state.scan = scan;
+		if (!scan)
+		{
+			set_error (res, "cannot search device");
+			goto done;
+		}
+	}
+	if (!scan)
+		goto done;
+	more = rover_lost_scan_step (scan, slice, lost_collect, res);
+	rover_lost_scan_progress (scan, &res->lost_done, &res->lost_total);
+	if (more > 0)
+		return;
+	if (more < 0)
+		set_error (res, "lost partition search failed");
+
+done:
+	res->lost_finished = true;
+	if (scan)
+	{
+		rover_lost_scan_end (scan);
+		state.scan = nullptr;
+	}
+}
+
+void
+run_payload (const lost_add_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::lost_add;
+	std::string dev = "lost" + std::to_string (g_lost_seq);
+	std::vector<rover_lost_remap> remap;
+	for (const backend_lost_remap &r : task.remap)
+		remap.push_back ({ r.target, r.source, r.length });
+	if (rover_lost_add_ex (dev.c_str (), task.parent.c_str (), task.offset, task.size,
+		remap.data (), (unsigned int) remap.size ()))
+		set_error (res, "cannot open lost partition");
+	else
+	{
+		g_lost_seq++;
+		res->path = dev;
+	}
+}
+
+void
+run_payload (const lost_del_task &task, UINT, backend_result *res)
+{
+	res->type = backend_task_type::lost_del;
+	res->path = task.path;
+	if (rover_lost_del (task.path.c_str ()))
 		set_error (res, "cannot unmount device");
 }
 

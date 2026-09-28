@@ -123,6 +123,7 @@ constexpr int IDM_PLAINMOUNT = 16;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 constexpr int IDM_SMART = 17;
 #endif
+constexpr int IDM_LOST_SCAN = 18;
 
 /* This window's DPI, and the layout metrics it scales.  Read from the
    creation monitor in WM_CREATE and refreshed on WM_DPICHANGED; every
@@ -347,6 +348,7 @@ device_icon (const backend_diskent &d)
 	switch (d.dev_id)
 	{
 	case BACKEND_DEV_LOOPBACK:
+	case BACKEND_DEV_LOST:
 		return IMG_LOOP;
 	case BACKEND_DEV_DISKFILTER:
 		return IMG_LVM;
@@ -953,6 +955,8 @@ on_tree_rclick (void)
 	bool can_vc = can_raw && d.size >= 256 * 1024
 		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
 	bool can_pm = can_raw && d.dev_id != BACKEND_DEV_CRYPTODISK;
+	/* The lost partition search reads raw sectors as well.  */
+	bool can_lost = can_raw && d.dev_id != BACKEND_DEV_PROCFS;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 	/* S.M.A.R.T. belongs to a drive, not to a volume: only a whole
 	   windisk "hdN" has a \\.\PhysicalDriveN behind it to ask.  The
@@ -980,6 +984,7 @@ on_tree_rclick (void)
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
 	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
+	AppendMenuW (menu, MF_STRING | busy | (can_lost ? 0u : MF_GRAYED), IDM_LOST_SCAN, res_str (IDS_LOST_MENU).c_str ());
 #if FSROVER_ENABLE_ADMIN_FEATURES
 	/* Neither S.M.A.R.T. nor Properties goes through the backend --
 	   one is libcdi's own I/O, the other reads the cached diskent --
@@ -1008,6 +1013,8 @@ on_tree_rclick (void)
 		{
 			if (d.dev_id == BACKEND_DEV_WINFILE)
 				backend_post (winfile_del_task { d.name });
+			else if (d.dev_id == BACKEND_DEV_LOST)
+				backend_post (lost_del_task { d.name });
 			else
 				backend_post (loopback_del_task { d.name });
 			set_status (IDS_STATUS_UNMOUNTING);
@@ -1028,6 +1035,10 @@ on_tree_rclick (void)
 	case IDM_EXPORT:
 		if (can_raw)
 			start_export (d);
+		break;
+	case IDM_LOST_SCAN:
+		if (can_lost)
+			show_lost_scan (d);
 		break;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 	case IDM_SMART:
@@ -1292,7 +1303,14 @@ on_task_done (backend_result *raw)
 	case backend_task_type::loopback_del:
 	case backend_task_type::winfile_add:
 	case backend_task_type::winfile_del:
+	case backend_task_type::lost_del:
 		break;
+	case backend_task_type::lost_add:
+		lost_add_done (res.get ());
+		break;
+	case backend_task_type::lost_scan:
+		lost_scan_done (res.get ());
+		return;
 	case backend_task_type::file_map:
 		file_map_done (res.get ());
 		return;
@@ -1379,6 +1397,7 @@ on_task_done (backend_result *raw)
 	}
 	case backend_task_type::loopback_add:
 	case backend_task_type::winfile_add:
+	case backend_task_type::lost_add:
 	{
 		g_mounted.insert (res->path);
 		refresh ();
@@ -1389,6 +1408,7 @@ on_task_done (backend_result *raw)
 	}
 	case backend_task_type::loopback_del:
 	case backend_task_type::winfile_del:
+	case backend_task_type::lost_del:
 	{
 		g_mounted.erase (res->path);
 		/* Leave the view if it was on the departed device.  */

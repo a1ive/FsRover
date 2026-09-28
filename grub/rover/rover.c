@@ -41,6 +41,7 @@
 #include <grub/procfs.h>
 
 #include "fscharset.h"
+#include "lost.h"
 #include "rover.h"
 
 int
@@ -413,6 +414,15 @@ enum_disk_shim (const char *name, void *data)
 			break;
 		case GRUB_DISK_DEVICE_PROCFS_ID:
 			info.dev_id = ROVER_DEV_PROCFS;
+			break;
+		case GRUB_DISK_DEVICE_LOST_ID:
+			info.dev_id = ROVER_DEV_LOST;
+			if (!dev->disk->partition)
+			{
+				info.parent_device = rover_lost_get_parent (name);
+				info.start_lba = grub_disk_to_native_sector (dev->disk,
+					grub_lostdisk_start (dev->disk));
+			}
 			break;
 		case GRUB_DISK_DEVICE_HOST_ID:
 			info.dev_id = ROVER_DEV_WINFILE;

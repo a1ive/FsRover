@@ -88,6 +88,9 @@
     <ClCompile Include="mapview.cpp">
       <Filter>SRC</Filter>
     </ClCompile>
+    <ClCompile Include="lostdlg.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
     <ClCompile Include="propsdlg.cpp">
       <Filter>SRC</Filter>
     </ClCompile>

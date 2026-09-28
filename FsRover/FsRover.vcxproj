@@ -196,6 +196,7 @@
     <ClCompile Include="mdview.cpp" />
     <ClCompile Include="propsdlg.cpp" />
     <ClCompile Include="mapview.cpp" />
+    <ClCompile Include="lostdlg.cpp" />
     <ClCompile Include="smartdlg.cpp" />
     <ClCompile Include="stb_impl.c" />
     <ClCompile Include="textview.cpp" />

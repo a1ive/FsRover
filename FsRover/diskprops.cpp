@@ -145,6 +145,8 @@ dp_type_label (const backend_diskent &d)
 		return IDS_DP_T_CRYPTO;
 	switch (d.dev_id)
 	{
+	case BACKEND_DEV_LOST:
+		return IDS_DP_T_PART;
 	case BACKEND_DEV_LOOPBACK:
 	case BACKEND_DEV_WINFILE:
 		return IDS_DP_T_IMAGE;
@@ -336,8 +338,9 @@ dp_build (const backend_diskent &d, const std::vector<backend_diskent> &disks)
 	else if (d.encrypted && !d.crypto_uuid.empty ())
 		dp_field_add (IDS_DP_UUID, widen (d.crypto_uuid));
 
-	/* Start LBA is only meaningful for an actual partition.  */
-	if (d.is_partition)
+	/* Start LBA is only meaningful for an actual partition, or a lost
+	   partition window on its parent device.  */
+	if (d.is_partition || d.dev_id == BACKEND_DEV_LOST)
 		dp_field_add (IDS_DP_LBA, group_digits (d.start_lba));
 	if (d.sector_size)
 		dp_field_add (IDS_DP_SECTOR, std::to_wstring (d.sector_size) + L" B");

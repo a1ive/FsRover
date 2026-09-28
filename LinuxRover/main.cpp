@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <iostream>
@@ -34,6 +35,7 @@
 #include "fusefs.h"
 #include "../common/blocklist.h"
 #include "../common/extract_core.h"
+#include "../common/lostpart.h"
 
 namespace
 {
@@ -42,14 +44,23 @@ constexpr const char *USAGE =
 	"Usage:\n"
 	"  LinuxRover [options] --list[=PATH]\n"
 	"  LinuxRover [options] --extract=PATH --output=DIR\n"
+	"  LinuxRover [options] --scan-lost=DEVICE\n"
 	"  LinuxRover [options] --mount=DEVICE MOUNTPOINT\n\n"
 	"Options:\n"
 	"  -f, --file=IMAGE       Attach a host image as imgN (repeatable)\n"
 	"  -d, --file-dec=IMAGE   Attach and transparently decompress IMAGE\n"
 	"  -p, --loop=PATH       Attach a GRUB file as loopN (repeatable)\n"
 	"      --loop-dec=PATH   Attach and transparently decompress a GRUB file\n"
+	"  -w, --lost=DEV:OFFSET:SIZE[:REMAPS]\n"
+	"                         Attach SIZE bytes at byte OFFSET of DEV as lostN\n"
+	"                         (repeatable), e.g. a --scan-lost window\n"
 	"  -l, --list[=PATH]      List devices, a directory, or a file\n"
 	"  -b, --blocklist=PATH   Enumerate metadata mappings as byte-based TSV\n"
+	"  -s, --scan-lost=DEVICE Search DEVICE for lost partitions; results are\n"
+	"                         printed as TSV\n"
+	"      --scan-ext-backup  Also look for ext backup superblocks (slower)\n"
+	"      --scan-deep        Examine every sector, also inside volumes found\n"
+	"                         (much slower)\n"
 	"  -e, --extract=PATH     Extract a file or directory (repeatable)\n"
 	"  -o, --output=DIR       Destination directory for --extract\n"
 	"  -n, --no-times         Do not preserve extracted timestamps\n"
@@ -58,11 +69,18 @@ constexpr const char *USAGE =
 	"  -c, --fs-encoding=ENC  UTF-8, GBK, Big5, Shift-JIS, or EUC-KR\n"
 	"  -h, --help             Show this help\n";
 
+enum class mount_kind
+{
+	image,
+	loop,
+	lost,
+};
+
 struct mount_option
 {
 	std::string path;
 	bool decompress;
-	bool loopback;
+	mount_kind kind;
 };
 
 struct options
@@ -78,6 +96,9 @@ struct options
 	bool list = false;
 	bool blocklist = false;
 	std::string blocklist_path;
+	bool scan_lost = false;
+	std::string scan_lost_device;
+	unsigned int scan_lost_flags = 0;
 	bool foreground = false;
 };
 
@@ -122,14 +143,20 @@ bool
 parse_options (int argc, char **argv, options *out)
 {
 	constexpr int OPT_LOOP_DEC = 256;
+	constexpr int OPT_SCAN_EXT_BACKUP = 257;
+	constexpr int OPT_SCAN_DEEP = 258;
 	static const option long_options[] =
 	{
 		{ "file", required_argument, nullptr, 'f' },
 		{ "file-dec", required_argument, nullptr, 'd' },
 		{ "loop", required_argument, nullptr, 'p' },
 		{ "loop-dec", required_argument, nullptr, OPT_LOOP_DEC },
+		{ "lost", required_argument, nullptr, 'w' },
 		{ "list", optional_argument, nullptr, 'l' },
 		{ "blocklist", required_argument, nullptr, 'b' },
+		{ "scan-lost", required_argument, nullptr, 's' },
+		{ "scan-ext-backup", no_argument, nullptr, OPT_SCAN_EXT_BACKUP },
+		{ "scan-deep", no_argument, nullptr, OPT_SCAN_DEEP },
 		{ "extract", required_argument, nullptr, 'e' },
 		{ "output", required_argument, nullptr, 'o' },
 		{ "no-times", no_argument, nullptr, 'n' },
@@ -142,7 +169,7 @@ parse_options (int argc, char **argv, options *out)
 	int ch;
 	bool output_seen = false;
 
-	while ((ch = getopt_long (argc, argv, "f:d:p:l::b:e:o:nm:Fc:h", long_options,
+	while ((ch = getopt_long (argc, argv, "f:d:p:w:l::b:s:e:o:nm:Fc:h", long_options,
 		nullptr)) != -1)
 	{
 		switch (ch)
@@ -157,8 +184,20 @@ parse_options (int argc, char **argv, options *out)
 				return false;
 			}
 			out->mounts.push_back ({ optarg, ch == 'd' || ch == OPT_LOOP_DEC,
-				ch == 'p' || ch == OPT_LOOP_DEC });
+				ch == 'p' || ch == OPT_LOOP_DEC ? mount_kind::loop : mount_kind::image });
 			break;
+		case 'w':
+		{
+			rover_lostpart::window window;
+			if (!rover_lostpart::parse_window (optarg, &window))
+			{
+				std::cerr << "LinuxRover: invalid --lost '" << optarg
+					<< "' (expected DEVICE:OFFSET:SIZE[:TARGET=SOURCE+LENGTH,...] in bytes)\n";
+				return false;
+			}
+			out->mounts.push_back ({ optarg, false, mount_kind::lost });
+			break;
+		}
 		case 'l':
 			out->list = true;
 			if (optarg)
@@ -172,6 +211,21 @@ parse_options (int argc, char **argv, options *out)
 			}
 			out->blocklist = true;
 			out->blocklist_path = optarg;
+			break;
+		case 's':
+			if (out->scan_lost || !optarg[0])
+			{
+				std::cerr << "LinuxRover: --scan-lost requires one nonempty device and may only be specified once\n";
+				return false;
+			}
+			out->scan_lost = true;
+			out->scan_lost_device = optarg;
+			break;
+		case OPT_SCAN_EXT_BACKUP:
+			out->scan_lost_flags |= ROVER_LOST_SCAN_EXT_BACKUP;
+			break;
+		case OPT_SCAN_DEEP:
+			out->scan_lost_flags |= ROVER_LOST_SCAN_DEEP;
 			break;
 		case 'e':
 			if (!optarg[0])
@@ -214,9 +268,15 @@ parse_options (int argc, char **argv, options *out)
 			return false;
 		}
 	}
-	if (int (out->list) + int (out->blocklist) + int (!out->extracts.empty ()) + int (!out->mount_device.empty ()) != 1)
+	if (int (out->list) + int (out->blocklist) + int (out->scan_lost) + int (!out->extracts.empty ())
+		+ int (!out->mount_device.empty ()) != 1)
 	{
-		std::cerr << "LinuxRover: specify exactly one of --list, --blocklist, --extract or --mount\n";
+		std::cerr << "LinuxRover: specify exactly one of --list, --blocklist, --scan-lost, --extract or --mount\n";
+		return false;
+	}
+	if (out->scan_lost_flags && !out->scan_lost)
+	{
+		std::cerr << "LinuxRover: --scan-ext-backup and --scan-deep require --scan-lost\n";
 		return false;
 	}
 	if (out->extracts.empty () != out->output.empty ())
@@ -450,30 +510,53 @@ main (int argc, char **argv)
 		return 2;
 	}
 	bool has_host_mount = std::any_of (command.mounts.begin (), command.mounts.end (),
-		[] (const mount_option &mount) { return !mount.loopback; });
+		[] (const mount_option &mount) { return mount.kind == mount_kind::image; });
 	size_t img_seq = 0;
 	size_t loop_seq = 0;
+	size_t lost_seq = 0;
 	rover_init (has_host_mount ? ROVER_INIT_NO_HOSTDISK : 0);
 	if (rover_set_fs_char_encoding (command.encoding))
 		goto out;
 	/* Preserve command-line order: a loop can depend on an earlier image or loop. */
 	for (const mount_option &mount : command.mounts)
 	{
-		std::string name = mount.loopback
-			? "loop" + std::to_string (loop_seq)
+		std::string name = mount.kind == mount_kind::loop ? "loop" + std::to_string (loop_seq)
+			: mount.kind == mount_kind::lost ? "lost" + std::to_string (lost_seq)
 			: "img" + std::to_string (img_seq);
-		int rc = mount.loopback
-			? rover_loopback_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0)
-			: rover_posixfile_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0);
+		rover_lostpart::window window;
+		int rc = 1;
+		if (mount.kind == mount_kind::loop)
+			rc = rover_loopback_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0);
+		else if (mount.kind == mount_kind::image)
+			rc = rover_posixfile_add (name.c_str (), mount.path.c_str (), mount.decompress ? 1 : 0);
+		else if (rover_lostpart::parse_window (mount.path, &window))
+			rc = rover_lostpart::add_window (name, window);
 		if (rc)
 		{
 			std::cerr << "LinuxRover: cannot mount '" << mount.path << "' as (" << name << ")\n";
 			goto out;
 		}
-		if (mount.loopback)
+		if (mount.kind == mount_kind::loop)
 			loop_seq++;
+		else if (mount.kind == mount_kind::lost)
+			lost_seq++;
 		else
 			img_seq++;
+	}
+	if (command.scan_lost)
+	{
+		std::string error;
+		bool tty = isatty (STDERR_FILENO);
+		result = rover_lostpart::run (command.scan_lost_device, command.scan_lost_flags,
+			[] (const std::string &line) { std::cout << line; return bool (std::cout); },
+			[tty] (unsigned long long done, unsigned long long total)
+			{
+				if (tty && total)
+					std::cerr << "\rScanning " << done * 100 / total << '%'
+						<< (done >= total ? "\n" : "") << std::flush;
+			}, &error) ? 0 : 1;
+		if (result) std::cerr << "LinuxRover: " << error << '\n';
+		goto out;
 	}
 	if (!command.extracts.empty ())
 	{

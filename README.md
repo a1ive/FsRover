@@ -16,6 +16,9 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 - Open nested and compressed disk images as virtual disks.
 - Inspect files with built-in properties, hashes, text, image, hex, and metadata storage-map views.
 - Unlock LUKS1, LUKS2, BitLocker, GELI, VeraCrypt/TrueCrypt, and plain dm-crypt volumes.
+- Search a disk or image for lost partitions (NTFS, FAT, exFAT, ext2/3/4, XFS, Btrfs, HFS/HFS+,
+  APFS, ReFS, F2FS, UFS, JFS, ReiserFS, ISO9660, UDF, backup GPT and orphaned EBR entries),
+  quickly or sector by sector, and open them read-only without rewriting the partition table.
 
 ## Download
 

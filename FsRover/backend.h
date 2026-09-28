@@ -70,6 +70,9 @@ enum class backend_task_type
 	crypto_unlock,	/* path (source device) + key -> result.path = "cryptoN" */
 	veracrypt_unlock,	/* like crypto_unlock, plus pim/prf/vc_flags */
 	plainmount_unlock,	/* headerless dm-crypt volume, all parameters given */
+	lost_scan,	/* one slice of a lost partition search -> result.lost_* */
+	lost_add,	/* parent + offset/size -> result.path = "lostN" */
+	lost_del,	/* path = device name */
 };
 
 /* veracrypt_unlock: key derivation function, matching ROVER_VC_PRF_*.  */
@@ -195,6 +198,59 @@ struct veracrypt_unlock_task
 	UINT vc_flags = 0;	/* BACKEND_VC_* bits */
 };
 
+/* A lost partition search runs as a chain of lost_scan tasks, one slice
+   of the device each, so queued work and dokan requests get the backend
+   in between; the GUI posts the next slice when one finishes.  The scan
+   handle lives on the backend thread.  A slice that sees CANCELLED, or
+   that completes the search, releases it.  */
+struct backend_lost_scan
+{
+	void *scan = nullptr;	/* rover_lost_scan *, backend thread only */
+	bool started = false;	/* backend thread only */
+	std::atomic<bool> cancelled { false };
+};
+
+/* lost_scan flags, matching ROVER_LOST_SCAN_*.  */
+constexpr UINT BACKEND_LOST_SCAN_EXT_BACKUP = 0x1;
+constexpr UINT BACKEND_LOST_SCAN_DEEP = 0x2;
+
+/* backend_lost_part flags, matching ROVER_LOST_*.  */
+constexpr UINT BACKEND_LOST_BACKUP = 0x01;
+constexpr UINT BACKEND_LOST_VERIFIED = 0x02;
+constexpr UINT BACKEND_LOST_EXISTING = 0x04;
+constexpr UINT BACKEND_LOST_OVERLAP = 0x08;
+constexpr UINT BACKEND_LOST_TRUNCATED = 0x10;
+constexpr UINT BACKEND_LOST_TABLE = 0x20;
+
+struct lost_scan_task
+{
+	std::string device;	/* device to search, no parens */
+	UINT flags = 0;	/* BACKEND_LOST_SCAN_* */
+	std::shared_ptr<backend_lost_scan> state;
+};
+
+/* LENGTH bytes at TARGET of a lost partition window read from SOURCE
+   (struct rover_lost_remap).  */
+struct backend_lost_remap
+{
+	UINT64 target = 0;
+	UINT64 source = 0;
+	UINT64 length = 0;
+};
+
+struct lost_add_task
+{
+	std::string parent;	/* device name, no parens */
+	UINT64 offset = 0;	/* bytes */
+	UINT64 size = 0;	/* bytes */
+	std::vector<backend_lost_remap> remap;	/* backups in place of primaries */
+};
+
+struct lost_del_task
+{
+	std::string path;	/* device name */
+};
+
 struct plainmount_unlock_task
 {
 	std::string path;	/* source device */
@@ -212,7 +268,8 @@ using backend_task = std::variant<enum_disks_task, list_dir_task,
 	list_sizes_task, extract_task, export_image_task, loopback_add_task,
 	loopback_del_task, winfile_add_task, winfile_del_task, file_props_task, file_map_task,
 	hash_file_task, read_chunk_task, crypto_unlock_task,
-	veracrypt_unlock_task, plainmount_unlock_task>;
+	veracrypt_unlock_task, plainmount_unlock_task, lost_scan_task,
+	lost_add_task, lost_del_task>;
 
 struct backend_progress
 {
@@ -232,6 +289,7 @@ constexpr int BACKEND_DEV_DISKFILTER = 3;	/* lvm/ldm/mdraid/dmraid volume */
 constexpr int BACKEND_DEV_CRYPTODISK = 4;	/* unlocked crypto volume */
 constexpr int BACKEND_DEV_PROCFS = 5;	/* (proc) pseudo-device */
 constexpr int BACKEND_DEV_WINFILE = 6;	/* winfile host image mount */
+constexpr int BACKEND_DEV_LOST = 7;	/* lostdisk lost partition window */
 
 struct backend_diskent
 {
@@ -250,6 +308,20 @@ struct backend_diskent
 	bool encrypted = false;	/* locked LUKS/LUKS2, BitLocker or GELI container */
 	std::string crypto_type;	/* "luks", "luks2", "bitlocker" or "geli" */
 	std::string crypto_uuid;	/* container UUID when encrypted */
+};
+
+/* A lost partition search result (see struct rover_lost_part).  */
+struct backend_lost_part
+{
+	UINT64 offset = 0;	/* bytes on the searched device */
+	UINT64 size = 0;	/* bytes, as recorded */
+	std::string type;	/* detector: "ntfs", "fat32", ..., "partition" */
+	std::string fs;	/* GRUB driver, empty unless VERIFIED */
+	std::string label;
+	std::string fs_uuid;
+	UINT flags = 0;	/* BACKEND_LOST_* */
+	UINT64 window = 0;	/* bytes a lost_add window can cover */
+	std::vector<backend_lost_remap> remap;	/* for lost_add */
 };
 
 struct backend_dirent
@@ -290,6 +362,10 @@ struct backend_result
 	std::string hash[BACKEND_HASH_COUNT];	/* hash_file: lowercase hex */
 	std::vector<char> data;	/* read_chunk: short read = EOF */
 	UINT64 file_size = 0;	/* read_chunk */
+	std::vector<backend_lost_part> lost_parts;	/* lost_scan: this slice's results */
+	UINT64 lost_done = 0;	/* lost_scan: bytes of the device covered */
+	UINT64 lost_total = 0;	/* lost_scan: device size */
+	bool lost_finished = false;	/* lost_scan: no further slice is needed */
 };
 
 /* Registered feature names for the Help "supported features" list,

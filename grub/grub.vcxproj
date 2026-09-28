@@ -163,6 +163,10 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_des.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\hash-common.c" />
     <ClCompile Include="rover\init.c" />
+    <ClCompile Include="rover\lostexam.c" />
+    <ClCompile Include="rover\lostfs.c" />
+    <ClCompile Include="rover\lostpart.c" />
+    <ClCompile Include="rover\losttable.c" />
     <ClCompile Include="rover\fscharset.c" />
     <ClCompile Include="rover\misc.c" />
     <ClCompile Include="rover\mm.c" />
@@ -182,6 +186,7 @@
     <ClCompile Include="grub-core\disk\dmraid_nvidia.c" />
     <ClCompile Include="grub-core\disk\ldm.c" />
     <ClCompile Include="grub-core\disk\loopdisk.c" />
+    <ClCompile Include="grub-core\disk\lostdisk.c" />
     <ClCompile Include="grub-core\disk\lp.c" />
     <ClCompile Include="grub-core\disk\lvm.c" />
     <ClCompile Include="grub-core\disk\mdraid_linux.c" />
@@ -638,6 +643,8 @@
     <ClInclude Include="include\grub\ghost.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\fscharset.h" />
+    <ClInclude Include="rover\lost.h" />
+    <ClInclude Include="rover\lostint.h" />
     <ClInclude Include="rover\proc.h" />
     <ClInclude Include="rover\rover.h" />
     <ClInclude Include="rover\version.h" />

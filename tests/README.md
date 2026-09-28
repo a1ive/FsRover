@@ -23,6 +23,29 @@ python tests/nsis_bzip2.py --cli build/x64/CliRover.exe build/nsis-bzip2
 ```
 
 Generation may run under WSL; pass the same fixture directory to Windows Python.
+
+The optional lost partition regression needs `mkfs.vfat`, `mkntfs`, `ntfscp`,
+`mkfs.exfat`, `mkfs.ext4`, mtools, `mkfs.xfs`, `mkfs.btrfs`, hfsutils,
+`mkfs.hfsplus`, `mkfs.f2fs`/`sload.f2fs`, `mksquashfs`, `sgdisk`, `sfdisk`,
+`makefs`, `mkfs.jfs`, `mkreiserfs`, `mkudffs` and `genisoimage` only when
+generating fixtures. It writes MBR and CHS layouts with an intact,
+wiped or partially deleted table; NTFS, FAT32, exFAT, ext4, XFS, Btrfs, HFS,
+HFS+ and F2FS volumes with their primary boot sector or superblock removed;
+GPT disks without protective MBR, with only the backup GPT, or with a stale
+backup GPT; an MBR whose extended boot record chain is cut; and a stale FAT32
+boot sector whose claimed range covers partitions created after it. UFS1/UFS2, JFS
+(also through its secondary superblock), ReiserFS, ISO9660, UDF and an
+ISO9660/UDF bridge are covered, and `--scan-deep` runs over several of the
+images plus one whose volumes sit at odd sector offsets only it finds. It checks the
+`--scan-lost` results (type, flags, label), extracts the payload through
+`--lost` windows with SHA-256 checks -- volumes found through a backup through
+their remapped windows -- and covers truncated volumes and window and remap
+argument errors. HFS+/HFSX and exFAT volumes are empty (no userland copy tool):
+
+```sh
+python3 tests/lostpart.py --generate build/lostpart
+python tests/lostpart.py --cli build/x64/CliRover.exe build/lostpart
+```
 For Linux validation, substitute the built `LinuxRover` path.
 
 From the repository root, after restoring the normal solution packages:

@@ -49,6 +49,7 @@ Libgcrypt primitives     LGPL-2.1-or-later        grub/grub-core/lib/libgcrypt/
 wimboot                  GPL-2.0-or-later         grub/grub-core/lib/wimboot/
 minilzo                  GPL-2.0-or-later         grub/grub-core/lib/minilzo/
 VirtualBox               GPL-3.0-only or CDDL-1.0 grub/grub-core/lib/vbox/
+TestDisk (derived)       GPL-2.0-or-later         grub/rover/lost*.c
 unRAR                    unRAR freeware license   grub/grub-core/lib/unrar/
 VC-LTL                   EPL-2.0                  (NuGet)
 YY-Thunks                MIT                      (NuGet)
@@ -333,6 +334,22 @@ License, version 3 or (at your option) any later version.  See
 The Dokany project also offers an MIT alternative for the user-mode
 library; see the upstream repository <https://github.com/dokan-dev/dokany>
 for the license files it ships (license.lgpl.txt, license.mit.txt).
+
+
+3.7 TestDisk - GPL-2.0-or-later
+-------------------------------
+
+grub/rover/lostpart.c, lostexam.c, losttable.c and lostfs.c (lost
+partition search) follow the search
+locations, filesystem checks and partition table parsing of TestDisk
+(godmode.c, next.c, analyse.c, ntfs.c, fat.c, exfat.c, ext2.c,
+ext2_common.c, xfs.c, btrfs.c, hfs.c, hfsp.c, apfs.c, apfs_common.c,
+refs.c, f2fs.c, ufs.c, jfs.c, rfs.c, iso.c, parti386.c, partgpt.c) -
+Copyright (C) 1998-2021 Christophe GRENIER <grenier@cgsecurity.org>.  Licensed
+under the GNU General Public License, version 2 or (at your option) any
+later version; Rover uses it under GPL-3.0-or-later.  See
+<https://www.gnu.org/licenses/old-licenses/gpl-2.0.html> and
+<https://www.cgsecurity.org/wiki/TestDisk>.
 
 
 4. COMPONENTS WITH SPECIAL LICENSES

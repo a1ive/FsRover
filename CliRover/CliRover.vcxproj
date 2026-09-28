@@ -147,6 +147,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\blocklist.h" />
+    <ClInclude Include="..\common\lostpart.h" />
     <ClInclude Include="..\common\filemap_format.h" />
     <ClInclude Include="..\common\extract_core.h" />
     <ClInclude Include="..\common\extract_host.h" />

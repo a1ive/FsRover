@@ -47,6 +47,9 @@
     <ClInclude Include="..\common\blocklist.h">
       <Filter>common</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\lostpart.h">
+      <Filter>common</Filter>
+    </ClInclude>
     <ClInclude Include="..\common\filemap_format.h">
       <Filter>common</Filter>
     </ClInclude>

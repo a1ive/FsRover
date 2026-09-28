@@ -90,6 +90,7 @@ int rover_last_errno (void);
 #define ROVER_DEV_PROCFS	5	/* (proc) pseudo-device */
 #define ROVER_DEV_WINFILE	6	/* winfile host image mount */
 #define ROVER_DEV_POSIXFILE	ROVER_DEV_WINFILE
+#define ROVER_DEV_LOST	7	/* lostdisk window of a lost partition */
 
 struct rover_disk_info
 {
@@ -110,8 +111,10 @@ struct rover_disk_info
 	/* Parentage, all valid only during the callback and all NULL unless
 	   the device is of the matching class: parent_file is a loopback's
 	   backing file (grub path); parent_device is the source device an
-	   unlocked cryptodisk decrypts; parents is a diskfilter volume's
-	   member devices, one per line ('\n'-separated).  */
+	   unlocked cryptodisk decrypts, or the device a lost partition
+	   window reads from (start_lba is then its first sector there);
+	   parents is a diskfilter volume's member devices, one per line
+	   ('\n'-separated).  */
 	const char *parent_file;
 	const char *parent_device;
 	const char *parents;
@@ -306,6 +309,108 @@ const char *rover_winfile_get_path (const char *devname);
 int rover_posixfile_add (const char *devname, const char *path, int decompress);
 int rover_posixfile_del (const char *devname);
 const char *rover_posixfile_get_path (const char *devname);
+
+/*
+ * Lost partition search.  A scan walks grub device DEVICE ("hd0",
+ * "img0") at the offsets where partitions usually begin, looking for
+ * the boot sectors and superblocks of NTFS, FAT12/16/32, exFAT,
+ * ext2/3/4, XFS, single-device Btrfs, HFS, HFS+/HFSX, APFS, ReFS, F2FS,
+ * UFS/UFS2, JFS, ReiserFS 3.x, ISO9660 and UDF, for their backup boot
+ * sectors and superblock copies next to
+ * those offsets (with ROVER_LOST_SCAN_EXT_BACKUP also the ext copy of
+ * block group 3), and for extended boot records outside the MBR chain.
+ * GPT headers GRUB does not use -- the backup, or a primary without a
+ * protective MBR -- contribute their entries.  Partitions of DEVICE
+ * whose filesystem GRUB reads are skipped; the scan steps over each
+ * filesystem it finds, and searches such a range after all when a table
+ * entry or another result starts inside it.  Every result is also checked by opening it as
+ * a lost partition window with the GRUB drivers; a result found through
+ * a backup is opened with its remap in place, so the backup stands in
+ * for a damaged primary boot sector or superblock.
+ *
+ * Offsets and sizes are bytes relative to DEVICE.  All pointers in a
+ * result are valid only during the callback.
+ */
+#define ROVER_LOST_SCAN_EXT_BACKUP	0x1
+/* Examine every sector and never step over a filesystem: slower, finds
+   what lies at unusual offsets or inside other volumes.  Results come at
+   the end of the scan.  EXT_BACKUP is then unnecessary.  */
+#define ROVER_LOST_SCAN_DEEP	0x2
+
+#define ROVER_LOST_BACKUP	0x01	/* located by a backup boot sector or superblock */
+#define ROVER_LOST_VERIFIED	0x02	/* a GRUB driver reads it; fs/label/fs_uuid are set */
+#define ROVER_LOST_EXISTING	0x04	/* starts at a partition entry whose filesystem GRUB does not read */
+#define ROVER_LOST_OVERLAP	0x08	/* overlaps a readable partition or an earlier result */
+#define ROVER_LOST_TRUNCATED	0x10	/* extends past the end of DEVICE */
+#define ROVER_LOST_TABLE	0x20	/* a GPT or extended boot record entry GRUB does not use describes it */
+
+/* LENGTH bytes at TARGET of a lost partition window read from SOURCE
+   instead, both offsets relative to the window: a backup boot sector,
+   superblock or group descriptor table in place of the primary.  */
+struct rover_lost_remap
+{
+	unsigned long long target;
+	unsigned long long source;
+	unsigned long long length;
+};
+
+#define ROVER_LOST_REMAP_MAX	2
+
+struct rover_lost_part
+{
+	unsigned long long offset;
+	unsigned long long size;	/* as recorded by the filesystem or table entry */
+	/* "ntfs", "fat12", "fat16", "fat32", "exfat", "ext2", "ext3", "ext4",
+	   "xfs", "btrfs", "hfs", "hfsplus", "hfsx", "apfs", "refs", "f2fs",
+	   "ufs", "ufs2", "jfs", "reiserfs", "iso9660", "udf",
+	   or "partition" for a table entry with none of these at its start */
+	const char *type;
+	const char *fs;	/* GRUB driver name, NULL unless VERIFIED */
+	const char *label;	/* NULL if none */
+	const char *fs_uuid;	/* NULL if none */
+	unsigned int flags;	/* ROVER_LOST_* */
+	/* Bytes a window can cover: SIZE, or up to the end of DEVICE when
+	   TRUNCATED (a multiple of its logical sector size).  */
+	unsigned long long window;
+	/* How to open a result found through a backup (see rover_lost_add_ex);
+	   empty otherwise.  */
+	struct rover_lost_remap remap[ROVER_LOST_REMAP_MAX];
+	unsigned int remap_count;
+};
+
+/* Return nonzero to end the current rover_lost_scan_step() once the
+   results found at the same offset are reported; the next step resumes
+   after them.  */
+typedef int (*rover_lost_hook) (const struct rover_lost_part *part, void *data);
+
+typedef struct rover_lost_scan rover_lost_scan;
+
+/* NULL on failure.  The device stays open until rover_lost_scan_end().  */
+rover_lost_scan *rover_lost_scan_begin (const char *device, unsigned int flags);
+/* Scan the next BUDGET bytes of the device (0: all of it).  Returns 1 if
+   more remains, 0 when the scan is complete, -1 on error (the scan is
+   then over; rover_last_error() has the message).  */
+int rover_lost_scan_step (rover_lost_scan *scan, unsigned long long budget,
+	rover_lost_hook cb, void *data);
+/* Bytes of the device covered so far, and the device size.  */
+void rover_lost_scan_progress (const rover_lost_scan *scan,
+	unsigned long long *done, unsigned long long *total);
+void rover_lost_scan_end (rover_lost_scan *scan);
+
+/* Expose OFFSET/SIZE bytes of grub device PARENT as read-only device
+   DEVNAME ("lost0").  Both must be multiples of PARENT's logical sector
+   size and lie inside it.  PARENT stays open, so it cannot be deleted
+   while DEVNAME exists; deleting DEVNAME fails while it is open.  */
+int rover_lost_add (const char *devname, const char *parent,
+	unsigned long long offset, unsigned long long size);
+/* The same, with REMAP_COUNT remaps applied in order on every read.
+   Each lies inside the window with a nonzero length.  */
+int rover_lost_add_ex (const char *devname, const char *parent,
+	unsigned long long offset, unsigned long long size,
+	const struct rover_lost_remap *remap, unsigned int remap_count);
+int rover_lost_del (const char *devname);
+/* Parent device name of DEVNAME, or NULL.  Owned by the device.  */
+const char *rover_lost_get_parent (const char *devname);
 
 /*
  * Unlock the LUKS/LUKS2 volume on grub device DEVICE ("hd0,gpt2") using

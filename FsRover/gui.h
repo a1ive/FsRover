@@ -142,6 +142,11 @@ void clipboard_set_text (HWND owner, const std::wstring &text);
 void show_file_map (const std::string &path);
 void file_map_done (backend_result *res);
 
+/* lostdlg.cpp */
+void show_lost_scan (const backend_diskent &d);
+void lost_scan_done (backend_result *res);
+void lost_add_done (backend_result *res);
+
 /* propsdlg.cpp */
 void show_props (const std::string &path);
 void props_on_type (backend_result *res);

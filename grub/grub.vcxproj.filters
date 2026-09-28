@@ -129,6 +129,18 @@
     <ClCompile Include="rover\init.c">
       <Filter>rover</Filter>
     </ClCompile>
+    <ClCompile Include="rover\lostexam.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\lostfs.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\lostpart.c">
+      <Filter>rover</Filter>
+    </ClCompile>
+    <ClCompile Include="rover\losttable.c">
+      <Filter>rover</Filter>
+    </ClCompile>
     <ClCompile Include="rover\fscharset.c">
       <Filter>rover</Filter>
     </ClCompile>
@@ -184,6 +196,9 @@
       <Filter>grub-core\disk</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\disk\loopdisk.c">
+      <Filter>grub-core\disk</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\disk\lostdisk.c">
       <Filter>grub-core\disk</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\disk\lp.c">
@@ -775,6 +790,12 @@
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="rover\fscharset.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\lost.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\lostint.h">
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="rover\proc.h">
