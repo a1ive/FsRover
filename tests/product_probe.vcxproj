@@ -43,6 +43,11 @@
       <ForcedIncludeFiles>$(ProjectDir)..\grub\rover\config.h</ForcedIncludeFiles>
       <AdditionalIncludeDirectories>$(ProjectDir)..\grub\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="strtol_probe.c">
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <ForcedIncludeFiles>$(ProjectDir)..\grub\rover\config.h</ForcedIncludeFiles>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\grub\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="printf_probe.c">
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <ForcedIncludeFiles>$(ProjectDir)..\grub\rover\config.h</ForcedIncludeFiles>

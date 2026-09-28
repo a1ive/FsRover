@@ -364,6 +364,9 @@ grub_strtol (const char * restrict str, const char ** const restrict end, int ba
           grub_error (GRUB_ERR_OUT_OF_RANGE, N_("overflow is detected"));
           return GRUB_LONG_MIN;
         }
+	/* The magnitude of LONG_MIN cannot be represented as a positive long. */
+	if (magnitude == (unsigned long long) GRUB_LONG_MAX + 1ULL)
+		return GRUB_LONG_MIN;
       return -((long) magnitude);
     }
   else

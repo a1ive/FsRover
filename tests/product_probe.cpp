@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+extern "C" int product_strtol_probe (void);
 extern "C" int product_printf_probe (const char *mode);
 extern "C" int product_filemap_probe (int argc, const char **argv);
 extern "C" int product_image_read_probe (int argc, const char **argv);
@@ -122,6 +123,8 @@ int wmain (int argc, wchar_t **argv)
 int main (int argc, char **argv)
 #endif
 {
+	if (argc >= 2 && std::filesystem::path (argv[1]) == "--strtol")
+		return product_strtol_probe ();
 	if (argc >= 2 && std::filesystem::path (argv[1]) == "--printf")
 	{
 		std::string mode = argc > 2 ? std::filesystem::path (argv[2]).string () : "formats";

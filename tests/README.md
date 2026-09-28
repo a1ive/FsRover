@@ -93,6 +93,13 @@ positions, and rejection of pointer/integer format substitutions. These runtime
 checks establish output compatibility; correct `va_arg` types must also be
 verified in source, since equal ABI argument slots can hide type mismatches.
 
+The `product_probe --strtol` check also runs in the default suite. It compares
+`grub_strtol` with libc for signed `long` limits, adjacent and out-of-range
+magnitudes in bases 8/10/16, automatic prefixes, leading whitespace, end
+pointers and a NULL end pointer. The C probe includes the real inline function;
+compiling it with UBSan can detect signed negation overflow at `LONG_MIN` even
+when an ordinary run happens to return the expected value.
+
 ## Coverage and results
 
 | Area | Checks |
