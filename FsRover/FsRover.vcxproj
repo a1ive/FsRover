@@ -190,6 +190,11 @@
     <ClCompile Include="mountdlg.cpp" />
     <ClCompile Include="tray.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="mainjob.cpp" />
+    <ClCompile Include="mainlist.cpp" />
+    <ClCompile Include="mainmenu.cpp" />
+    <ClCompile Include="mainnav.cpp" />
+    <ClCompile Include="maintree.cpp" />
     <ClCompile Include="md4c\entity.c" />
     <ClCompile Include="md4c\md4c.c" />
     <ClCompile Include="mdrtf.cpp" />
@@ -220,6 +225,7 @@
     <ClInclude Include="filedlg.h" />
     <ClInclude Include="mountdlg.h" />
     <ClInclude Include="tray.h" />
+    <ClInclude Include="mainwnd.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="libcdi\libcdi.h" />
     <ClInclude Include="md4c\entity.h" />

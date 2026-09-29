@@ -19,29 +19,24 @@
 /*
  * This thread never calls grub; work is queued to
  * the backend thread (backend.h) and results arrive as WM_APP messages.
+ * This file owns the main window itself: its controls and layout, the
+ * window procedure and the dispatch of backend results.  The list,
+ * tree, navigation, job and menu code are split out by function and
+ * share mainwnd.h.
  */
 
 #include <windows.h>
 #include <commctrl.h>
-#include <commoncontrols.h>
-#include <shlobj.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <uxtheme.h>
 #include <wchar.h>
-#include <wctype.h>
 
-#include <map>
 #include <memory>
-#include <set>
 #include <string>
-#include <vector>
 
-#include "backend.h"
-#include "../common/fs_encoding.h"
 #include "dokanfs.h"
-#include "gui.h"
-#include "filedlg.h"
-#include "mountdlg.h"
+#include "mainwnd.h"
 #include "tray.h"
 #include "resource.h"
 #include "strconv.h"
@@ -59,71 +54,24 @@ name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' \
 language='*'\"")
 
-/* The message the drag payload itself travels in; the SDK headers
-   name every other one but not this.  See enable_file_drop().  */
-#ifndef WM_COPYGLOBALDATA
-#define WM_COPYGLOBALDATA 0x0049
-#endif
-
 /* Shared with the dialog and viewer files through gui.h.  */
 HWND g_main;
-bool g_extracting;
+
+namespace mainwnd
+{
+
+HWND g_address;
+HWND g_btn_extract;
+HWND g_btn_up;
+HWND g_btn_back;
+HWND g_btn_fwd;
+HWND g_tree;
+HWND g_list;
+HWND g_status;
+HWND g_progress;
 
 namespace
 {
-
-constexpr int IDC_EXTRACT = 101;
-constexpr int IDC_UP = 102;
-constexpr int IDC_BACK = 103;
-constexpr int IDC_FWD = 104;
-
-/* Menu bar commands.  IDM_DOKAN_UNMOUNT_BASE + i unmounts
-   dokanfs_get(i); the Dokan popup is rebuilt on every open, and a
-   menu is modal, so the index is still valid when the command
-   arrives.  */
-constexpr int IDM_FILE_REFRESH = 200;
-constexpr int IDM_FILE_EXIT = 201;
-constexpr int IDM_FILE_TIMESTAMPS = 202;
-constexpr int IDM_FILE_OPEN_IMAGE = 203;
-constexpr int IDM_FILE_OPEN_IMAGE_DECOMP = 204;
-#if FSROVER_ENABLE_ADMIN_FEATURES
-constexpr int IDM_FILE_RUNAS = 205;
-#endif
-constexpr int IDM_SEL_ALL = 210;
-constexpr int IDM_SEL_INVERT = 211;
-constexpr int IDM_HELP_SUPPORT = 220;
-constexpr int IDM_HELP_ABOUT = 221;
-#if FSROVER_EMBED_DOKAN
-constexpr int IDM_DOKAN_INSTALL = 222;
-#endif
-constexpr int IDM_HELP_SHORTCUTS = 223;
-constexpr int IDM_HELP_DOC = 224;
-constexpr int IDM_BACKEND_WINFSP = 225;
-constexpr int IDM_BACKEND_DOKAN = 226;
-constexpr int IDM_FS_ENCODING_BASE = 230;
-constexpr int IDM_DOKAN_UNMOUNT_BASE = 2000;
-
-constexpr int IDM_EXTRACT = 1;
-constexpr int IDM_MOUNT = 2;
-constexpr int IDM_UNMOUNT = 3;
-constexpr int IDM_DOKAN_MOUNT = 4;
-constexpr int IDM_DOKAN_UNMOUNT = 5;
-constexpr int IDM_PROPS = 6;
-constexpr int IDM_FILE_MAP = 30;
-constexpr int IDM_HEX = 7;
-constexpr int IDM_COPY_NAME = 8;
-constexpr int IDM_COPY_PATH = 9;
-constexpr int IDM_MOUNT_DECOMP = 10;
-constexpr int IDM_TEXT = 11;
-constexpr int IDM_IMAGE = 12;
-constexpr int IDM_EXPORT = 13;
-constexpr int IDM_MARKDOWN = 14;
-constexpr int IDM_VERACRYPT = 15;
-constexpr int IDM_PLAINMOUNT = 16;
-#if FSROVER_ENABLE_ADMIN_FEATURES
-constexpr int IDM_SMART = 17;
-#endif
-constexpr int IDM_LOST_SCAN = 18;
 
 /* This window's DPI, and the layout metrics it scales.  Read from the
    creation monitor in WM_CREATE and refreshed on WM_DPICHANGED; every
@@ -149,56 +97,8 @@ constexpr int PROGRESS_W = 260;
 constexpr int DEF_W = 1000;	/* default window size */
 constexpr int DEF_H = 700;
 
-/* imageres.dll */
-constexpr int IR_ICON_FLOPPY = 28;
-constexpr int IR_ICON_CD = 30;
-constexpr int IR_ICON_DISK = 32;
-constexpr int IR_ICON_CHIP = 34;
-constexpr int IR_ICON_WINFILE = 67;
-constexpr int IR_ICON_BACK = 148;
-constexpr int IR_ICON_ZIP = 174;
-constexpr int IR_ICON_LOCK = 1031;
-constexpr int IR_ICON_UNLOCK = 1030;
-
-/* SHELL32.dll */
-constexpr int SH_ICON_CANCEL = 240;
-constexpr int SH_ICON_EXTRACT = 241;
-
-/* Tree image list order, and the imageres.dll icon each index holds.  */
-constexpr int IMG_DISK = 0;
-constexpr int IMG_FLOPPY = 1;
-constexpr int IMG_CD = 2;
-constexpr int IMG_LOOP = 3;
-constexpr int IMG_LVM = 4;
-constexpr int IMG_FW = 5;
-constexpr int IMG_LOCK = 6;
-constexpr int IMG_UNLOCK = 7;
-constexpr int IMG_WINFILE = 8;
-constexpr int TREE_ICON_IDS[] =
-	{ IR_ICON_DISK, IR_ICON_FLOPPY, IR_ICON_CD, IR_ICON_ZIP,
-	  IR_ICON_BACK, IR_ICON_CHIP, IR_ICON_LOCK, IR_ICON_UNLOCK,
-	  IR_ICON_WINFILE };
-
-/* The file list uses per-extension shell icons copied into a DPI-sized
-   image list; indexes come from list_icon() below, not a fixed order.  */
-
-HWND g_address;
-HWND g_btn_extract;
-HWND g_btn_up;
-HWND g_btn_back;
-HWND g_btn_fwd;
-HWND g_tree;
-HWND g_list;
-HWND g_status;
-HWND g_progress;
-HMENU g_menu_file;	/* File popup: Refresh grays while extracting */
-HMENU g_menu_settings;	/* Settings popup: toggles refreshed on open */
-HMENU g_menu_encoding;	/* File name encoding radio submenu */
-HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
-
-/* Settings toggle, copied into each extract task when it starts.  */
-bool g_preserve_times = true;
-UINT g_fs_encoding = BACKEND_FS_ENCODING_UTF8;
+HFONT g_font;	/* message font, shared by all controls */
+tray_icon g_tray;	/* notification icon and its shell-restart handling */
 
 /* Splitter state.  The width is kept in 96-DPI units like every other
    layout metric, so a move to another monitor rescales it for free.  */
@@ -206,51 +106,7 @@ int g_tree_w = TREE_W;
 bool g_split_drag;
 int g_split_grab;	/* cursor offset inside the bar when the drag began */
 
-/* Back/Forward, Explorer style: the visited paths in order with a
-   cursor on the current one.  Only a listing that succeeded is
-   recorded (fill_list), so the history never points at a path that
-   could not be read.  */
-constexpr size_t HIST_MAX = 10;
-std::vector<std::string> g_hist;	/* oldest first */
-int g_hist_pos = -1;	/* index of the current path, -1 = empty */
-UINT g_hist_seq;	/* list_dir seq posted by Back/Forward, 0 = none */
-
-/* Current view; owned by the GUI thread, replaced from task results.  */
-struct list_row
-{
-	std::wstring name;
-	std::wstring size;
-	std::wstring mtime;
-	int image = -1;	/* DPI-sized list image index, -1 if none */
-};
-
-std::vector<backend_diskent> g_disks;
-std::vector<backend_dirent> g_entries;
-std::vector<list_row> g_rows;	/* display strings for the virtual list */
-std::map<std::wstring, int> g_icon_cache;	/* list_icon() memo, by key */
-std::string g_path;	/* listed path, UTF-8, empty = nothing shown */
-UINT g_seq_disks;	/* pending seq per task type; older results */
-UINT g_seq_list;	/* are stale and dropped */
-UINT g_view_seq;	/* list_dir seq currently represented by g_entries */
-UINT g_seq_sizes;	/* one bounded lazy-size batch at a time */
-UINT g_seq_extract;	/* also the raw image export: one long job at a time */
-bool g_export_job;	/* the running job is an export, not an extraction */
-
-constexpr size_t LIST_SIZE_BATCH = 64;
-constexpr int LIST_SIZE_WINDOW = 192;
-std::vector<bool> g_size_pending;	/* parallel to g_entries */
-std::vector<size_t> g_size_rows;	/* rows owned by g_seq_sizes */
-int g_size_want_first;
-int g_size_want_last = -1;
-
-std::set<std::string> g_mounted;	/* loopback devices we created */
-HFONT g_font;	/* message font, shared by all controls */
-HIMAGELIST g_himl_extract;	/* Extract button icon */
-HIMAGELIST g_himl_cancel;	/* same button while extracting */
-HIMAGELIST g_tree_iml;	/* tree device-icon image list */
-HIMAGELIST g_list_iml;	/* DPI-sized file/folder icons */
-IImageList *g_shell_iml;	/* source shell icons at the nearest larger size */
-tray_icon g_tray;	/* notification icon and its shell-restart handling */
+} // namespace
 
 void
 set_status (const wchar_t *text)
@@ -264,7 +120,8 @@ set_status (UINT id)
 	set_status (res_str (id).c_str ());
 }
 
-int list_icon (const std::string &name, bool is_dir);
+namespace
+{
 
 /* (Re)create every DPI-dependent GDI object at g_main_dpi and hand it to the
    controls that use it, freeing the previous generation.  Called once when
@@ -282,992 +139,9 @@ apply_dpi_resources (void)
 		DeleteObject (g_font);
 	g_font = font;
 
-	/* File/folder icons.  SHGFI_SMALLICON is fixed at 16 physical pixels
-	   in a per-monitor-aware process, so copy the same shell indexes from
-	   the nearest larger system list into an image list sized for this
-	   monitor.  Rebuilding also updates the ListView row height.  */
-	int shell_size = sm > 48 ? SHIL_JUMBO : sm > 32 ? SHIL_EXTRALARGE : sm > 16 ? SHIL_LARGE : SHIL_SMALL;
-	IImageList *shell_iml = nullptr;
-	SHGetImageList (shell_size, IID_IImageList, reinterpret_cast<void **> (&shell_iml));
-	HIMAGELIST list_iml = ImageList_Create (sm, sm, ILC_COLOR32 | ILC_MASK, 16, 8);
-	if (list_iml)
-	{
-		ImageList_SetBkColor (list_iml, CLR_NONE);
-		ListView_SetImageList (g_list, list_iml, LVSIL_SMALL);
-		if (g_list_iml)
-			ImageList_Destroy (g_list_iml);
-		if (g_shell_iml)
-			g_shell_iml->Release ();
-		g_list_iml = list_iml;
-		g_shell_iml = shell_iml;
-		g_icon_cache.clear ();
-		for (size_t i = 0; i < g_entries.size () && i < g_rows.size (); i++)
-			g_rows[i].image = list_icon (g_entries[i].name, g_entries[i].is_dir);
-		InvalidateRect (g_list, nullptr, TRUE);
-	}
-	else if (shell_iml)
-		shell_iml->Release ();
-
-	/* Tree device icons.  */
-	HIMAGELIST tree_iml = icon_list (L"\\imageres.dll", TREE_ICON_IDS,
-					 ARRAYSIZE (TREE_ICON_IDS), sm);
-	TreeView_SetImageList (g_tree, tree_iml, TVSIL_NORMAL);
-	if (g_tree_iml)
-		ImageList_Destroy (g_tree_iml);
-	g_tree_iml = tree_iml;
-
-	/* Toolbar button icons; a button keeps its current icon if the shell
-	   has no replacement at this size rather than being blanked.  The
-	   Back/Forward/Up buttons carry a glyph from the string table instead.  */
-	HIMAGELIST extract = button_icons (L"\\SHELL32.dll", SH_ICON_EXTRACT, sm);
-	HIMAGELIST cancel = button_icons (L"\\SHELL32.dll", SH_ICON_CANCEL, sm);
-	if (extract && cancel)
-	{
-		set_button_icon (g_btn_extract, g_extracting ? cancel : extract);
-		if (g_himl_extract)
-			ImageList_Destroy (g_himl_extract);
-		if (g_himl_cancel)
-			ImageList_Destroy (g_himl_cancel);
-		g_himl_extract = extract;
-		g_himl_cancel = cancel;
-	}
-	else
-	{
-		if (extract)
-			ImageList_Destroy (extract);
-		if (cancel)
-			ImageList_Destroy (cancel);
-	}
-}
-
-int
-device_icon (const backend_diskent &d)
-{
-	if (d.encrypted)
-		return IMG_LOCK;
-	switch (d.dev_id)
-	{
-	case BACKEND_DEV_LOOPBACK:
-	case BACKEND_DEV_LOST:
-		return IMG_LOOP;
-	case BACKEND_DEV_DISKFILTER:
-		return IMG_LVM;
-	case BACKEND_DEV_PROCFS:
-		return IMG_FW;
-	case BACKEND_DEV_CRYPTODISK:
-		return IMG_UNLOCK;
-	case BACKEND_DEV_WINFILE:
-		return IMG_WINFILE;
-	}
-	if (d.name.rfind ("cd", 0) == 0)
-		return IMG_CD;
-	if (d.name.rfind ("fd", 0) == 0)
-		return IMG_FLOPPY;
-	return IMG_DISK;
-}
-
-/* DPI-sized image-list index for a directory entry, chosen by the shell
-   from the file extension (folders get the generic folder icon).
-   SHGFI_USEFILEATTRIBUTES keeps the shell off the disk -- these paths
-   live inside a grub image, not the local filesystem.  Results are
-   memoised by extension so a directory full of like-typed files costs
-   one shell call.  (No link overlay: SHGFI_LINKOVERLAY only works with
-   SHGFI_ICON, not the SHGFI_SYSICONINDEX index we return here, and the
-   "SYMLINK" size-column label marks symlinks anyway.)  */
-int
-list_icon (const std::string &name, bool is_dir)
-{
-	std::wstring key = is_dir ? L"\x01" L"dir" : L"\x01" L"file";
-	std::wstring lookup_name = is_dir ? L"folder" : L"file";
-
-	if (!is_dir)
-	{
-		size_t dot = name.rfind ('.');
-		if (dot != std::string::npos)
-		{
-			key = widen (name.substr (dot));
-			for (wchar_t &c : key)
-				c = (wchar_t) towlower (c);
-			lookup_name += key;
-		}
-	}
-
-	auto it = g_icon_cache.find (key);
-	if (it != g_icon_cache.end ())
-		return it->second;
-
-	SHFILEINFOW sfi = {};
-	DWORD attr = is_dir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
-	/* Never pass the image entry name to the shell: names such as "M:"
-	   retain drive-path semantics even with SHGFI_USEFILEATTRIBUTES and can
-	   poison the shared directory icon cache with a disk icon.  The cache key
-	   contains all the type information needed for a synthetic lookup name.  */
-	int idx = -1;
-	int icon_w = 16;
-	int icon_h = 16;
-	ImageList_GetIconSize (g_list_iml, &icon_w, &icon_h);
-	if (SHGetFileInfoW (lookup_name.c_str (), attr, &sfi, sizeof (sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES))
-	{
-		HICON icon = nullptr;
-		if (g_shell_iml)
-			g_shell_iml->GetIcon (sfi.iIcon, ILD_TRANSPARENT, &icon);
-		if (!icon && SHGetFileInfoW (lookup_name.c_str (), attr, &sfi, sizeof (sfi),
-				SHGFI_ICON | (icon_w <= 16 ? SHGFI_SMALLICON : SHGFI_LARGEICON) | SHGFI_USEFILEATTRIBUTES))
-			icon = sfi.hIcon;
-		if (icon)
-		{
-			HICON sized = (HICON) CopyImage (icon, IMAGE_ICON, icon_w, icon_h, 0);
-			if (sized)
-			{
-				DestroyIcon (icon);
-				icon = sized;
-			}
-			idx = ImageList_AddIcon (g_list_iml, icon);
-			DestroyIcon (icon);
-		}
-	}
-	g_icon_cache[key] = idx;
-	return idx;
-}
-
-} // namespace
-
-/* Same icon the tree shows for a device, as an imageres.dll id, for the
-   dialogs that want one icon instead of the tree image list.  */
-int
-device_icon_id (const backend_diskent &d)
-{
-	return TREE_ICON_IDS[device_icon (d)];
-}
-
-/* Navigation: every view change goes through a list_dir task; the
-   address bar and g_path are updated from the result, so the UI
-   always reflects what was actually listed.  */
-
-void
-navigate (const std::string &path)
-{
-	g_seq_list = backend_post (list_dir_task { path });
-	/* A result from the old view must not populate the new one, even
-	   when both paths happen to contain the same names.  */
-	g_seq_sizes = 0;
-	g_size_pending.clear ();
-	g_size_rows.clear ();
-	g_size_want_last = -1;
-	set_status (IDS_STATUS_LISTING);
-}
-
-void
-refresh (void)
-{
-	g_seq_disks = backend_post (enum_disks_task {});
-	set_status (IDS_STATUS_ENUM);
-	if (!g_path.empty ())
-		navigate (g_path);
-}
-
-void
-set_fs_encoding (UINT encoding)
-{
-	std::string root;
-
-	if (g_extracting || encoding == g_fs_encoding)
-		return;
-	backend_set_fs_char_encoding (encoding);
-	dokanfs_invalidate_all ();
-	g_fs_encoding = encoding;
-
-	/* Paths below the device root may themselves have been decoded with the
-	   old setting.  Restart at the stable device root and discard history
-	   entries that can no longer be resolved. */
-	if (!g_path.empty ())
-	{
-		size_t close = g_path.find (')');
-		if (close != std::string::npos)
-			root = g_path.substr (0, close + 1);
-	}
-	g_hist.clear ();
-	g_hist_pos = -1;
-	g_hist_seq = 0;
-	g_path = std::move (root);
-	g_view_seq = 0;
-	g_entries.clear ();
-	g_rows.clear ();
-	ListView_SetItemCountEx (g_list, 0, 0);
-	SetWindowTextW (g_address, widen (g_path).c_str ());
-	refresh ();
-}
-
-namespace
-{
-
-/* Back, Forward and Up all post a list_dir, which would queue behind a
-   running extraction and overwrite its progress line, so they follow
-   the same rule as the File menu's Refresh.  */
-void
-update_nav_buttons (void)
-{
-	EnableWindow (g_btn_back, !g_extracting && g_hist_pos > 0);
-	EnableWindow (g_btn_fwd, !g_extracting && g_hist_pos >= 0 && (size_t) (g_hist_pos + 1) < g_hist.size ());
-	EnableWindow (g_btn_up, !g_extracting);
-}
-
-/* Called for every listing that came back without an error.  A Back or
-   Forward only moves the cursor (it already did); anything else drops
-   whatever was ahead of the cursor and appends.  */
-void
-hist_record (UINT seq)
-{
-	if (seq == g_hist_seq)
-	{
-		g_hist_seq = 0;
-		return;
-	}
-	/* Refresh, or navigating to where we already are.  */
-	if (g_hist_pos >= 0 && g_hist[(size_t) g_hist_pos] == g_path)
-		return;
-	g_hist.erase (g_hist.begin () + (g_hist_pos + 1), g_hist.end ());
-	g_hist.push_back (g_path);
-	if (g_hist.size () > HIST_MAX)
-		g_hist.erase (g_hist.begin ());
-	g_hist_pos = (int) g_hist.size () - 1;
-}
-
-/* Both moves walk the cursor first and remember the seq they posted:
-   should the user navigate somewhere else before the listing lands,
-   that result carries a different seq and is recorded normally.  */
-void
-go_back (void)
-{
-	if (g_hist_pos <= 0)
-		return;
-	g_hist_pos--;
-	navigate (g_hist[(size_t) g_hist_pos]);
-	g_hist_seq = g_seq_list;
-}
-
-void
-go_forward (void)
-{
-	if (g_hist_pos < 0 || (size_t) (g_hist_pos + 1) >= g_hist.size ())
-		return;
-	g_hist_pos++;
-	navigate (g_hist[(size_t) g_hist_pos]);
-	g_hist_seq = g_seq_list;
-}
-
-void
-go_up (void)
-{
-	size_t close = g_path.find (')');
-
-	if (close == std::string::npos)
-		return;
-	size_t root_len = close + 2;	/* "(dev)" + "/" */
-	if (g_path.size () <= root_len)
-		return;
-	size_t cut = g_path.find_last_of ('/');
-	if (cut < root_len)
-		navigate (g_path.substr (0, root_len));
-	else
-		navigate (g_path.substr (0, cut));
-}
-
-LRESULT CALLBACK
-address_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
-{
-	switch (msg)
-	{
-	case WM_KEYDOWN:
-		if (wp == VK_RETURN)
-		{
-			navigate (narrow (window_text (wnd)));
-			return 0;
-		}
-		break;
-	case WM_CHAR:
-		if (wp == L'\r')
-			return 0;
-		break;
-	case WM_NCDESTROY:
-		RemoveWindowSubclass (wnd, address_proc, 0);
-		break;
-	}
-	return DefSubclassProc (wnd, msg, wp, lp);
-}
-
-} // namespace
-
-/* Mount a file from the Windows filesystem as a virtual disk
-   (winfile.c); the result arrives like a loopback mount.  Also the
-   --file startup path, which is why it lives outside the picker.  */
-void
-mount_host_image (std::wstring file, bool decompress)
-{
-	backend_post (winfile_add_task { std::move (file), decompress });
-	set_status (IDS_STATUS_MOUNTING);
-}
-
-namespace
-{
-
-void
-open_host_image (bool decompress)
-{
-	std::wstring file = pick_open_image (g_main);
-
-	if (file.empty ())
-		return;
-	mount_host_image (std::move (file), decompress);
-}
-
-/* Take dropped files.  The main window is the only drop target, which
-   is enough for the panes as well: a drop lands on the first ancestor
-   that is registered.  An elevated window also has to let the drag
-   through UIPI -- these three messages carry it, and without them a
-   drag from the unelevated Explorer is refused with no sign of why.
-   The hole is opened only where the integrity boundary exists.  */
-void
-enable_file_drop (HWND wnd)
-{
-	DragAcceptFiles (wnd, TRUE);
-	if (!is_elevated ())
-		return;
-	ChangeWindowMessageFilterEx (wnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr);
-	ChangeWindowMessageFilterEx (wnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr);
-	ChangeWindowMessageFilterEx (wnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr);
-}
-
-/* Every dropped file is mounted as a virtual disk of its own, exactly
-   as --file does: a drop carries no way to ask for anything else, and
-   the decompressing variant stays a menu item away.  */
-void
-on_drop_files (HDROP drop)
-{
-	UINT count = DragQueryFileW (drop, 0xFFFFFFFF, nullptr, 0);
-
-	/* The mount menu items gray out while an extraction runs, for the
-	   same reason: the mount would queue behind the job and overwrite
-	   the progress line it is holding.  */
-	if (g_extracting)
-		count = 0;
-	for (UINT i = 0; i < count; i++)
-	{
-		std::wstring path (DragQueryFileW (drop, i, nullptr, 0), L'\0');
-		DWORD attr;
-
-		if (path.empty ())
-			continue;
-		DragQueryFileW (drop, i, path.data (), (UINT) path.size () + 1);
-		/* A directory cannot back a disk, and the Win32 error for
-		   opening one as a file (access denied) would only mislead.  */
-		attr = GetFileAttributesW (path.c_str ());
-		if (attr == INVALID_FILE_ATTRIBUTES || (attr & FILE_ATTRIBUTE_DIRECTORY))
-			continue;
-		mount_host_image (std::move (path), false);
-	}
-	DragFinish (drop);
-}
-
-std::vector<std::string>
-selected_paths (void)
-{
-	std::vector<std::string> out;
-	int i = -1;
-
-	while ((i = ListView_GetNextItem (g_list, i, LVNI_SELECTED)) != -1)
-		if ((size_t) i < g_entries.size ())
-			out.push_back (join_path (g_path, g_entries[(size_t) i].name));
-	return out;
-}
-
-/* Claim the long-job slot for the task just posted: the Extract button
-   turns into Cancel and the status bar grows a progress bar.  */
-void
-begin_job (UINT seq, bool is_export, UINT status_id)
-{
-	g_seq_extract = seq;
-	g_extracting = true;
-	g_export_job = is_export;
-	SetWindowTextW (g_btn_extract, res_str (IDS_BTN_CANCEL).c_str ());
-	set_button_icon (g_btn_extract, g_himl_cancel);
-	/* Refresh (File menu, grayed in on_menu_popup) and the navigation
-	   buttons would only queue list tasks behind the running job
-	   and overwrite the progress line; the context menus gray their
-	   backend items for the same reason.  */
-	update_nav_buttons ();
-	SendMessageW (g_progress, PBM_SETPOS, 0, 0);
-	ShowWindow (g_progress, SW_SHOW);
-	set_status (status_id);
-}
-
-void
-start_extract (std::vector<std::string> &&paths)
-{
-	if (g_extracting || paths.empty ())
-		return;
-	std::wstring dest = pick_folder (g_main);
-	if (dest.empty ())
-		return;
-
-	extract_task task { std::move (paths), std::move (dest), g_preserve_times };
-	begin_job (backend_post (std::move (task)), false, IDS_STATUS_EXTRACTING);
-}
-
-/* "lvm/vg-root" -> "lvm_vg-root.img": a device name goes straight into
-   a file name, so the path separators and the other characters Win32
-   reserves cannot survive.  */
-std::wstring
-image_default_name (const std::string &device)
-{
-	std::wstring out = widen (device);
-
-	for (wchar_t &c : out)
-		if (c < 32 || wcschr (L"<>:\"/\\|?*", c))
-			c = L'_';
-	return out + L".img";
-}
-
-/* Raw image export.  It shares the extract job slot (progress bar and
-   Cancel button); only one long backend job runs at a time.  */
-void
-start_export (const backend_diskent &d)
-{
-	if (g_extracting)
-		return;
-	std::wstring dest = pick_image_file (g_main, image_default_name (d.name));
-	if (dest.empty ())
-		return;
-
-	export_image_task task { d.name, std::move (dest) };
-	/* The device size the tree already knows: on a partition it is
-	   what bounds the copy, the blocklist alone would not.  */
-	task.limit = d.size;
-	begin_job (backend_post (std::move (task)), true, IDS_STATUS_EXPORTING);
-}
-
-void
-on_extract_button (void)
-{
-	if (g_extracting)
-	{
-		backend_cancel ();
-		set_status (IDS_STATUS_CANCELLING);
-		return;
-	}
-	std::vector<std::string> paths = selected_paths ();
-	if (paths.empty () && !g_path.empty ())
-		paths.push_back (g_path);
-	if (paths.empty ())
-	{
-		set_status (IDS_STATUS_NOTHING);
-		return;
-	}
-	start_extract (std::move (paths));
-}
-
-/* Index of the selected entry if the selection is exactly one file
-   (not a directory), else -1.  Mounting only makes sense for files.  */
-int
-selected_single_file (void)
-{
-	int i = ListView_GetNextItem (g_list, -1, LVNI_SELECTED);
-
-	if (i < 0 || (size_t) i >= g_entries.size ())
-		return -1;
-	if (ListView_GetNextItem (g_list, i, LVNI_SELECTED) != -1)
-		return -1;
-	return g_entries[(size_t) i].is_dir ? -1 : i;
-}
-
-void
-on_list_rclick (NMITEMACTIVATE *ia)
-{
-	int hit = ia->iItem;
-
-	if (hit < 0 || (size_t) hit >= g_entries.size ())
-		return;
-	/* The menu acts on the item under the cursor: a right click
-	   outside the current selection replaces it, so a stale
-	   selection can never be mounted/extracted by accident.  */
-	if (!(ListView_GetItemState (g_list, hit, LVIS_SELECTED) & LVIS_SELECTED))
-	{
-		ListView_SetItemState (g_list, -1, 0, LVIS_SELECTED);
-		ListView_SetItemState (g_list, hit, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-	}
-
-	std::vector<std::string> paths = selected_paths ();
-	if (paths.empty ())
-		return;
-	int file_item = selected_single_file ();
-	/* While an extraction runs, everything that would touch the
-	   backend is grayed: a second extract would silently no-op, and
-	   mounts/viewers/properties would queue behind the running task
-	   with their dialogs sitting dead until it finishes.  The copy
-	   items are pure GUI and stay enabled.  */
-	UINT busy = g_extracting ? MF_GRAYED : 0u;
-	POINT pt;
-	GetCursorPos (&pt);
-	HMENU menu = CreatePopupMenu ();
-	AppendMenuW (menu, MF_STRING | busy, IDM_EXTRACT, res_str (IDS_MENU_EXTRACT).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_MOUNT, res_str (IDS_MENU_MOUNT).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_MOUNT_DECOMP, res_str (IDS_MENU_MOUNT_DECOMP).c_str ());
-	if (file_item >= 0 && is_image_name (g_entries[(size_t) file_item].name))
-		AppendMenuW (menu, MF_STRING | busy, IDM_IMAGE, res_str (IDS_MENU_IMAGE).c_str ());
-	if (file_item >= 0 && is_markdown_name (g_entries[(size_t) file_item].name))
-		AppendMenuW (menu, MF_STRING | busy, IDM_MARKDOWN, res_str (IDS_MENU_MARKDOWN).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_TEXT, res_str (IDS_MENU_TEXT).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_FILE_MAP, res_str (IDS_MAP_TITLE).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (file_item >= 0 ? 0u : MF_GRAYED), IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
-	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (menu, MF_STRING, IDM_COPY_NAME, res_str (IDS_MENU_COPY_NAME).c_str ());
-	AppendMenuW (menu, MF_STRING, IDM_COPY_PATH, res_str (IDS_MENU_COPY_PATH).c_str ());
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
-	DestroyMenu (menu);
-	if (cmd == IDM_EXTRACT)
-		start_extract (std::move (paths));
-	else if ((cmd == IDM_MOUNT || cmd == IDM_MOUNT_DECOMP) && file_item >= 0)
-	{
-		loopback_add_task task;
-		task.path = join_path (g_path, g_entries[(size_t) file_item].name);
-		task.decompress = (cmd == IDM_MOUNT_DECOMP);
-		backend_post (std::move (task));
-		set_status (IDS_STATUS_MOUNTING);
-	}
-	else if (cmd == IDM_IMAGE && file_item >= 0)
-		show_image (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_MARKDOWN && file_item >= 0)
-		show_markdown (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_TEXT && file_item >= 0)
-		show_text (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_HEX && file_item >= 0)
-		show_hex (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_FILE_MAP && file_item >= 0)
-		show_file_map (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_PROPS && file_item >= 0)
-		show_props (join_path (g_path, g_entries[(size_t) file_item].name));
-	else if (cmd == IDM_COPY_NAME || cmd == IDM_COPY_PATH)
-	{
-		/* One line per selected item: the full grub path, or just
-		   the name component after the last '/'.  */
-		std::wstring text;
-		for (const std::string &p : paths)
-		{
-			std::string s = p;
-			if (cmd == IDM_COPY_NAME)
-			{
-				size_t slash = p.find_last_of ('/');
-				if (slash != std::string::npos)
-					s = p.substr (slash + 1);
-			}
-			if (!text.empty ())
-				text += L"\r\n";
-			text += widen (s);
-		}
-		clipboard_set_text (g_main, text);
-	}
-}
-
-
-/* The main window owns the status bar; mount dialogs return its text. */
-void
-do_dokan_mount (const backend_diskent &disk)
-{
-	std::wstring text = show_mount_dialog (g_main, disk);
-	if (!text.empty ())
-		set_status (text.c_str ());
-}
-
-void
-do_dokan_unmount (dokan_mount *mount)
-{
-	set_status (unmount_drive (mount).c_str ());
-}
-
-#if FSROVER_ENABLE_ADMIN_FEATURES
-/* Restart elevated (File menu, shown only while this process is not).
-   A running process cannot gain privileges, so this instance hands
-   over as soon as the elevated one has been started.  */
-void
-run_as_admin (void)
-{
-	wchar_t exe[MAX_PATH];
-	SHELLEXECUTEINFOW info = { sizeof (info) };
-
-	if (!GetModuleFileNameW (nullptr, exe, ARRAYSIZE (exe)))
-		return;
-
-	/* NOASYNC: the shell must be done with the request before this
-	   process leaves.  */
-	info.fMask = SEE_MASK_NOASYNC;
-	info.hwnd = g_main;
-	info.lpVerb = L"runas";
-	info.lpFile = exe;
-	info.nShow = SW_SHOWNORMAL;
-	if (!ShellExecuteExW (&info))
-	{
-		/* Dismissing the UAC prompt is a decision, not a failure.  */
-		if (GetLastError () != ERROR_CANCELLED)
-			set_status (IDS_ELEVATE_FAILED);
-		return;
-	}
-	DestroyWindow (g_main);
-}
-#endif
-
-void
-on_tree_rclick (void)
-{
-	POINT pt;
-	GetCursorPos (&pt);
-	TVHITTESTINFO ht = {};
-	ht.pt = pt;
-	ScreenToClient (g_tree, &ht.pt);
-	HTREEITEM item = TreeView_HitTest (g_tree, &ht);
-	if (!item)
-		return;
-
-	TVITEMW tvi = {};
-	tvi.mask = TVIF_PARAM | TVIF_HANDLE;
-	tvi.hItem = item;
-	TreeView_GetItem (g_tree, &tvi);
-	size_t i = (size_t) tvi.lParam;
-	if (i >= g_disks.size ())
-		return;
-	const backend_diskent &d = g_disks[i];
-
-	/* Drive mounting needs a recognized filesystem on the device and
-	   either WinFsp or Dokan; otherwise the item is grey.  It stays
-	   usable during an extraction (backend_call jumps
-	   the task queue), but loopback unmount and the hex viewer
-	   would queue behind it -- and the unmount could even pull the
-	   device the extraction is reading from -- so they gray.  */
-	dokan_mount *dm = dokanfs_find_device (d.name);
-	bool can_dokan = dokanfs_available () && !d.fs.empty () && !dm;
-	bool is_loop = g_mounted.count (d.name) != 0;
-	/* Both raw reads (hex view, image export) go through the "0+"
-	   blocklist, which spans the whole device, so they need a known
-	   device size; pseudo-devices report none.  */
-	bool can_raw = d.size != BACKEND_SIZE_UNKNOWN;
-	/* A VeraCrypt volume needs at least its two header slots plus some
-	   data, and unlocking one that is itself an unlocked volume is not
-	   something the backend supports.  */
-	bool can_vc = can_raw && d.size >= 256 * 1024
-		&& d.dev_id != BACKEND_DEV_CRYPTODISK;
-	bool can_pm = can_raw && d.dev_id != BACKEND_DEV_CRYPTODISK;
-	/* The lost partition search reads raw sectors as well.  */
-	bool can_lost = can_raw && d.dev_id != BACKEND_DEV_PROCFS;
-#if FSROVER_ENABLE_ADMIN_FEATURES
-	/* S.M.A.R.T. belongs to a drive, not to a volume: only a whole
-	   windisk "hdN" has a \\.\PhysicalDriveN behind it to ask.  The
-	   optical drives ("cdN") and everything mapped or imaged are out,
-	   and the item is left off their menus entirely.  */
-	bool is_drive = d.dev_id == BACKEND_DEV_WINDISK && !d.is_partition
-		&& d.name.compare (0, 2, "hd") == 0;
-#endif
-
-	UINT busy = g_extracting ? MF_GRAYED : 0u;
-
-	HMENU menu = CreatePopupMenu ();
-	AppendMenuW (menu, MF_STRING | (can_dokan ? 0u : MF_GRAYED), IDM_DOKAN_MOUNT, res_str (IDS_MENU_DOKAN_MOUNT).c_str ());
-	if (dm)
-		AppendMenuW (menu, MF_STRING, IDM_DOKAN_UNMOUNT, res_str (IDS_MENU_DOKAN_UNMOUNT).c_str ());
-	if (is_loop)
-		AppendMenuW (menu, MF_STRING | busy, IDM_UNMOUNT, res_str (IDS_MENU_UNMOUNT).c_str ());
-	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	/* VeraCrypt volumes are not detectable, so the item is offered on any
-	   device with a known size that is not already an unlocked one.  */
-	AppendMenuW (menu, MF_STRING | busy | (can_vc ? 0u : MF_GRAYED), IDM_VERACRYPT, res_str (IDS_MENU_VERACRYPT).c_str ());
-	/* Plain dm-crypt has no header at all, so the same applies -- except
-	   that it needs no room for headers, only a device.  */
-	AppendMenuW (menu, MF_STRING | busy | (can_pm ? 0u : MF_GRAYED), IDM_PLAINMOUNT, res_str (IDS_MENU_PLAINMOUNT).c_str ());
-	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_HEX, res_str (IDS_MENU_HEX).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (can_raw ? 0u : MF_GRAYED), IDM_EXPORT, res_str (IDS_MENU_EXPORT).c_str ());
-	AppendMenuW (menu, MF_STRING | busy | (can_lost ? 0u : MF_GRAYED), IDM_LOST_SCAN, res_str (IDS_LOST_MENU).c_str ());
-#if FSROVER_ENABLE_ADMIN_FEATURES
-	/* Neither S.M.A.R.T. nor Properties goes through the backend --
-	   one is libcdi's own I/O, the other reads the cached diskent --
-	   so both stay available during an extraction.  */
-	if (is_drive)
-		AppendMenuW (menu, MF_STRING | (smart_available () ? 0u : MF_GRAYED), IDM_SMART, res_str (IDS_MENU_SMART).c_str ());
-#endif
-
-	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
-	DestroyMenu (menu);
-	/* TrackPopupMenu never returns a grayed or absent item, so the
-	   guards below only restate what the menu already enforces.  */
-	switch (cmd)
-	{
-	case IDM_DOKAN_MOUNT:
-		if (can_dokan)
-			do_dokan_mount (d);
-		break;
-	case IDM_DOKAN_UNMOUNT:
-		if (dm)
-			do_dokan_unmount (dm);
-		break;
-	case IDM_UNMOUNT:
-		if (is_loop)
-		{
-			if (d.dev_id == BACKEND_DEV_WINFILE)
-				backend_post (winfile_del_task { d.name });
-			else if (d.dev_id == BACKEND_DEV_LOST)
-				backend_post (lost_del_task { d.name });
-			else
-				backend_post (loopback_del_task { d.name });
-			set_status (IDS_STATUS_UNMOUNTING);
-		}
-		break;
-	case IDM_VERACRYPT:
-		if (can_vc)
-			prompt_unlock_veracrypt (d.name);
-		break;
-	case IDM_PLAINMOUNT:
-		if (can_pm)
-			prompt_plainmount (d.name);
-		break;
-	case IDM_HEX:
-		if (can_raw)
-			show_hex ("(" + d.name + ")0+", widen ("(" + d.name + ")"), d.size);
-		break;
-	case IDM_EXPORT:
-		if (can_raw)
-			start_export (d);
-		break;
-	case IDM_LOST_SCAN:
-		if (can_lost)
-			show_lost_scan (d);
-		break;
-#if FSROVER_ENABLE_ADMIN_FEATURES
-	case IDM_SMART:
-		if (is_drive)
-			show_smart (d);
-		break;
-#endif
-
-	case IDM_PROPS:
-		show_disk_props (d, g_disks);
-		break;
-	}
-}
-
-/* Result handling */
-
-void
-fill_tree (backend_result *res)
-{
-	std::map<std::string, HTREEITEM> items;
-
-	g_disks = std::move (res->disks);
-	TreeView_DeleteAllItems (g_tree);
-
-	for (size_t i = 0; i < g_disks.size (); i++)
-	{
-		const backend_diskent &d = g_disks[i];
-
-		std::wstring text = widen (d.name);
-		std::wstring extra;
-		if (!d.fs.empty ())
-			extra = widen (d.fs);
-		else if (d.encrypted)
-			extra = widen (d.crypto_type);
-		if (!d.label.empty ())
-		{
-			if (!extra.empty ())
-				extra += L", ";
-			extra += widen (d.label);
-		}
-		if (d.size != BACKEND_SIZE_UNKNOWN)
-		{
-			if (!extra.empty ())
-				extra += L", ";
-			extra += format_size (d.size);
-		}
-		if (!extra.empty ())
-			text += L" [" + extra + L"]";
-
-		/* Partitions hang under their disk: "hd0,gpt2" under
-		   "hd0", "hd0,msdos1,bsd1" under "hd0,msdos1".  */
-		HTREEITEM parent = TVI_ROOT;
-		size_t comma = d.name.find_last_of (',');
-		if (comma != std::string::npos)
-		{
-			auto it = items.find (d.name.substr (0, comma));
-			if (it != items.end ())
-				parent = it->second;
-		}
-
-		TVINSERTSTRUCTW ins = {};
-		ins.hParent = parent;
-		ins.hInsertAfter = TVI_LAST;
-		ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-		ins.item.pszText = const_cast<wchar_t *> (text.c_str ());
-		ins.item.lParam = (LPARAM) i;
-		ins.item.iImage = device_icon (d);
-		ins.item.iSelectedImage = ins.item.iImage;
-		items[d.name] = TreeView_InsertItem (g_tree, &ins);
-	}
-
-	for (const auto &it : items)
-		TreeView_Expand (g_tree, it.second, TVE_EXPAND);
-
-	wchar_t text[64];
-	swprintf (text, 64, res_str (IDS_FMT_DEVICES).c_str (), (int) g_disks.size ());
-	set_status (text);
-}
-
-void
-queue_list_sizes (int first, int last)
-{
-	if (g_view_seq != g_seq_list || g_entries.empty ())
-		return;
-	if (first < 0)
-		first = 0;
-	if (last >= (int) g_entries.size ())
-		last = (int) g_entries.size () - 1;
-	if (first > last)
-		return;
-
-	/* A newer cache hint replaces the desired neighborhood.  The
-	   in-flight batch is deliberately small; when it finishes we fill
-	   the newest neighborhood rather than queueing scroll history.  */
-	g_size_want_first = first;
-	g_size_want_last = last;
-	if (g_seq_sizes)
-		return;
-
-	list_sizes_task task;
-	std::vector<size_t> rows;
-	task.path = g_path;
-	task.owner_seq = g_view_seq;
-	task.paths.reserve (LIST_SIZE_BATCH);
-	rows.reserve (LIST_SIZE_BATCH);
-	for (int i = first; i <= last && rows.size () < LIST_SIZE_BATCH; i++)
-	{
-		const backend_dirent &e = g_entries[(size_t) i];
-		if (e.is_dir || e.is_symlink || e.size_set || g_size_pending[(size_t) i])
-			continue;
-		g_size_pending[(size_t) i] = true;
-		task.paths.push_back (e.name);
-		rows.push_back ((size_t) i);
-	}
-	if (rows.empty ())
-		return;
-
-	g_size_rows = std::move (rows);
-	g_seq_sizes = backend_post (std::move (task));
-}
-
-void
-hint_list_sizes (int from, int to)
-{
-	if (from < 0 || to < from || g_entries.empty ())
-		return;
-	int page = ListView_GetCountPerPage (g_list);
-	if (page < 1)
-		page = 32;
-	int span = to - from + 1;
-	int first = from - page;
-	int last = to + page;
-	if (span >= LIST_SIZE_WINDOW)
-	{
-		first = from;
-		last = from + LIST_SIZE_WINDOW - 1;
-	}
-	else if (last - first + 1 > LIST_SIZE_WINDOW)
-	{
-		int extra = LIST_SIZE_WINDOW - span;
-		first = from - extra / 2;
-		last = to + extra - extra / 2;
-	}
-	if (first < 0)
-	{
-		last -= first;
-		first = 0;
-	}
-	if (last >= (int) g_entries.size ())
-	{
-		int over = last - (int) g_entries.size () + 1;
-		last = (int) g_entries.size () - 1;
-		first = first > over ? first - over : 0;
-	}
-	queue_list_sizes (first, last);
-}
-
-void
-fill_list_sizes (backend_result *res)
-{
-	int redraw_first = (int) g_entries.size ();
-	int redraw_last = -1;
-	size_t got = res->sizes.size () < g_size_rows.size ()
-		? res->sizes.size () : g_size_rows.size ();
-
-	for (size_t row : g_size_rows)
-		if (row < g_size_pending.size ())
-			g_size_pending[row] = false;
-	for (size_t i = 0; i < got; i++)
-	{
-		size_t row = g_size_rows[i];
-		if (row >= g_entries.size () || row >= g_rows.size ())
-			continue;
-		g_entries[row].size = res->sizes[i];
-		g_entries[row].size_set = true;
-		g_rows[row].size = format_size (res->sizes[i]);
-		if ((int) row < redraw_first)
-			redraw_first = (int) row;
-		if ((int) row > redraw_last)
-			redraw_last = (int) row;
-	}
-
-	g_size_rows.clear ();
-	g_seq_sizes = 0;
-	if (redraw_last >= redraw_first)
-		ListView_RedrawItems (g_list, redraw_first, redraw_last);
-	if (g_size_want_last >= g_size_want_first)
-		queue_list_sizes (g_size_want_first, g_size_want_last);
-}
-
-void
-fill_list (backend_result *res)
-{
-	g_path = res->path;
-	g_entries = std::move (res->entries);
-	g_view_seq = res->seq;
-	g_seq_sizes = 0;
-	g_size_pending.assign (g_entries.size (), false);
-	g_size_rows.clear ();
-	g_size_want_first = 0;
-	g_size_want_last = -1;
-	hist_record (res->seq);
-	update_nav_buttons ();
-
-	g_rows.clear ();
-	g_rows.reserve (g_entries.size ());
-	for (const backend_dirent &e : g_entries)
-	{
-		list_row row;
-		row.name = widen (e.name);
-		if (e.is_symlink)
-			row.size = res_str (IDS_SIZE_SYMLINK);
-		else if (!e.is_dir && e.size_set)
-			row.size = format_size (e.size);
-		row.mtime = format_mtime (e.mtime);
-		row.image = list_icon (e.name, e.is_dir);
-		g_rows.push_back (std::move (row));
-	}
-
-	ListView_SetItemCountEx (g_list, (int) g_rows.size (), 0);
-	int top = ListView_GetTopIndex (g_list);
-	int per_page = ListView_GetCountPerPage (g_list);
-	hint_list_sizes (top, top + (per_page > 0 ? per_page : 1) - 1);
-	SetWindowTextW (g_address, widen (g_path).c_str ());
-
-	wchar_t text[64];
-	swprintf (text, 64, res_str (IDS_FMT_ITEMS).c_str (), (int) g_rows.size ());
-	set_status (text);
+	list_apply_dpi (sm);
+	tree_apply_dpi (sm);
+	job_apply_dpi (sm);
 }
 
 void
@@ -1291,14 +165,8 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::extract:
 	case backend_task_type::export_image:
-		if (res->seq != g_seq_extract)
+		if (!job_finish (res.get ()))
 			return;
-		g_extracting = false;
-		g_export_job = false;
-		SetWindowTextW (g_btn_extract, res_str (IDS_BTN_EXTRACT).c_str ());
-		set_button_icon (g_btn_extract, g_himl_extract);
-		update_nav_buttons ();
-		ShowWindow (g_progress, SW_HIDE);
 		break;
 	case backend_task_type::loopback_add:
 	case backend_task_type::loopback_del:
@@ -1345,11 +213,7 @@ on_task_done (backend_result *raw)
 		{
 			/* A failed navigation must not keep showing the
 			   previous directory's entries.  */
-			g_path.clear ();
-			g_view_seq = 0;
-			g_entries.clear ();
-			g_rows.clear ();
-			ListView_SetItemCountEx (g_list, 0, 0);
+			list_clear ();
 			SetWindowTextW (g_address, widen (res->path).c_str ());
 		}
 		set_status (widen (res->error).c_str ());
@@ -1363,71 +227,25 @@ on_task_done (backend_result *raw)
 		break;
 	case backend_task_type::list_dir:
 		fill_list (res.get ());
+		nav_on_listed (res->seq);
 		break;
 	case backend_task_type::list_sizes:
 		fill_list_sizes (res.get ());
 		break;
 	case backend_task_type::extract:
-	{
-		wchar_t text[512];
-		int n = swprintf (text, 512, res_str (IDS_FMT_EXTRACT_DONE).c_str (),
-			res->stat_files, format_size (res->stat_bytes).c_str ());
-		/* Symlinks are never extracted; say so instead of letting
-		   the file count silently come up short.  */
-		if (res->stat_links && n > 0 && n < 512)
-		{
-			int added = swprintf (text + n, (size_t) (512 - n),
-				res_str (IDS_FMT_EXTRACT_LINKS).c_str (), res->stat_links);
-			if (added > 0)
-				n += added;
-		}
-		if (res->stat_errors && n > 0 && n < 512)
-			swprintf (text + n, (size_t) (512 - n),
-				res_str (IDS_FMT_EXTRACT_ERRORS).c_str (), res->stat_errors,
-				widen (res->extract_error).c_str ());
-		set_status (text);
-		break;
-	}
 	case backend_task_type::export_image:
-	{
-		wchar_t text[192];
-		swprintf (text, 192, res_str (IDS_FMT_EXPORT_DONE).c_str (),
-			widen (res->path).c_str (), format_size (res->stat_bytes).c_str ());
-		set_status (text);
+		job_report (res.get ());
 		break;
-	}
 	case backend_task_type::loopback_add:
 	case backend_task_type::winfile_add:
 	case backend_task_type::lost_add:
-	{
-		g_mounted.insert (res->path);
-		refresh ();
-		wchar_t text[128];
-		swprintf (text, 128, res_str (IDS_FMT_MOUNTED).c_str (), widen (res->path).c_str ());
-		set_status (text);
+		tree_on_mounted (res.get ());
 		break;
-	}
 	case backend_task_type::loopback_del:
 	case backend_task_type::winfile_del:
 	case backend_task_type::lost_del:
-	{
-		g_mounted.erase (res->path);
-		/* Leave the view if it was on the departed device.  */
-		if (g_path.rfind ("(" + res->path + ")", 0) == 0 || g_path.rfind ("(" + res->path + ",", 0) == 0)
-		{
-			g_path.clear ();
-			g_view_seq = 0;
-			g_entries.clear ();
-			g_rows.clear ();
-			ListView_SetItemCountEx (g_list, 0, 0);
-			SetWindowTextW (g_address, L"");
-		}
-		refresh ();
-		wchar_t text[128];
-		swprintf (text, 128, res_str (IDS_FMT_UNMOUNTED).c_str (), widen (res->path).c_str ());
-		set_status (text);
+		tree_on_unmounted (res.get ());
 		break;
-	}
 	}
 }
 
@@ -1440,131 +258,16 @@ on_task_progress (backend_progress *raw)
 	if (props_on_progress (p.get ()) || crypto_on_progress (p.get ())
 		|| veracrypt_on_progress (p.get ()))
 		return;
-	if (!g_extracting || p->seq != g_seq_extract)
-		return;
-	SendMessageW (g_progress, PBM_SETPOS, (WPARAM) p->percent, 0);
-
-	wchar_t text[512];
-	if (g_export_job)
-		_snwprintf_s (text, 512, _TRUNCATE, res_str (IDS_FMT_EXPORT_PROG).c_str (),
-			widen (p->name).c_str (), p->percent);
-	else
-		_snwprintf_s (text, 512, _TRUNCATE, res_str (IDS_FMT_EXTRACT_PROG).c_str (),
-			p->file_index, p->file_total, widen (p->name).c_str (), p->percent);
-	set_status (text);
-}
-
-/* Control notifications */
-
-void
-on_list_getdispinfo (NMLVDISPINFOW *di)
-{
-	int item = di->item.iItem;
-
-	if (item < 0 || item >= (int) g_rows.size ())
-		return;
-
-	if (di->item.mask & LVIF_IMAGE)
-		di->item.iImage = g_rows[(size_t) item].image;
-	if (!(di->item.mask & LVIF_TEXT))
-		return;
-
-	const list_row &row = g_rows[(size_t) item];
-	const std::wstring *text = &row.name;
-	if (di->item.iSubItem == 1)
-		text = &row.size;
-	else if (di->item.iSubItem == 2)
-		text = &row.mtime;
-	lstrcpynW (di->item.pszText, text->c_str (), di->item.cchTextMax);
-}
-
-void
-on_list_cache_hint (NMLVCACHEHINT *hint)
-{
-	hint_list_sizes (hint->iFrom, hint->iTo);
-}
-
-int
-on_list_finditem (NMLVFINDITEMW *find)
-{
-	const LVFINDINFOW &fi = find->lvfi;
-	if ((fi.flags & (LVFI_PARAM | LVFI_NEARESTXY))
-		|| !(fi.flags & (LVFI_STRING | LVFI_PARTIAL | LVFI_SUBSTRING | LVFI_WRAP))
-		|| !fi.psz || !*fi.psz || g_rows.empty ())
-		return -1;
-
-	const int count = (int) g_rows.size ();
-	const bool wrap = (fi.flags & LVFI_WRAP) != 0;
-	const bool partial = (fi.flags & (LVFI_PARTIAL | LVFI_SUBSTRING)) != 0;
-	const int length = lstrlenW (fi.psz);
-	/* The notification's iStart is inclusive (unlike LVM_FINDITEM). */
-	int item = find->iStart < 0 ? 0 : find->iStart;
-	if (item >= count)
-	{
-		if (!wrap)
-			return -1;
-		item = 0;
-	}
-	const int limit = wrap ? count : count - item;
-	for (int n = 0; n < limit; n++)
-	{
-		const std::wstring &name = g_rows[(size_t) item].name;
-		if (name.size () >= (size_t) length
-			&& (partial || name.size () == (size_t) length)
-			&& CompareStringOrdinal (name.c_str (), length, fi.psz, length, TRUE) == CSTR_EQUAL)
-			return item;
-		if (++item == count)
-			item = 0;
-	}
-	return -1;
-}
-
-void
-on_list_dblclk (int item)
-{
-	if (item < 0 || item >= (int) g_entries.size ())
-		return;
-	const backend_dirent &e = g_entries[(size_t) item];
-	if (e.is_dir)
-		navigate (join_path (g_path, e.name));
-}
-
-void
-on_tree_selchanged (NMTREEVIEWW *tv)
-{
-	/* TVC_UNKNOWN = programmatic (tree rebuild), not the user.  */
-	if (tv->action == TVC_UNKNOWN)
-		return;
-	size_t i = (size_t) tv->itemNew.lParam;
-	if (i >= g_disks.size ())
-		return;
-	/* A locked LUKS/LUKS2 volume has no browsable filesystem yet:
-	   prompt for the passphrase/key file instead of listing it.  */
-	if (g_disks[i].encrypted)
-	{
-		prompt_unlock (g_disks[i].name, g_disks[i].crypto_uuid);
-		return;
-	}
-	navigate ("(" + g_disks[i].name + ")/");
+	job_on_progress (p.get ());
 }
 
 LRESULT
 on_notify (NMHDR *hdr)
 {
-	if (hdr->hwndFrom == g_list && hdr->code == LVN_GETDISPINFOW)
-		on_list_getdispinfo ((NMLVDISPINFOW *) hdr);
-	else if (hdr->hwndFrom == g_list && hdr->code == LVN_ODCACHEHINT)
-		on_list_cache_hint ((NMLVCACHEHINT *) hdr);
-	else if (hdr->hwndFrom == g_list && hdr->code == LVN_ODFINDITEMW)
-		return on_list_finditem ((NMLVFINDITEMW *) hdr);
-	else if (hdr->hwndFrom == g_list && hdr->code == NM_DBLCLK)
-		on_list_dblclk (((NMITEMACTIVATE *) hdr)->iItem);
-	else if (hdr->hwndFrom == g_list && hdr->code == NM_RCLICK)
-		on_list_rclick ((NMITEMACTIVATE *) hdr);
-	else if (hdr->hwndFrom == g_tree && hdr->code == NM_RCLICK)
-		on_tree_rclick ();
-	else if (hdr->hwndFrom == g_tree && hdr->code == TVN_SELCHANGEDW)
-		on_tree_selchanged ((NMTREEVIEWW *) hdr);
+	if (hdr->hwndFrom == g_list)
+		return list_on_notify (hdr);
+	if (hdr->hwndFrom == g_tree)
+		return tree_on_notify (hdr);
 	return 0;
 }
 
@@ -1595,7 +298,6 @@ create_children (HWND wnd)
 		WS_CHILD, 0, 0, 0, 0, g_status, nullptr, nullptr, nullptr);
 	SendMessageW (g_progress, PBM_SETRANGE32, 0, 100);
 
-	SetWindowSubclass (g_address, address_proc, 0, 0);
 	ListView_SetExtendedListViewStyle (g_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
 
 	/* Explorer-style hover/selection rendering.  */
@@ -1608,7 +310,7 @@ create_children (HWND wnd)
 	/* Font, file/tree icons and button icons, all sized for the current
 	   monitor DPI (rebuilt on WM_DPICHANGED).  */
 	apply_dpi_resources ();
-	update_nav_buttons ();	/* nothing visited yet: both grayed */
+	nav_init ();
 
 	LVCOLUMNW col = {};
 	std::wstring col_name = res_str (IDS_COL_NAME);
@@ -1629,166 +331,6 @@ create_children (HWND wnd)
 	ListView_InsertColumn (g_list, 2, &col);
 
 	set_status (IDS_STATUS_STARTING);
-}
-
-	/* The menu bar and its submenus are owned by the window and destroyed
-	   with it.  The drive-mount popup starts empty; on_menu_popup fills it. */
-void
-create_menu_bar (HWND wnd)
-{
-	HMENU bar = CreateMenu ();
-
-	g_menu_file = CreatePopupMenu ();
-	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_OPEN_IMAGE, res_str (IDS_MENU_OPEN_IMAGE).c_str ());
-	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_OPEN_IMAGE_DECOMP, res_str (IDS_MENU_OPEN_IMAGE_DECOMP).c_str ());
-	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
-	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
-#if FSROVER_ENABLE_ADMIN_FEATURES
-	/* Elevation cannot change while the process runs, so the re-launch
-	   is either offered for good or never.  Under --file it is never:
-	   the new instance would start on an empty command line, dropping
-	   the image this one was asked to open for physical disks this one
-	   was asked to leave alone.  */
-	if (!is_elevated () && !g_cmdline.no_windisk)
-		AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_RUNAS, res_str (IDS_MENU_RUNAS).c_str ());
-#endif
-
-	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EXIT, res_str (IDS_TRAY_EXIT).c_str ());
-
-	HMENU sel = CreatePopupMenu ();
-	AppendMenuW (sel, MF_STRING, IDM_SEL_ALL, res_str (IDS_MENU_SEL_ALL).c_str ());
-	AppendMenuW (sel, MF_STRING, IDM_SEL_INVERT, res_str (IDS_MENU_SEL_INVERT).c_str ());
-
-	g_menu_settings = CreatePopupMenu ();
-	g_menu_encoding = CreatePopupMenu ();
-	for (int i = 0; i < (int) ARRAYSIZE (rover_fs_encoding::OPTIONS); i++)
-		AppendMenuW (g_menu_encoding, MF_STRING, IDM_FS_ENCODING_BASE + i,
-			rover_fs_encoding::OPTIONS[i].name);
-	AppendMenuW (g_menu_settings, MF_POPUP, (UINT_PTR) g_menu_encoding,
-		res_str (IDS_MENU_FS_ENCODING).c_str ());
-	AppendMenuW (g_menu_settings, MF_SEPARATOR, 0, nullptr);
-	/* Check mark set by on_menu_popup from g_preserve_times.  */
-	AppendMenuW (g_menu_settings, MF_STRING, IDM_FILE_TIMESTAMPS, res_str (IDS_MENU_TIMESTAMPS).c_str ());
-
-	g_menu_dokan = CreatePopupMenu ();
-
-	HMENU help = CreatePopupMenu ();
-	AppendMenuW (help, MF_STRING, IDM_HELP_DOC, res_str (IDS_MENU_HELPDOC).c_str ());
-	AppendMenuW (help, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (help, MF_STRING, IDM_HELP_SHORTCUTS, res_str (IDS_MENU_SHORTCUTS).c_str ());
-	AppendMenuW (help, MF_STRING, IDM_HELP_SUPPORT, res_str (IDS_MENU_SUPPORT).c_str ());
-	AppendMenuW (help, MF_SEPARATOR, 0, nullptr);
-	AppendMenuW (help, MF_STRING, IDM_HELP_ABOUT, res_str (IDS_MENU_ABOUT).c_str ());
-
-	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_file, res_str (IDS_MENU_FILE).c_str ());
-	AppendMenuW (bar, MF_POPUP, (UINT_PTR) sel, res_str (IDS_MENU_SELECTION).c_str ());
-	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_settings, res_str (IDS_MENU_SETTINGS).c_str ());
-	AppendMenuW (bar, MF_POPUP, (UINT_PTR) g_menu_dokan, res_str (IDS_MENU_DOKAN).c_str ());
-	AppendMenuW (bar, MF_POPUP, (UINT_PTR) help, res_str (IDS_MENU_HELP).c_str ());
-	SetMenu (wnd, bar);
-}
-
-void
-on_menu_popup (HMENU menu)
-{
-	if (menu == g_menu_file)
-	{
-		/* Same rule as the old toolbar button: a refresh would
-		   queue behind a running extraction and overwrite the
-		   progress line.  Mounting an image ends in a refresh, so
-		   it waits for the same moment.  */
-		EnableMenuItem (menu, IDM_FILE_REFRESH, g_extracting ? MF_GRAYED : MF_ENABLED);
-		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE, g_extracting ? MF_GRAYED : MF_ENABLED);
-		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE_DECOMP, g_extracting ? MF_GRAYED : MF_ENABLED);
-		return;
-	}
-	if (menu == g_menu_settings)
-	{
-		CheckMenuItem (menu, IDM_FILE_TIMESTAMPS, g_preserve_times ? MF_CHECKED : MF_UNCHECKED);
-		EnableMenuItem (menu, 0, MF_BYPOSITION | (g_extracting ? MF_GRAYED : MF_ENABLED));
-		return;
-	}
-	if (menu == g_menu_encoding)
-	{
-		int selected = IDM_FS_ENCODING_BASE;
-		for (int i = 0; i < (int) ARRAYSIZE (rover_fs_encoding::OPTIONS); i++)
-			if (rover_fs_encoding::OPTIONS[i].code_page == g_fs_encoding)
-				selected += i;
-		CheckMenuRadioItem (menu, IDM_FS_ENCODING_BASE,
-			IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (rover_fs_encoding::OPTIONS) - 1,
-			selected, MF_BYCOMMAND);
-		return;
-	}
-	if (menu != g_menu_dokan)
-		return;
-
-	/* Rebuilt on every open, like the tray menu: one unmount entry
-	   per live mount, or a grayed line saying why there is none.  */
-	while (GetMenuItemCount (menu) > 0)
-		DeleteMenu (menu, 0, MF_BYPOSITION);
-	if (!dokanfs_available ())
-	{
-		AppendMenuW (menu, MF_STRING | MF_GRAYED, 0,
-			res_str (IDS_MOUNT_UNAVAILABLE).c_str ());
-#if FSROVER_EMBED_DOKAN
-		AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-		/* With the driver absent and nothing in the way, offer to
-		   install the bundled runtime instead of just greying the
-		   feature out.  What can be in the way is named in the order
-		   the user can act on it: a 32-bit build on 64-bit Windows
-		   bundles a runtime the system cannot use and elevating
-		   would not change that. Otherwise an elevated token is needed.  */
-		if (is_wow64 ())
-			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_WOW64).c_str ());
-		else if (!is_elevated ())
-			AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
-		else
-			AppendMenuW (menu, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
-#endif
-		return;
-	}
-	wchar_t backend[96];
-	_snwprintf_s (backend, ARRAYSIZE (backend), _TRUNCATE,
-		res_str (IDS_FMT_MOUNT_BACKEND).c_str (), dokanfs_backend_name ());
-	HMENU hosts = CreatePopupMenu ();
-	dokanfs_backend selected = dokanfs_current_backend ();
-	AppendMenuW (hosts, MF_STRING
-		| (dokanfs_backend_available (dokanfs_backend::winfsp) ? 0u : MF_GRAYED)
-		| (selected == dokanfs_backend::winfsp ? MF_CHECKED : 0u),
-		IDM_BACKEND_WINFSP, L"WinFsp");
-	AppendMenuW (hosts, MF_STRING
-		| (dokanfs_backend_available (dokanfs_backend::dokan) ? 0u : MF_GRAYED)
-		| (selected == dokanfs_backend::dokan ? MF_CHECKED : 0u),
-		IDM_BACKEND_DOKAN, L"Dokan");
-#if FSROVER_EMBED_DOKAN
-	if (!dokanfs_backend_available (dokanfs_backend::dokan))
-	{
-		AppendMenuW (hosts, MF_SEPARATOR, 0, nullptr);
-		if (is_wow64 ())
-			AppendMenuW (hosts, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_WOW64).c_str ());
-		else if (!is_elevated ())
-			AppendMenuW (hosts, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NEED_ADMIN).c_str ());
-		else
-			AppendMenuW (hosts, MF_STRING, IDM_DOKAN_INSTALL, res_str (IDS_DOKAN_INSTALL).c_str ());
-	}
-#endif
-
-	AppendMenuW (menu, MF_POPUP, (UINT_PTR) hosts, backend);
-	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
-	if (!dokanfs_count ())
-	{
-		AppendMenuW (menu, MF_STRING | MF_GRAYED, 0, res_str (IDS_DOKAN_NONE).c_str ());
-		return;
-	}
-	for (size_t i = 0; i < dokanfs_count (); i++)
-	{
-		dokan_mount *m = dokanfs_get (i);
-		wchar_t text[160];
-		_snwprintf_s (text, 160, _TRUNCATE, res_str (IDS_FMT_TRAY_UNMOUNT).c_str (),
-			dokanfs_letter (m).c_str (), widen (dokanfs_device (m)).c_str ());
-		AppendMenuW (menu, MF_STRING, IDM_DOKAN_UNMOUNT_BASE + (int) i, text);
-	}
 }
 
 /* Range where both panes stay usable, in device pixels.  */
@@ -1872,99 +414,6 @@ layout (HWND wnd)
 	MoveWindow (g_btn_extract, rc.right - btn_w - margin, margin, btn_w, btn_h, TRUE);
 	MoveWindow (g_tree, 0, body_top, tree_w, body_h, TRUE);
 	MoveWindow (g_list, tree_w + split_w, body_top, rc.right - tree_w - split_w, body_h, TRUE);
-}
-
-void
-on_command (int id)
-{
-	if (id >= IDM_FS_ENCODING_BASE
-		&& id < IDM_FS_ENCODING_BASE + (int) ARRAYSIZE (rover_fs_encoding::OPTIONS))
-	{
-		if (!g_extracting)
-			set_fs_encoding (rover_fs_encoding::OPTIONS[id - IDM_FS_ENCODING_BASE].code_page);
-		return;
-	}
-	if (id >= IDM_DOKAN_UNMOUNT_BASE)
-	{
-		dokan_mount *m = dokanfs_get (
-			(size_t) (id - IDM_DOKAN_UNMOUNT_BASE));
-		if (m)
-			do_dokan_unmount (m);
-		return;
-	}
-	switch (id)
-	{
-	case IDM_BACKEND_WINFSP:
-		dokanfs_select_backend (dokanfs_backend::winfsp);
-		break;
-	case IDM_BACKEND_DOKAN:
-		dokanfs_select_backend (dokanfs_backend::dokan);
-		break;
-#if FSROVER_EMBED_DOKAN
-	case IDM_DOKAN_INSTALL:
-		show_dokan_install (g_main, g_status);
-		break;
-#endif
-
-	case IDM_FILE_REFRESH:
-		if (!g_extracting)
-			refresh ();
-		break;
-	case IDM_FILE_OPEN_IMAGE:
-	case IDM_FILE_OPEN_IMAGE_DECOMP:
-		if (!g_extracting)
-			open_host_image (id == IDM_FILE_OPEN_IMAGE_DECOMP);
-		break;
-	case IDM_FILE_TIMESTAMPS:
-		/* A running extraction keeps the setting it started with.  */
-		g_preserve_times = !g_preserve_times;
-		break;
-#if FSROVER_ENABLE_ADMIN_FEATURES
-	case IDM_FILE_RUNAS:
-		run_as_admin ();
-		break;
-#endif
-
-	case IDM_FILE_EXIT:
-		SendMessageW (g_main, WM_CLOSE, 0, 0);
-		break;
-	case IDM_SEL_ALL:
-		ListView_SetItemState (g_list, -1, LVIS_SELECTED, LVIS_SELECTED);
-		break;
-	case IDM_SEL_INVERT:
-		for (int i = 0, n = ListView_GetItemCount (g_list); i < n; i++)
-			ListView_SetItemState (g_list, i, ListView_GetItemState (g_list, i, LVIS_SELECTED) ^ LVIS_SELECTED, LVIS_SELECTED);
-		break;
-	case IDM_HELP_DOC:
-		show_help_doc ();
-		break;
-	case IDM_HELP_SHORTCUTS:
-		show_shortcuts ();
-		break;
-	case IDM_HELP_SUPPORT:
-		show_support ();
-		break;
-	case IDM_HELP_ABOUT:
-		show_about ();
-		break;
-	/* The buttons are disabled while extracting, but their accelerators
-	   fire regardless of the button state.  */
-	case IDC_BACK:
-		if (!g_extracting)
-			go_back ();
-		break;
-	case IDC_FWD:
-		if (!g_extracting)
-			go_forward ();
-		break;
-	case IDC_UP:
-		if (!g_extracting)
-			go_up ();
-		break;
-	case IDC_EXTRACT:
-		on_extract_button ();
-		break;
-	}
 }
 
 LRESULT CALLBACK
@@ -2154,9 +603,13 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 
 } // namespace
 
+} // namespace mainwnd
+
 int WINAPI
 wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 {
+	using namespace mainwnd;
+
 	CoInitializeEx (nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 	init_language ();
 	/* After init_language(), because the usage box is localized.  */
@@ -2199,7 +652,7 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 
 	/* Explorer's navigation bindings plus Ctrl+A.  Built here rather than
 	   loaded from an ACCELERATORS resource because the command ids live in
-	   main.cpp, not resource.h, and the table needs no translation.  */
+	   mainwnd.h, not resource.h, and the table needs no translation.  */
 	ACCEL accels[] =
 	{
 		{ FVIRTKEY | FALT, VK_LEFT, IDC_BACK },
