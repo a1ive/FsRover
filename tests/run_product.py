@@ -334,6 +334,7 @@ class Suite:
         before = {p.name: digest(p.read_bytes()) for p in self.fixtures.iterdir()}
         self.case("FAT/exFAT large sector addresses", lambda: check_fat_large(self))
         self.case("strtol boundaries", lambda: self.command([self.probe, "--strtol"]))
+        self.case("mount core metadata cache", lambda: self.command([self.probe, "--fusefs", self.fixtures]))
         for mode in ("formats", "trailing", "null", "minimum"):
             self.case("printf " + mode, lambda mode=mode: self.command([self.probe, "--printf", mode]))
         self.case("zip list/extract", lambda: self.basic("basic.zip", FILES, DIRS))

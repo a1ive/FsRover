@@ -101,11 +101,12 @@ install(TARGETS LinuxRover RUNTIME DESTINATION bin)
 include(CTest)
 if(BUILD_TESTING)
 	find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
-	add_executable(product_probe tests/product_probe.cpp tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c common/extract_core.cpp)
+	add_executable(product_probe tests/product_probe.cpp tests/fusefs_probe.cpp tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c
+		common/extract_core.cpp common/fusefs.cpp)
 	set_property(SOURCE tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c APPEND PROPERTY COMPILE_OPTIONS
 		-include "${CMAKE_CURRENT_SOURCE_DIR}/grub/rover/config.h")
 	target_compile_options(product_probe PRIVATE -Wall -Wextra -Werror)
-	target_link_libraries(product_probe PRIVATE rover-grub)
+	target_link_libraries(product_probe PRIVATE rover-grub pthread)
 	add_test(NAME product-regression
 		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_product.py"
 			--cli $<TARGET_FILE:LinuxRover> --probe $<TARGET_FILE:product_probe>

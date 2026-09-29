@@ -474,6 +474,7 @@ set_fs_encoding (UINT encoding)
 	if (g_extracting || encoding == g_fs_encoding)
 		return;
 	backend_set_fs_char_encoding (encoding);
+	dokanfs_invalidate_all ();
 	g_fs_encoding = encoding;
 
 	/* Paths below the device root may themselves have been decoded with the

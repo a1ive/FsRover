@@ -23,11 +23,14 @@
 #include <stdint.h>
 
 #include <functional>
+#include <memory>
 #include <string>
 
 /* Host-neutral, FUSE-shaped view of a mounted Rover filesystem.  Platform
    adapters translate these small structures to libfuse, WinFsp-FUSE or
    Dokany ABI structures. */
+
+struct fusefs_cache;
 
 struct fusefs
 {
@@ -37,6 +40,9 @@ struct fusefs
 	unsigned long long size;
 	uint32_t serial;
 	std::function<bool (const std::function<void ()> &)> dispatch;
+	/* Path -> metadata LRU.  The volume is read-only, so entries stay valid
+	   until the name decoding changes (see fusefs_invalidate). */
+	std::shared_ptr<fusefs_cache> cache;
 };
 
 struct fusefs_stat
@@ -69,5 +75,9 @@ int fusefs_release (fusefs *fs, uint64_t *handle);
 int fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	void *data);
 int fusefs_statfs (fusefs *fs, fusefs_statvfs *st);
+
+/* Drop cached metadata.  Call after rover_set_fs_char_encoding() returns:
+   names decoded with the old setting no longer resolve the same way. */
+void fusefs_invalidate (fusefs *fs);
 
 #endif

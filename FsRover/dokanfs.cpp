@@ -643,6 +643,13 @@ dokanfs_unmount_all (void)
 		dokanfs_unmount (g_table.back ());
 }
 
+void
+dokanfs_invalidate_all (void)
+{
+	for (dokan_mount *m : g_table)
+		fusefs_invalidate (&m->core);
+}
+
 size_t
 dokanfs_count (void)
 {

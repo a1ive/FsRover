@@ -92,6 +92,10 @@ void dokanfs_unmount (dokan_mount *m);
 
 void dokanfs_unmount_all (void);
 
+/* Drop cached path metadata of every mount (after the name encoding
+   changes).  */
+void dokanfs_invalidate_all (void);
+
 size_t dokanfs_count (void);
 dokan_mount *dokanfs_get (size_t i);
 dokan_mount *dokanfs_find_device (const std::string &device);

@@ -61,7 +61,13 @@ The probe is a separate test project, not a release executable. It links the
 product's `grub.lib` and compiles the actual `common/extract_core.cpp`; it does not
 mock Rover or duplicate the extraction implementation. Its C mapping companion,
 `filemap_probe.c`, compiles with the GRUB headers/configuration separately from
-the C++ frontend and calls the actual `grub_file_map_range` and read APIs. x86 uses `Win32` for the
+the C++ frontend and calls the actual `grub_file_map_range` and read APIs.
+`--fusefs FIXTURES` drives the shared mount core (`common/fusefs.cpp`) directly on
+the generated ext2 and FAT12 images: cached getattr/readdir/open results must
+match an uncached `rover_stat` walk (symlink components, missing and non-directory
+parents, case variants), repeated and listing-seeded lookups must not reach the
+backend dispatcher, the LRU bound evicts oldest first, and concurrent lookups,
+listings and invalidations stay consistent. It does not mount anything. x86 uses `Win32` for the
 probe project and `build/Win32/` for executable paths; ARM64 uses `ARM64` and
 requires an appropriate runtime host to execute.
 

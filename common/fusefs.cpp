@@ -25,12 +25,34 @@
 #include <fcntl.h>
 
 #include <algorithm>
+#include <list>
+#include <mutex>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <rover.h>
 
 #include "fusefs.h"
+
+/* Adapter threads read the cache directly so hits skip the dispatcher; only
+   the dispatched (serialized) side inserts, which orders every insert with
+   respect to rover_set_fs_char_encoding(). */
+struct fusefs_cache
+{
+	struct entry
+	{
+		int err;	/* mount_stat() result for exactly this path */
+		rover_stat_t st;
+	};
+	typedef std::list<std::pair<std::string, entry>> lru_list;
+
+	std::mutex lock;
+	lru_list lru;	/* most recently used first */
+	/* Keys borrow the strings of list nodes, which never move. */
+	std::unordered_map<std::string_view, lru_list::iterator> map;
+};
 
 namespace
 {
@@ -40,6 +62,48 @@ constexpr uint32_t MODE_FILE = 0100000;
 constexpr uint32_t MODE_READ = 00444;
 constexpr uint32_t MODE_EXEC = 00111;
 
+/* Roughly 250 bytes per entry: at most ~16 MiB per mount. */
+constexpr size_t CACHE_MAX = 65536;
+
+bool
+cache_get (fusefs_cache *cache, std::string_view path, fusefs_cache::entry *out)
+{
+	std::lock_guard<std::mutex> hold (cache->lock);
+	auto it = cache->map.find (path);
+	if (it == cache->map.end ())
+		return false;
+	cache->lru.splice (cache->lru.begin (), cache->lru, it->second);
+	*out = it->second->second;
+	return true;
+}
+
+/* Only outcomes fixed by on-disk metadata are kept; I/O and allocation
+   failures may succeed on a later attempt. */
+void
+cache_put (fusefs_cache *cache, std::string_view path,
+	const fusefs_cache::entry &ent)
+{
+	if (ent.err && ent.err != -ENOENT && ent.err != -ENOTDIR
+		&& ent.err != -ENOTSUP)
+		return;
+
+	std::lock_guard<std::mutex> hold (cache->lock);
+	auto it = cache->map.find (path);
+	if (it != cache->map.end ())
+	{
+		it->second->second = ent;
+		cache->lru.splice (cache->lru.begin (), cache->lru, it->second);
+		return;
+	}
+	if (cache->lru.size () >= CACHE_MAX)
+	{
+		cache->map.erase (cache->lru.back ().first);
+		cache->lru.pop_back ();
+	}
+	cache->lru.emplace_front (std::string (path), ent);
+	cache->map.emplace (cache->lru.front ().first, cache->lru.begin ());
+}
+
 std::string
 rover_path (const fusefs *fs, const char *path)
 {
@@ -48,36 +112,66 @@ rover_path (const fusefs *fs, const char *path)
 	return path[0] == '/' ? fs->root + path : fs->root + "/" + path;
 }
 
+fusefs_cache::entry
+lookup (const char *path)
+{
+	fusefs_cache::entry ent = {};
+	if (rover_stat (path, &ent.st))
+		ent.err = -rover_last_errno ();
+	else if (ent.st.is_symlink)
+		ent.err = -ENOTSUP;
+	return ent;
+}
+
 /* GRUB exposes link identity but has no common readlink interface.  Do not
    synthesize regular files from links or follow a directory link indirectly.
-   Reject every link component, including direct calls with /link/child. */
-int
-mount_stat (const std::string &full, rover_stat_t *st)
+   Reject every link component, including direct calls with /link/child.
+
+   rover_stat() resolves from the root and scans the whole parent directory,
+   so each component goes through the cache.  A cached success for FULL
+   implies its ancestors were checked when it was stored. */
+fusefs_cache::entry
+resolve (fusefs_cache *cache, const std::string &full)
 {
+	fusefs_cache::entry ent;
 	size_t close = full.find (')');
 	for (size_t slash = full.find ('/', close == std::string::npos ? 0 : close + 1);
 		slash != std::string::npos; slash = full.find ('/', slash + 1))
 	{
 		if (slash == close + 1)
 			continue;
-		rover_stat_t parent = {};
-		if (rover_stat (full.substr (0, slash).c_str (), &parent))
-			return -rover_last_errno ();
-		if (parent.is_symlink)
-			return -ENOTSUP;
-		if (!parent.is_dir)
-			return -ENOTDIR;
+		std::string_view parent (full.data (), slash);
+		if (!cache_get (cache, parent, &ent))
+		{
+			ent = lookup (std::string (parent).c_str ());
+			cache_put (cache, parent, ent);
+		}
+		if (!ent.err && !ent.st.is_dir)
+			ent.err = -ENOTDIR;
+		if (ent.err)
+			return { ent.err, {} };
 	}
-	if (rover_stat (full.c_str (), st))
-		return -rover_last_errno ();
-	return st->is_symlink ? -ENOTSUP : 0;
+	return lookup (full.c_str ());
+}
+
+int
+mount_stat (fusefs_cache *cache, const std::string &full, rover_stat_t *st)
+{
+	fusefs_cache::entry ent;
+	if (!cache_get (cache, full, &ent))
+	{
+		ent = resolve (cache, full);
+		cache_put (cache, full, ent);
+	}
+	*st = ent.st;
+	return ent.err;
 }
 
 rover_file *
-open_file (const std::string &full, int *error)
+open_file (fusefs_cache *cache, const std::string &full, int *error)
 {
 	rover_stat_t st = {};
-	*error = mount_stat (full, &st);
+	*error = mount_stat (cache, full, &st);
 	if (*error)
 		return nullptr;
 	if (st.is_dir)
@@ -103,8 +197,7 @@ fill_stat (const rover_stat_t &in, fusefs_stat *out)
 struct dir_entry
 {
 	std::string name;
-	fusefs_stat st;
-	bool size_set;
+	fusefs_cache::entry ent;	/* what lookup() would return */
 };
 
 } // namespace
@@ -119,6 +212,7 @@ fusefs_init (fusefs *fs, const std::string &device,
 	fs->fs_name = fs_name;
 	fs->size = size;
 	fs->dispatch = std::move (dispatch);
+	fs->cache = std::make_shared<fusefs_cache> ();
 	uint32_t hash = 2166136261u;
 	for (char c : device)
 		hash = (hash ^ (unsigned char) c) * 16777619u;
@@ -131,8 +225,16 @@ fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st)
 	rover_stat_t rover_st = {};
 	int err = 0;
 	std::string full = rover_path (fs, path);
+	fusefs_cache::entry ent;
 
-	if (!fs->dispatch ([&] { err = mount_stat (full, &rover_st); }))
+	if (cache_get (fs->cache.get (), full, &ent))
+	{
+		if (ent.err)
+			return ent.err;
+		fill_stat (ent.st, st);
+		return 0;
+	}
+	if (!fs->dispatch ([&] { err = mount_stat (fs->cache.get (), full, &rover_st); }))
 		return -EIO;
 	if (err)
 		return err;
@@ -150,7 +252,7 @@ fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle)
 	std::string full = rover_path (fs, path);
 	rover_file *file = nullptr;
 	int err = 0;
-	if (!fs->dispatch ([&] { file = open_file (full, &err); }))
+	if (!fs->dispatch ([&] { file = open_file (fs->cache.get (), full, &err); }))
 		return -EIO;
 	if (!file)
 		return err;
@@ -174,7 +276,7 @@ fusefs_read (fusefs *fs, const char *path, void *buf, size_t size,
 		rover_file *file = (rover_file *) (uintptr_t) *handle;
 		if (!file)
 		{
-			file = open_file (full, &result);
+			file = open_file (fs->cache.get (), full, &result);
 			if (!file)
 				return;
 			*handle = (uint64_t) (uintptr_t) file;
@@ -216,8 +318,9 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 
 	if (!fs->dispatch ([&]
 	{
+		fusefs_cache *cache = fs->cache.get ();
 		rover_stat_t st = {};
-		err = mount_stat (full, &st);
+		err = mount_stat (cache, full, &st);
 		if (err)
 			return;
 		if (!st.is_dir)
@@ -228,17 +331,17 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 		err = rover_dir_list (full.c_str (),
 			[] (const rover_dirent *ent, void *opaque) -> int
 			{
-				/* Unsupported links must not appear as ordinary files. */
-				if (ent->is_symlink)
-					return 0;
 				auto *out = (std::vector<dir_entry> *) opaque;
 				dir_entry item = {};
 				item.name = ent->name;
-				item.st.mode = (ent->is_dir ? MODE_DIR | MODE_EXEC : MODE_FILE) | MODE_READ;
-				item.st.inode = ent->inode_set ? ent->inode : 0;
-				item.st.size = ent->size_set ? ent->size : 0;
-				item.st.mtime = ent->mtime_set ? ent->mtime : 0;
-				item.size_set = ent->size_set != 0;
+				item.ent.err = ent->is_symlink ? -ENOTSUP : 0;
+				item.ent.st.is_dir = ent->is_dir;
+				item.ent.st.is_symlink = ent->is_symlink;
+				item.ent.st.mtime_set = ent->mtime_set;
+				item.ent.st.mtime = ent->mtime;
+				item.ent.st.size = ent->size_set ? ent->size : ROVER_SIZE_UNKNOWN;
+				item.ent.st.inode_set = ent->inode_set;
+				item.ent.st.inode = ent->inode;
 				out->push_back (std::move (item));
 				return 0;
 			}, &entries);
@@ -250,21 +353,35 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 
 		/* Directory consumers cache the first metadata snapshot.  Most
 		   drivers report sizes from metadata already read while enumerating;
-		   obtain exact sizes separately only when a driver cannot do so. */
+		   obtain exact sizes separately only when a driver cannot do so,
+		   and only once per file. */
 		std::string prefix = full;
 		if (prefix.empty () || prefix.back () != '/')
 			prefix += '/';
 		for (dir_entry &item : entries)
 		{
-			if ((item.st.mode & MODE_DIR) == MODE_DIR || item.size_set)
+			rover_stat_t &ist = item.ent.st;
+			if (ist.is_dir || ist.is_symlink || ist.size != ROVER_SIZE_UNKNOWN)
 				continue;
-			rover_file *file = rover_file_open ((prefix + item.name).c_str ());
+			std::string child = prefix + item.name;
+			fusefs_cache::entry cached;
+			if (cache_get (cache, child, &cached) && !cached.err)
+			{
+				ist.size = cached.st.size;
+				continue;
+			}
+			rover_file *file = rover_file_open (child.c_str ());
 			if (file)
 			{
-				item.st.size = rover_file_size (file);
+				ist.size = rover_file_size (file);
 				rover_file_close (file);
 			}
 		}
+
+		/* Seed the per-entry lookups that follow a listing.  Reverse order
+		   leaves the first of duplicate names, the one rover_stat() finds. */
+		for (auto it = entries.rbegin (); it != entries.rend (); ++it)
+			cache_put (cache, prefix + it->name, it->ent);
 	}))
 		return -EIO;
 	if (err)
@@ -275,8 +392,15 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	if (fill (data, ".", &dot) || fill (data, "..", &dot))
 		return 0;
 	for (const dir_entry &item : entries)
-		if (fill (data, item.name.c_str (), &item.st))
+	{
+		/* Unsupported links must not appear as ordinary files. */
+		if (item.ent.st.is_symlink)
+			continue;
+		fusefs_stat st = {};
+		fill_stat (item.ent.st, &st);
+		if (fill (data, item.name.c_str (), &st))
 			break;
+	}
 	return 0;
 }
 
@@ -287,4 +411,12 @@ fusefs_statfs (fusefs *fs, fusefs_statvfs *st)
 	st->blocks = fs->size == ~0ULL ? 0 : (fs->size + 511) / 512;
 	st->name_max = 255;
 	return 0;
+}
+
+void
+fusefs_invalidate (fusefs *fs)
+{
+	std::lock_guard<std::mutex> hold (fs->cache->lock);
+	fs->cache->map.clear ();
+	fs->cache->lru.clear ();
 }
