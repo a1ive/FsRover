@@ -157,6 +157,17 @@ static_assert (BACKEND_LOST_SCAN_EXT_BACKUP == ROVER_LOST_SCAN_EXT_BACKUP
 	&& BACKEND_LOST_TABLE == ROVER_LOST_TABLE,
 	"BACKEND_LOST_* must match ROVER_LOST_*");
 
+static_assert (BACKEND_MAP_DIRECT == ROVER_MAP_DIRECT
+	&& BACKEND_MAP_ZERO == ROVER_MAP_ZERO
+	&& BACKEND_MAP_HOLE == ROVER_MAP_HOLE
+	&& BACKEND_MAP_INLINE == ROVER_MAP_INLINE
+	&& BACKEND_MAP_COMPRESSED == ROVER_MAP_COMPRESSED
+	&& BACKEND_MAP_UNWRITTEN == ROVER_MAP_UNWRITTEN
+	&& BACKEND_MAP_UNKNOWN == ROVER_MAP_UNKNOWN
+	&& BACKEND_MAP_TRANSFORMED == ROVER_MAP_TRANSFORMED
+	&& BACKEND_MAP_SHARED == ROVER_MAP_SHARED,
+	"BACKEND_MAP_* must match ROVER_MAP_*");
+
 static_assert (BACKEND_VC_PRF_AUTO == ROVER_VC_PRF_AUTO
 	&& BACKEND_VC_PRF_SHA512 == ROVER_VC_PRF_SHA512
 	&& BACKEND_VC_PRF_WHIRLPOOL == ROVER_VC_PRF_WHIRLPOOL
@@ -1045,6 +1056,20 @@ file_map_collect (const rover_map_extent *e, void *opaque)
 		if (res->map_rows.size () >= 100000) return 1;
 		res->map_rows.push_back (file_map_columns (*e, i,
 			res->path.substr (0, res->path.find (')') + 1), group));
+		backend_map_info info;
+		info.group = res->map_groups;
+		info.offset = e->logical_offset;
+		info.length = e->logical_length;
+		info.flags = e->flags;
+		info.first = i == 0;
+		if (e->storage_count)
+		{
+			info.storage = true;
+			info.storage_offset = e->storage[i].offset;
+			info.storage_length = e->storage[i].length;
+			info.fs_logical = e->storage[i].address_space == ROVER_MAP_FS_LOGICAL;
+		}
+		res->map_info.push_back (info);
 	}
 	return 0;
 }

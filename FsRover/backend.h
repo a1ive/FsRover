@@ -310,6 +310,33 @@ struct backend_diskent
 	std::string crypto_uuid;	/* container UUID when encrypted */
 };
 
+/* file_map extent flags; values match ROVER_MAP_* in rover.h
+   (static_assert'd in backend.cpp).  */
+constexpr UINT BACKEND_MAP_DIRECT = 1;
+constexpr UINT BACKEND_MAP_ZERO = 2;
+constexpr UINT BACKEND_MAP_HOLE = 4;
+constexpr UINT BACKEND_MAP_INLINE = 8;
+constexpr UINT BACKEND_MAP_COMPRESSED = 16;
+constexpr UINT BACKEND_MAP_UNWRITTEN = 32;
+constexpr UINT BACKEND_MAP_UNKNOWN = 64;
+constexpr UINT BACKEND_MAP_TRANSFORMED = 128;
+constexpr UINT BACKEND_MAP_SHARED = 256;
+
+/* One file_map row in numbers (see struct rover_map_extent); a group
+   with several storage copies has one row per copy.  */
+struct backend_map_info
+{
+	UINT64 group = 0;
+	UINT64 offset = 0;	/* bytes into the file */
+	UINT64 length = 0;
+	UINT64 storage_offset = 0;	/* valid when storage */
+	UINT64 storage_length = 0;
+	UINT flags = 0;	/* BACKEND_MAP_* */
+	bool storage = false;
+	bool fs_logical = false;	/* storage is an FS logical address */
+	bool first = false;	/* first row of its group */
+};
+
 /* A lost partition search result (see struct rover_lost_part).  */
 struct backend_lost_part
 {
@@ -354,6 +381,7 @@ struct backend_result
 	UINT64 stat_errors = 0;	/* extract: files that could not be written */
 	std::string extract_error;	/* extract: first per-file error */
 	std::vector<std::array<std::string, 11>> map_rows;
+	std::vector<backend_map_info> map_info;	/* file_map: parallel to map_rows */
 	UINT64 map_groups = 0;
 	bool map_stopped = false;
 	std::string text;	/* file_props: libmagic description */
