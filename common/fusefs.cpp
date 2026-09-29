@@ -203,6 +203,7 @@ struct dir_entry
 void
 fusefs_init (fusefs *fs, const std::string &device,
 	const std::string &fs_name, unsigned long long size,
+	unsigned int sector_size,
 	std::function<bool (const std::function<void ()> &)> dispatch,
 	size_t cache_max)
 {
@@ -210,6 +211,10 @@ fusefs_init (fusefs *fs, const std::string &device,
 	fs->root = "(" + device + ")";
 	fs->fs_name = fs_name;
 	fs->size = size;
+	/* WinFsp caps sectors at 4096; Dokan wants a power of two.  */
+	if (sector_size < 512 || sector_size > 4096 || (sector_size & (sector_size - 1)))
+		sector_size = 512;
+	fs->sector_size = sector_size;
 	fs->dispatch = std::move (dispatch);
 	fs->cache = std::make_shared<fusefs_cache> ();
 	fs->cache->max = cache_max ? cache_max : 1;
@@ -407,8 +412,8 @@ fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 int
 fusefs_statfs (fusefs *fs, fusefs_statvfs *st)
 {
-	st->block_size = 512;
-	st->blocks = fs->size == ~0ULL ? 0 : (fs->size + 511) / 512;
+	st->block_size = fs->sector_size;
+	st->blocks = fs->size == ~0ULL ? 0 : (fs->size + fs->sector_size - 1) / fs->sector_size;
 	st->name_max = 255;
 	return 0;
 }

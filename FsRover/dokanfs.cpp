@@ -561,7 +561,8 @@ dokanfs_shutdown (void)
 
 dokan_mount *
 dokanfs_mount (const std::string &device, const std::string &fs,
-	unsigned long long size, wchar_t letter, bool open_explorer, std::wstring *error)
+	unsigned long long size, unsigned int sector_size, wchar_t letter,
+	bool open_explorer, std::wstring *error)
 {
 	if (!dokanfs_backend_available (g_backend))
 	{
@@ -570,7 +571,7 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 	}
 
 	dokan_mount *m = new dokan_mount;
-	fusefs_init (&m->core, device, fs, size,
+	fusefs_init (&m->core, device, fs, size, sector_size,
 		[] (const std::function<void ()> &fn) { return backend_call (fn); });
 	m->mountpoint = std::wstring (1, letter) + L":\\";
 	m->open_explorer = open_explorer;
@@ -600,8 +601,8 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 		m->opts.Options = DOKAN_OPTION_WRITE_PROTECT;
 		m->opts.GlobalContext = (ULONG64) (UINT_PTR) m;
 		m->opts.MountPoint = m->mountpoint.c_str ();
-		m->opts.SectorSize = 512;
-		m->opts.AllocationUnitSize = 512;
+		m->opts.SectorSize = m->core.sector_size;
+		m->opts.AllocationUnitSize = m->core.sector_size;
 
 		int rc = p_DokanCreateFileSystem (&m->opts, &g_ops, &m->handle);
 		if (rc != DOKAN_SUCCESS)

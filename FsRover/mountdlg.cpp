@@ -101,7 +101,7 @@ show_mount_dialog (HWND owner, const backend_diskent &d)
 	}
 
 	std::wstring err;
-	dokan_mount *m = dokanfs_mount (g_dokan_disk.name, g_dokan_disk.fs, g_dokan_disk.size, g_dokan_letter, g_dokan_explorer, &err);
+	dokan_mount *m = dokanfs_mount (g_dokan_disk.name, g_dokan_disk.fs, g_dokan_disk.size, g_dokan_disk.sector_size, g_dokan_letter, g_dokan_explorer, &err);
 	if (!m)
 		return err;
 	wchar_t text[160];

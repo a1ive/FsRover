@@ -107,6 +107,7 @@ struct mounted_device
 	std::string name;
 	std::string fs;
 	unsigned long long size = ROVER_SIZE_UNKNOWN;
+	unsigned int sector_size = 0;
 	bool found = false;
 };
 
@@ -410,6 +411,7 @@ find_mount_device (const rover_disk_info *info, void *opaque)
 		return 0;
 	wanted->found = true;
 	wanted->size = info->size;
+	wanted->sector_size = info->sector_size;
 	if (info->fs)
 		wanted->fs = info->fs;
 	return 1;
@@ -587,6 +589,7 @@ main (int argc, char **argv)
 	}
 
 	fusefs_init (&core, device.name, device.fs, device.size,
+		device.sector_size,
 		[] (const std::function<void ()> &fn) { fn (); return true; });
 	operations.getattr = fs_getattr;
 	operations.open = fs_open;

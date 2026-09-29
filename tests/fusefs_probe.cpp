@@ -102,7 +102,7 @@ struct mount
 
 	explicit mount (const std::string &device, size_t cache_max = FUSEFS_CACHE_MAX)
 	{
-		fusefs_init (&fs, device, "probe", ~0ULL,
+		fusefs_init (&fs, device, "probe", ~0ULL, 0,
 			[this] (const std::function<void ()> &fn)
 			{
 				std::lock_guard<std::mutex> hold (backend);

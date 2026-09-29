@@ -41,6 +41,10 @@ struct fusefs
 	std::string root;
 	std::string fs_name;
 	unsigned long long size;
+	/* Volume sector size reported to the host, a power of two in
+	   512..4096; also the allocation unit (grub does not expose cluster
+	   sizes).  */
+	uint32_t sector_size;
 	uint32_t serial;
 	std::function<bool (const std::function<void ()> &)> dispatch;
 	/* Path -> metadata LRU.  The volume is read-only, so entries stay valid
@@ -66,8 +70,11 @@ struct fusefs_statvfs
 typedef int (*fusefs_fill_dir) (void *data, const char *name,
 	const fusefs_stat *st);
 
+/* SECTOR_SIZE is the device's logical sector size (rover_disk_info),
+   0 if unknown. */
 void fusefs_init (fusefs *fs, const std::string &device,
 	const std::string &fs_name, unsigned long long size,
+	unsigned int sector_size,
 	std::function<bool (const std::function<void ()> &)> dispatch,
 	size_t cache_max = FUSEFS_CACHE_MAX);
 
