@@ -63,7 +63,6 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define HIK_ENTRY_DATA_OFFSET	0x20
 
 #define HIK_FOOTER_MARKER_OFFSET	0x10
-#define HIK_FOOTER_LAST_PAGE_OFFSET	0x18
 #define HIK_FOOTER_READ		0x20
 
 #define HIK_TIMESTAMP_RECORDING	0x7FFFFFFFU
@@ -288,8 +287,6 @@ hik_add_entry (struct hik_data *data, const grub_uint8_t *raw, grub_uint32_t ord
 	entry.end_time = end;
 	entry.ordinal = ordinal;
 	entry.channel = channel;
-	if (hik_probe_media (data, &entry))
-		return grub_errno;
 
 	if (data->num_entries == data->cap_entries)
 	{
@@ -318,11 +315,11 @@ hik_find_page (const grub_uint64_t *pages, grub_uint32_t count, grub_uint64_t of
 }
 
 static grub_err_t
-hik_validate_chain (const grub_uint64_t *pages, const grub_uint64_t *next, grub_uint32_t count, grub_uint64_t footer_last)
+hik_validate_chain (const grub_uint64_t *pages, const grub_uint64_t *next, grub_uint32_t count)
 {
 	grub_uint8_t *incoming = NULL;
 	grub_uint8_t *seen = NULL;
-	grub_uint32_t i, head = count, terminal = count;
+	grub_uint32_t i, head = count;
 	grub_uint32_t terminal_count = 0, head_count = 0;
 	grub_err_t err = GRUB_ERR_NONE;
 
@@ -340,7 +337,6 @@ hik_validate_chain (const grub_uint64_t *pages, const grub_uint64_t *next, grub_
 
 		if (next[i] == ~(grub_uint64_t) 0)
 		{
-			terminal = i;
 			terminal_count++;
 			continue;
 		}
@@ -358,7 +354,7 @@ hik_validate_chain (const grub_uint64_t *pages, const grub_uint64_t *next, grub_
 			head = i;
 			head_count++;
 		}
-	if (terminal_count != 1 || head_count != 1 || pages[terminal] != footer_last)
+	if (terminal_count != 1 || head_count != 1)
 	{
 		err = grub_error (GRUB_ERR_BAD_FS, "inconsistent Hikvision HIKBTREE page chain");
 		goto out;
@@ -396,6 +392,71 @@ out:
 	return err;
 }
 
+/* Some disks have an additional index level.  Their header first-page
+   pointer starts the complete leaf chain, including leaves not mentioned by
+   the top index.  Do not interpret those index entries as recording entries. */
+static grub_err_t
+hik_parse_leaf_chain (struct hik_data *data, grub_uint64_t base,
+	grub_uint32_t size, grub_uint64_t first_page, grub_uint64_t page_list,
+	grub_uint64_t footer_offset)
+{
+	grub_uint8_t page[HIK_PAGE_SIZE];
+	grub_uint8_t *seen = NULL;
+	grub_uint64_t offset = first_page;
+	grub_uint32_t ordinal = 0;
+	grub_err_t err = GRUB_ERR_NONE;
+
+	seen = grub_calloc (size / HIK_PAGE_SIZE, 1);
+	if (!seen)
+	{
+		err = grub_errno;
+		goto fail;
+	}
+	while (offset != ~(grub_uint64_t) 0)
+	{
+		grub_uint32_t slot, count, i;
+
+		if (!hik_tree_range (base, size, offset, HIK_PAGE_SIZE)
+			|| (offset - base) % HIK_PAGE_SIZE != 0
+			|| offset == base || offset == page_list || offset == footer_offset)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision leaf page pointer");
+			goto fail;
+		}
+		slot = (grub_uint32_t) ((offset - base) / HIK_PAGE_SIZE);
+		if (seen[slot])
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "cyclic Hikvision leaf page chain");
+			goto fail;
+		}
+		seen[slot] = 1;
+		if (hik_read (data, offset, sizeof (page), page))
+		{
+			err = grub_errno;
+			goto fail;
+		}
+		count = hik_get_le32 (page + HIK_PAGE_COUNT_OFFSET);
+		if (count > HIK_PAGE_ENTRIES_MAX)
+		{
+			err = grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision leaf entry count");
+			goto fail;
+		}
+		for (i = 0; i < count; i++)
+		{
+			ordinal++;
+			err = hik_add_entry (data, page + HIK_PAGE_ENTRIES_OFFSET
+				+ i * HIK_ENTRY_SIZE, ordinal);
+			if (err)
+				goto fail;
+		}
+		offset = hik_get_le64 (page + HIK_PAGE_NEXT_OFFSET);
+	}
+
+fail:
+	grub_free (seen);
+	return err;
+}
+
 static grub_err_t
 hik_parse_tree (struct hik_data *data, grub_uint64_t base, grub_uint32_t size)
 {
@@ -403,7 +464,7 @@ hik_parse_tree (struct hik_data *data, grub_uint64_t base, grub_uint32_t size)
 	grub_uint8_t footer[HIK_FOOTER_READ];
 	grub_uint8_t page_header[HIK_PAGE_ENTRIES_OFFSET];
 	grub_uint8_t raw[HIK_ENTRY_SIZE];
-	grub_uint64_t footer_offset, page_list, first_page, footer_last;
+	grub_uint64_t footer_offset, page_list, first_page;
 	grub_uint64_t *pages = NULL, *next = NULL;
 	grub_uint32_t page_count, i, j, ordinal = 0;
 	grub_err_t err = GRUB_ERR_NONE;
@@ -426,6 +487,19 @@ hik_parse_tree (struct hik_data *data, grub_uint64_t base, grub_uint32_t size)
 		|| (page_list - base) % HIK_PAGE_SIZE != 0
 		|| (first_page - base) % HIK_PAGE_SIZE != 0)
 		return grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision HIKBTREE pointers");
+
+	if (hik_read (data, footer_offset, sizeof (footer), footer))
+	{
+		err = grub_errno;
+		goto out;
+	}
+	if (!hik_all_byte (footer + HIK_FOOTER_MARKER_OFFSET, 8, 0xFF))
+	{
+		err = grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision HIKBTREE footer");
+		goto out;
+	}
+	/* Footer +0x18 does not identify the terminal leaf on all known disks.
+	   Keep the footer range/marker checks, but do not compare that field. */
 
 	if (hik_read (data, page_list + HIK_PAGE_COUNT_OFFSET, sizeof (page_count), &page_count))
 		return grub_errno;
@@ -456,6 +530,37 @@ hik_parse_tree (struct hik_data *data, grub_uint64_t base, grub_uint32_t size)
 			|| hik_find_page (pages, i, pages[i]) >= 0)
 		{
 			err = grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision HIKBTREE page list");
+			goto out;
+		}
+	}
+
+	/* Select the chain path only for a listed page whose first entry looks
+	   like a tree-local index pointer, not for an arbitrary bad marker. */
+	for (i = 0; i < page_count; i++)
+	{
+		grub_uint64_t target;
+		grub_uint32_t count;
+
+		if (hik_read (data, pages[i], sizeof (page_header), page_header))
+		{
+			err = grub_errno;
+			goto out;
+		}
+		count = hik_get_le32 (page_header + HIK_PAGE_COUNT_OFFSET);
+		if (!count || count > HIK_PAGE_ENTRIES_MAX)
+			continue;
+		if (hik_read (data, pages[i] + HIK_PAGE_ENTRIES_OFFSET, sizeof (raw), raw))
+		{
+			err = grub_errno;
+			goto out;
+		}
+		target = hik_get_le64 (raw);
+		if (!hik_all_byte (raw, 8, 0xFF)
+			&& hik_tree_range (base, size, target, HIK_PAGE_SIZE)
+			&& (target - base) % HIK_PAGE_SIZE == 0)
+		{
+			err = hik_parse_leaf_chain (data, base, size, first_page,
+				page_list, footer_offset);
 			goto out;
 		}
 	}
@@ -492,18 +597,7 @@ hik_parse_tree (struct hik_data *data, grub_uint64_t base, grub_uint32_t size)
 		}
 	}
 
-	if (hik_read (data, footer_offset, sizeof (footer), footer))
-	{
-		err = grub_errno;
-		goto out;
-	}
-	if (!hik_all_byte (footer + HIK_FOOTER_MARKER_OFFSET, 8, 0xFF))
-	{
-		err = grub_error (GRUB_ERR_BAD_FS, "invalid Hikvision HIKBTREE footer");
-		goto out;
-	}
-	footer_last = hik_get_le64 (footer + HIK_FOOTER_LAST_PAGE_OFFSET);
-	err = hik_validate_chain (pages, next, page_count, footer_last);
+	err = hik_validate_chain (pages, next, page_count);
 
 out:
 	grub_free (pages);
@@ -727,6 +821,11 @@ grub_hikvision_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t h
 
 		if (data->entries[i].channel != channel)
 			continue;
+		/* Only the requested channel needs media names and adjusted sizes.
+		   Root/probe calls never touch recording payloads. */
+		err = hik_probe_media (data, &data->entries[i]);
+		if (err)
+			goto out;
 		found = 1;
 		hik_format_name (&data->entries[i], name, sizeof (name));
 		grub_memset (&info, 0, sizeof (info));
@@ -757,7 +856,7 @@ grub_hikvision_open (struct grub_file *file, const char *name)
 	struct hik_data *data;
 	struct hik_file *ctx = NULL;
 	const char *normalized, *child;
-	grub_size_t length, child_length;
+	grub_size_t length, child_length, stem_length;
 	grub_uint16_t channel;
 	grub_uint32_t i;
 	char generated[HIK_NAME_MAX];
@@ -776,6 +875,15 @@ grub_hikvision_open (struct grub_file *file, const char *name)
 	{
 		if (data->entries[i].channel != channel)
 			continue;
+		/* The metadata-derived stem identifies the record before reading
+		   its payload.  Check the actual extension after probing only it. */
+		hik_format_name (&data->entries[i], generated, sizeof (generated));
+		stem_length = grub_strlen (generated) - grub_strlen (".bin");
+		if (child_length <= stem_length || child[stem_length] != '.'
+			|| grub_strncasecmp (generated, child, stem_length) != 0)
+			continue;
+		if (hik_probe_media (data, &data->entries[i]))
+			goto fail;
 		hik_format_name (&data->entries[i], generated, sizeof (generated));
 		if (grub_strlen (generated) == child_length
 			&& grub_strncasecmp (generated, child, child_length) == 0)
@@ -838,29 +946,27 @@ grub_hikvision_close (grub_file_t file)
 static grub_err_t
 grub_hikvision_label (grub_device_t device, char **label)
 {
-	struct hik_data *data;
+	struct hik_data data = { 0 };
 
 	*label = NULL;
-	data = hik_mount (device->disk);
-	if (!data)
+	data.disk = device->disk;
+	if (hik_parse_master (&data))
 		return grub_errno;
 	*label = grub_strdup ("HIKVISION DVR");
-	hik_free_data (data);
 	return grub_errno;
 }
 
 static grub_err_t
 grub_hikvision_mtime (grub_device_t device, grub_int64_t *timebuf)
 {
-	struct hik_data *data;
+	struct hik_data data = { 0 };
 
 	*timebuf = 0;
-	data = hik_mount (device->disk);
-	if (!data)
+	data.disk = device->disk;
+	if (hik_parse_master (&data))
 		return grub_errno;
-	if (hik_valid_timestamp (data->master.init_time))
-		*timebuf = data->master.init_time;
-	hik_free_data (data);
+	if (hik_valid_timestamp (data.master.init_time))
+		*timebuf = data.master.init_time;
 	return GRUB_ERR_NONE;
 }
 
