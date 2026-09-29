@@ -783,11 +783,17 @@ grub_jfs_find_file (struct grub_jfs_data *data, const char *path,
 static grub_err_t
 grub_jfs_lookup_symlink (struct grub_jfs_data *data, grub_uint32_t ino)
 {
-  grub_size_t size = grub_le_to_cpu64 (data->currinode.size);
+  grub_size_t size;
   char *symlink;
 
   if (++data->linknest > GRUB_JFS_MAX_SYMLNK_CNT)
     return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
+
+  /* CVE-2025-0685: the on-disk size must neither truncate nor overflow
+     the terminator allocation below.  */
+  if (grub_le_to_cpu64 (data->currinode.size) >= GRUB_SIZE_MAX)
+    return grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+  size = grub_le_to_cpu64 (data->currinode.size);
 
   symlink = grub_malloc (size + 1);
   if (!symlink)
