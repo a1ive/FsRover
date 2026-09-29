@@ -100,6 +100,31 @@ pointers and a NULL end pointer. The C probe includes the real inline function;
 compiling it with UBSan can detect signed negation overflow at `LONG_MIN` even
 when an ordinary run happens to return the expected value.
 
+The default suite also runs `fat_large.py`: 29 driver-focused FAT32/exFAT
+sparse-image cases cover 512/1024/2048/4096-byte sectors, data/FAT/heap addresses
+beyond 2 TiB, FAT entries beyond 4 GiB, active FAT selection, chained and
+contiguous files, extraction hashes, cross-cluster seeks, exact blocklist
+addresses and invalid geometry. Volumes whose tail lies past the device end
+still mount (only a cluster heap starting outside it is rejected); when the
+cut runs through a file, blocklist and reads both stop at the device end. FAT32
+entries with reserved high bits are followed like the blocklist does, and an
+exFAT read past the 2^32nd cluster fails instead of wrapping to cluster 0. These synthetic images leave unused allocation
+metadata sparse and are not OS-formatted or real-media validation. Source
+integrity checks sample every written metadata/payload range; they do not hash
+multi-TiB holes. Images are removed after each case so CI artifacts stay bounded.
+To run the matrix independently:
+
+```sh
+python tests/fat_large.py --cli build/x64/CliRover.exe --probe build/x64/product_probe.exe --output build/fat-large-tests
+```
+
+Use `--keep-images` only for local inspection; retained images have multi-TiB
+logical lengths and must not be copied or uploaded with tools that expand holes.
+Windows fixtures use native sparse-file and EOF operations; Linux uses sparse
+truncation. Linux binaries can be passed to the same script. When changing
+`fat.c` on Windows, rebuild the GRUB project if incremental compilation omits
+`exfat.c`, which includes `fat.c`; relink the CLI and probe before testing.
+
 ## Coverage and results
 
 | Area | Checks |

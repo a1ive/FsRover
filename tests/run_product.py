@@ -23,6 +23,7 @@ from sysv import generate_sysv, check_sysv
 from xenix import generate_xenix, check_xenix
 from eafs import generate_eafs, check_eafs
 from okr import generate_okr, check_okr
+from fat_large import check_fat_large
 
 
 class Skipped(Exception):
@@ -331,6 +332,7 @@ class Suite:
         generate_eafs(self.fixtures)
         generate_okr(self.fixtures)
         before = {p.name: digest(p.read_bytes()) for p in self.fixtures.iterdir()}
+        self.case("FAT/exFAT large sector addresses", lambda: check_fat_large(self))
         self.case("strtol boundaries", lambda: self.command([self.probe, "--strtol"]))
         for mode in ("formats", "trailing", "null", "minimum"):
             self.case("printf " + mode, lambda mode=mode: self.command([self.probe, "--printf", mode]))

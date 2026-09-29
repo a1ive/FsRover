@@ -172,21 +172,21 @@ typedef struct grub_fat_dir_entry grub_fat_dir_node_t;
 struct grub_fat_data
 {
   int logical_sector_bits;
-  grub_uint32_t num_sectors;
+	grub_disk_addr_t num_sectors;
 
-  grub_uint32_t fat_sector;
-  grub_uint32_t sectors_per_fat;
+	grub_disk_addr_t fat_sector;
+	grub_disk_addr_t sectors_per_fat;
   int fat_size;
 
   grub_uint32_t root_cluster;
 #ifndef MODE_EXFAT
-  grub_uint32_t root_sector;
+	grub_disk_addr_t root_sector;
   grub_uint32_t num_root_sectors;
 #endif
 
   int cluster_bits;
   grub_uint32_t cluster_eof_mark;
-  grub_uint32_t cluster_sector;
+	grub_disk_addr_t cluster_sector;
   grub_uint32_t num_clusters;
 
   grub_uint32_t uuid;
@@ -239,6 +239,8 @@ grub_fat_mount (grub_disk_t disk)
   grub_current_fat_bpb_t bpb;
   struct grub_fat_data *data = 0;
   grub_uint32_t first_fat, magic;
+	grub_uint64_t clusters;
+	grub_disk_addr_t disk_sectors;
 
   if (! disk)
     goto fail;
@@ -280,20 +282,20 @@ grub_fat_mount (grub_disk_t disk)
 
   /* Get information about FATs.  */
 #ifdef MODE_EXFAT
-  data->fat_sector = (grub_le_to_cpu32 (bpb.num_reserved_sectors)
+  data->fat_sector = ((grub_disk_addr_t) grub_le_to_cpu32 (bpb.num_reserved_sectors)
 		      << data->logical_sector_bits);
 #else
-  data->fat_sector = (grub_le_to_cpu16 (bpb.num_reserved_sectors)
+  data->fat_sector = ((grub_disk_addr_t) grub_le_to_cpu16 (bpb.num_reserved_sectors)
 		      << data->logical_sector_bits);
 #endif
   if (data->fat_sector == 0)
     goto fail;
 
 #ifdef MODE_EXFAT
-  data->sectors_per_fat = (grub_le_to_cpu32 (bpb.sectors_per_fat)
+  data->sectors_per_fat = ((grub_disk_addr_t) grub_le_to_cpu32 (bpb.sectors_per_fat)
 			   << data->logical_sector_bits);
 #else
-  data->sectors_per_fat = ((bpb.sectors_per_fat_16
+  data->sectors_per_fat = ((grub_disk_addr_t) (bpb.sectors_per_fat_16
 			    ? grub_le_to_cpu16 (bpb.sectors_per_fat_16)
 			    : grub_le_to_cpu32 (bpb.version_specific.fat32.sectors_per_fat_32))
 			   << data->logical_sector_bits);
@@ -303,10 +305,14 @@ grub_fat_mount (grub_disk_t disk)
 
   /* Get the number of sectors in this volume.  */
 #ifdef MODE_EXFAT
-  data->num_sectors = ((grub_le_to_cpu64 (bpb.num_total_sectors))
-		       << data->logical_sector_bits);
+	/* Both disk sectors and mapping byte offsets must remain representable. */
+	if (grub_le_to_cpu64 (bpb.num_total_sectors)
+		> (~0ULL >> (data->logical_sector_bits + GRUB_DISK_SECTOR_BITS)))
+		goto fail;
+	data->num_sectors = (grub_le_to_cpu64 (bpb.num_total_sectors)
+		<< data->logical_sector_bits);
 #else
-  data->num_sectors = ((bpb.num_total_sectors_16
+  data->num_sectors = ((grub_disk_addr_t) (bpb.num_total_sectors_16
 			? grub_le_to_cpu16 (bpb.num_total_sectors_16)
 			: grub_le_to_cpu32 (bpb.num_total_sectors_32))
 		       << data->logical_sector_bits);
@@ -329,18 +335,30 @@ grub_fat_mount (grub_disk_t disk)
 #endif
 
 #ifdef MODE_EXFAT
-  data->cluster_sector = (grub_le_to_cpu32 (bpb.cluster_offset)
+  data->cluster_sector = ((grub_disk_addr_t) grub_le_to_cpu32 (bpb.cluster_offset)
 			  << data->logical_sector_bits);
-  data->num_clusters = grub_le_to_cpu32 (bpb.cluster_count) + 2;
+	clusters = grub_le_to_cpu32 (bpb.cluster_count);
 #else
   data->cluster_sector = data->root_sector + data->num_root_sectors;
-  data->num_clusters = (((data->num_sectors - data->cluster_sector)
-			 >> data->cluster_bits)
-			+ 2);
 #endif
-
-  if (data->num_clusters <= 2)
-    goto fail;
+	/* Validate before subtraction, narrowing the cluster count or reading FATs. */
+	if (data->cluster_sector >= data->num_sectors
+		|| data->fat_sector + bpb.num_fats * data->sectors_per_fat > data->cluster_sector)
+		goto fail;
+	/* A truncated tail stays readable up to the device end; only the metadata
+	   and the start of the cluster heap have to be present. */
+	disk_sectors = grub_disk_native_sectors (disk);
+	if (disk_sectors != GRUB_DISK_SIZE_UNKNOWN && data->cluster_sector >= disk_sectors)
+		goto fail;
+#ifndef MODE_EXFAT
+	clusters = (data->num_sectors - data->cluster_sector) >> data->cluster_bits;
+#else
+	if (clusters > ((data->num_sectors - data->cluster_sector) >> data->cluster_bits))
+		goto fail;
+#endif
+	if (!clusters || clusters > 0xffffffffULL - 2)
+		goto fail;
+	data->num_clusters = (grub_uint32_t) clusters + 2;
 
 #ifdef MODE_EXFAT
   {
@@ -368,7 +386,7 @@ grub_fat_mount (grub_disk_t disk)
 	  /* Get an active FAT.  */
 	  unsigned active_fat = flags & 0xf;
 
-	  if (active_fat > bpb.num_fats)
+	  if (active_fat >= bpb.num_fats)
 	    goto fail;
 
 	  data->fat_sector += active_fat * data->sectors_per_fat;
@@ -398,6 +416,10 @@ grub_fat_mount (grub_disk_t disk)
 #endif
 
   /* More sanity checks.  */
+	if (data->num_clusters > data->cluster_eof_mark
+		|| ((grub_uint64_t) data->num_clusters * data->fat_size + 7) / 8
+		   > (data->sectors_per_fat << GRUB_DISK_SECTOR_BITS))
+		goto fail;
   if (data->num_sectors <= data->fat_sector)
     goto fail;
 
@@ -465,7 +487,8 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
   grub_uint32_t logical_cluster;
   unsigned logical_cluster_bits;
   grub_ssize_t ret = 0;
-  unsigned long sector;
+	grub_disk_addr_t sector;
+	grub_uint64_t remaining;
 
 #ifndef MODE_EXFAT
   /* This is a special case. FAT12 and FAT16 doesn't have the root directory
@@ -486,9 +509,15 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 #ifdef MODE_EXFAT
   if (node->is_contiguous)
     {
+		if (node->file_cluster < 2 || node->file_cluster >= node->data->num_clusters)
+			goto bad_cluster;
+		remaining = (grub_uint64_t) (node->data->num_clusters - node->file_cluster)
+			<< (node->data->cluster_bits + GRUB_DISK_SECTOR_BITS);
+		if (offset > remaining || len > remaining - offset)
+			goto bad_cluster;
       /* Read the data here.  */
       sector = (node->data->cluster_sector
-		+ ((node->file_cluster - 2)
+		+ (((grub_disk_addr_t) node->file_cluster - 2)
 		   << node->data->cluster_bits));
 
       disk->read_hook = read_hook;
@@ -506,6 +535,9 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
   /* Calculate the logical cluster number and offset.  */
   logical_cluster_bits = (node->data->cluster_bits
 			  + GRUB_DISK_SECTOR_BITS);
+	/* No chain has more links than clusters; keep the index from wrapping. */
+	if ((offset >> logical_cluster_bits) >= node->data->num_clusters)
+		goto bad_cluster;
   logical_cluster = offset >> logical_cluster_bits;
   offset &= (1ULL << logical_cluster_bits) - 1;
 
@@ -521,19 +553,19 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 	{
 	  /* Find next cluster.  */
 	  grub_uint32_t next_cluster;
-	  grub_uint32_t fat_offset;
+		  grub_uint64_t fat_offset;
 
 	  switch (node->data->fat_size)
 	    {
 	    case 32:
-	      fat_offset = node->cur_cluster << 2;
+	      fat_offset = (grub_uint64_t) node->cur_cluster << 2;
 	      break;
 	    case 16:
-	      fat_offset = node->cur_cluster << 1;
+	      fat_offset = (grub_uint64_t) node->cur_cluster << 1;
 	      break;
 	    default:
 	      /* case 12: */
-	      fat_offset = node->cur_cluster + (node->cur_cluster >> 1);
+	      fat_offset = (grub_uint64_t) node->cur_cluster + (node->cur_cluster >> 1);
 	      break;
 	    }
 
@@ -546,6 +578,11 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 	  next_cluster = grub_le_to_cpu32 (next_cluster);
 	  switch (node->data->fat_size)
 	    {
+#ifndef MODE_EXFAT
+	    case 32:
+	      next_cluster &= 0x0FFFFFFF;
+	      break;
+#endif
 	    case 16:
 	      next_cluster &= 0xFFFF;
 	      break;
@@ -583,13 +620,14 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 	    }
 	}
 
+		if (node->cur_cluster < 2 || node->cur_cluster >= node->data->num_clusters)
+			goto bad_cluster;
       /* Read the data here.  */
       sector = (node->data->cluster_sector
-		+ ((node->cur_cluster - 2)
+		+ (((grub_disk_addr_t) node->cur_cluster - 2)
 		   << node->data->cluster_bits));
-      size = (1 << logical_cluster_bits) - offset;
-      if (size > len)
-	size = len;
+		remaining = (1ULL << logical_cluster_bits) - offset;
+		size = remaining > len ? len : (grub_size_t) remaining;
 
       disk->read_hook = read_hook;
       disk->read_hook_data = read_hook_data;
@@ -606,6 +644,10 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
     }
 
   return ret;
+
+bad_cluster:
+	grub_error (GRUB_ERR_BAD_FS, "invalid FAT data range");
+	return -1;
 }
 
 struct grub_fat_iterate_context
