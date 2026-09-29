@@ -68,37 +68,23 @@ jobs:
             throw "MSBuild failed with exit code $LASTEXITCODE."
           }
 
-      - name: Set up Python for product regression
-        if: matrix.architecture == 'x64'
-        uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-
       - name: Build product regression probe
-        if: matrix.architecture == 'x64'
         shell: pwsh
         run: |
-          msbuild tests/product_probe.vcxproj /m /p:Configuration=Release /p:Platform=x64 "/p:SolutionDir=$env:GITHUB_WORKSPACE\"
+          msbuild tests/product_probe.vcxproj /m /p:Configuration=Release /p:Platform=${{ matrix.output_directory }} "/p:SolutionDir=$env:GITHUB_WORKSPACE\"
           if ($LASTEXITCODE -ne 0) {
             throw "Product probe build failed with exit code $LASTEXITCODE."
           }
 
-      - name: Product regression
-        if: matrix.architecture == 'x64'
-        shell: pwsh
-        run: |
-          python tests/run_product.py --cli build/x64/CliRover.exe --probe build/x64/product_probe.exe --output build/product-tests
-          if ($LASTEXITCODE -ne 0) {
-            throw "Product regression failed with exit code $LASTEXITCODE."
-          }
-
-      - name: Upload failed product regression
-        if: failure() && matrix.architecture == 'x64'
+      - name: Upload regression binaries
+        if: matrix.architecture != 'ARM64'
         uses: actions/upload-artifact@v7
         with:
-          name: product-regression-windows-x64
-          path: build/product-tests/
-          if-no-files-found: ignore
+          name: regression-bin-${{ matrix.architecture }}
+          path: |
+            build/${{ matrix.output_directory }}/CliRover.exe
+            build/${{ matrix.output_directory }}/product_probe.exe
+          if-no-files-found: error
 
       - name: Package artifact
         shell: pwsh
@@ -121,10 +107,53 @@ jobs:
           path: ${{ runner.temp }}\Rover-${{ matrix.architecture }}
           if-no-files-found: error
 
+  regression:
+    name: Regression ${{ matrix.architecture }}
+    needs: build
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+          - architecture: x86
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Download regression binaries
+        uses: actions/download-artifact@v8
+        with:
+          name: regression-bin-${{ matrix.architecture }}
+          path: regression-bin
+
+      - name: Product regression
+        shell: pwsh
+        run: |
+          python tests/run_product.py --cli regression-bin/CliRover.exe --probe regression-bin/product_probe.exe --output build/product-tests
+          if ($LASTEXITCODE -ne 0) {
+            throw "Product regression failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload failed product regression
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: product-regression-windows-${{ matrix.architecture }}
+          path: build/product-tests/
+          if-no-files-found: ignore
+
   release:
     name: Create release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build
+    needs: [build, regression]
     runs-on: windows-latest
     permissions:
       contents: write

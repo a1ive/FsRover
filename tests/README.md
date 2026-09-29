@@ -157,8 +157,10 @@ exit codes, stdout/stderr and durations. Any unexpected failure returns nonzero;
 checks also remain active under `python -O`. Each child command has a 60-second
 timeout; the CTest entry has a 300-second timeout.
 
-Windows x64 and Linux x64 CI run the suite, and upload run directories on failure.
-The normal Windows x86/ARM64 build matrix remains separate from runtime coverage.
+Windows x64, x86 and Linux x64 CI run the suite, and upload run directories
+on failure. The Windows build job publishes CliRover and the probe for x64 and x86,
+and a separate job runs the suite on each (x86 under WOW64). ARM64 is built,
+including the probe, but its runtime is not covered.
 POSIX runs additionally send a real SIGINT through LinuxRover's signal handlers; on
 Windows, cancellation is covered through the cooperative core at a deterministic
 checkpoint between driver calls. Platform-only checks report `SKIP` when the host

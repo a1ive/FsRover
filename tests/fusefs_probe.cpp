@@ -253,7 +253,7 @@ void run_device (const std::string &device, const std::vector<std::string> &path
 				+ " got " + std::to_string (rc));
 			if (!rc)
 			{
-				std::vector<char> data (item.second.st.size + 16);
+				std::vector<char> data (static_cast<size_t> (item.second.st.size) + 16);
 				int got = fusefs_read (&m.fs, item.first.c_str (), data.data (),
 					data.size (), 0, &handle);
 				require (got == (int) item.second.st.size, "short read: " + item.first);
