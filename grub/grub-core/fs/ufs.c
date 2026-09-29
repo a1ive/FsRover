@@ -451,10 +451,16 @@ static grub_err_t
 grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
 {
   char *symlink;
-  grub_size_t sz = INODE_SIZE (data);
+  grub_size_t sz;
 
   if (++data->linknest > GRUB_UFS_MAX_SYMLNK_CNT)
     return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
+
+  /* CVE-2025-0677: the on-disk size must neither truncate nor overflow
+     the terminator allocation below.  */
+  if (INODE_SIZE (data) >= GRUB_SIZE_MAX)
+    return grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+  sz = INODE_SIZE (data);
 
   symlink = grub_malloc (sz + 1);
   if (!symlink)
