@@ -66,7 +66,8 @@ the C++ frontend and calls the actual `grub_file_map_range` and read APIs.
 the generated ext2 and FAT12 images: cached getattr/readdir/open results must
 match an uncached `rover_stat` walk (symlink components, missing and non-directory
 parents, case variants), repeated and listing-seeded lookups must not reach the
-backend dispatcher, the LRU bound evicts oldest first, and concurrent lookups,
+backend dispatcher, the LRU bound (a small per-mount limit, since every insert is a
+real lookup) evicts oldest first, and concurrent lookups,
 listings and invalidations stay consistent. It does not mount anything. x86 uses `Win32` for the
 probe project and `build/Win32/` for executable paths; ARM64 uses `ARM64` and
 requires an appropriate runtime host to execute.

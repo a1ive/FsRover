@@ -32,6 +32,9 @@
 
 struct fusefs_cache;
 
+/* Roughly 250 bytes per entry: at most ~16 MiB per mount. */
+constexpr size_t FUSEFS_CACHE_MAX = 65536;
+
 struct fusefs
 {
 	std::string device;
@@ -65,7 +68,8 @@ typedef int (*fusefs_fill_dir) (void *data, const char *name,
 
 void fusefs_init (fusefs *fs, const std::string &device,
 	const std::string &fs_name, unsigned long long size,
-	std::function<bool (const std::function<void ()> &)> dispatch);
+	std::function<bool (const std::function<void ()> &)> dispatch,
+	size_t cache_max = FUSEFS_CACHE_MAX);
 
 int fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st);
 int fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle);

@@ -16,8 +16,8 @@
 namespace
 {
 
-/* Mirrors CACHE_MAX in common/fusefs.cpp. */
-constexpr unsigned CACHE_MAX = 65536;
+/* Small bound for the eviction check: every insert costs a real lookup. */
+constexpr unsigned EVICT_MAX = 256;
 
 void require (bool value, const std::string &message)
 {
@@ -100,7 +100,7 @@ struct mount
 	std::mutex backend;	/* stands in for the single Rover thread */
 	std::atomic<unsigned> dispatches { 0 };
 
-	explicit mount (const std::string &device)
+	explicit mount (const std::string &device, size_t cache_max = FUSEFS_CACHE_MAX)
 	{
 		fusefs_init (&fs, device, "probe", ~0ULL,
 			[this] (const std::function<void ()> &fn)
@@ -109,7 +109,7 @@ struct mount
 				dispatches++;
 				fn ();
 				return true;
-			});
+			}, cache_max);
 	}
 
 	result getattr (const std::string &path)
@@ -307,8 +307,8 @@ void run_device (const std::string &device, const std::vector<std::string> &path
 
 void run_eviction (const std::string &device)
 {
-	mount m (device);
-	unsigned total = CACHE_MAX + 64;
+	mount m (device, EVICT_MAX);
+	unsigned total = EVICT_MAX + 64;
 	for (unsigned i = 0; i < total; i++)
 	{
 		std::string path = "/absent-" + std::to_string (i);

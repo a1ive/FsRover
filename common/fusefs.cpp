@@ -49,6 +49,7 @@ struct fusefs_cache
 	typedef std::list<std::pair<std::string, entry>> lru_list;
 
 	std::mutex lock;
+	size_t max;	/* entries kept, at least 1 */
 	lru_list lru;	/* most recently used first */
 	/* Keys borrow the strings of list nodes, which never move. */
 	std::unordered_map<std::string_view, lru_list::iterator> map;
@@ -61,9 +62,6 @@ constexpr uint32_t MODE_DIR = 0040000;
 constexpr uint32_t MODE_FILE = 0100000;
 constexpr uint32_t MODE_READ = 00444;
 constexpr uint32_t MODE_EXEC = 00111;
-
-/* Roughly 250 bytes per entry: at most ~16 MiB per mount. */
-constexpr size_t CACHE_MAX = 65536;
 
 bool
 cache_get (fusefs_cache *cache, std::string_view path, fusefs_cache::entry *out)
@@ -95,7 +93,7 @@ cache_put (fusefs_cache *cache, std::string_view path,
 		cache->lru.splice (cache->lru.begin (), cache->lru, it->second);
 		return;
 	}
-	if (cache->lru.size () >= CACHE_MAX)
+	if (cache->lru.size () >= cache->max)
 	{
 		cache->map.erase (cache->lru.back ().first);
 		cache->lru.pop_back ();
@@ -205,7 +203,8 @@ struct dir_entry
 void
 fusefs_init (fusefs *fs, const std::string &device,
 	const std::string &fs_name, unsigned long long size,
-	std::function<bool (const std::function<void ()> &)> dispatch)
+	std::function<bool (const std::function<void ()> &)> dispatch,
+	size_t cache_max)
 {
 	fs->device = device;
 	fs->root = "(" + device + ")";
@@ -213,6 +212,7 @@ fusefs_init (fusefs *fs, const std::string &device,
 	fs->size = size;
 	fs->dispatch = std::move (dispatch);
 	fs->cache = std::make_shared<fusefs_cache> ();
+	fs->cache->max = cache_max ? cache_max : 1;
 	uint32_t hash = 2166136261u;
 	for (char c : device)
 		hash = (hash ^ (unsigned char) c) * 16777619u;
