@@ -383,6 +383,7 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
 		       grub_disk_addr_t blocks_start)
 {
   grub_disk_addr_t i, blockcnt;
+  grub_size_t max_read;
   int blocksize = 1 << (log2blocksize + GRUB_DISK_SECTOR_BITS);
 
   /*
@@ -409,14 +410,17 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
     len = filesize - pos;
 
   blockcnt = ((len + pos) + blocksize - 1) >> (log2blocksize + GRUB_DISK_SECTOR_BITS);
+  max_read = disk->max_agglomerate
+    << (GRUB_DISK_CACHE_BITS + GRUB_DISK_SECTOR_BITS);
 
-  for (i = pos >> (log2blocksize + GRUB_DISK_SECTOR_BITS); i < blockcnt; i++)
+  for (i = pos >> (log2blocksize + GRUB_DISK_SECTOR_BITS); i < blockcnt;)
     {
       grub_disk_addr_t blknr;
       int blockoff = pos & (blocksize - 1);
       int blockend = blocksize;
-
       int skipfirst = 0;
+      grub_disk_addr_t run_blocks = 1;
+      grub_size_t run_length;
 
       blknr = get_block (node, i);
       if (grub_errno)
@@ -441,15 +445,50 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
 	  blockend -= skipfirst;
 	}
 
+      run_length = blockend;
+
       /* If the block number is 0 this block is not stored on disk but
 	 is zero filled instead.  */
       if (blknr)
 	{
+	  /*
+	   * The filesystem calls this helper once per file block.  Merge
+	   * consecutive physical blocks so that grub_disk_read() can pass a
+	   * larger request to the disk driver.  Do not merge holes, and stop
+	   * at the driver's advertised aggregation limit.
+	   */
+	  while (i + run_blocks < blockcnt)
+	    {
+	      grub_disk_addr_t next;
+	      grub_size_t next_length = blocksize;
+
+	      if (i + run_blocks == blockcnt - 1)
+		{
+		  next_length = (len + pos) & (blocksize - 1);
+		  if (! next_length)
+		    next_length = blocksize;
+		}
+
+	      if (max_read && run_length + next_length > max_read)
+		break;
+
+	      next = get_block (node, i + run_blocks);
+	      if (grub_errno)
+		return -1;
+	      next = next << log2blocksize;
+
+	      if (! next || next != blknr + (run_blocks << log2blocksize))
+		break;
+
+	      run_length += next_length;
+	      run_blocks++;
+	    }
+
 	  disk->read_hook = read_hook;
 	  disk->read_hook_data = read_hook_data;
 
 	  grub_disk_read (disk, blknr + blocks_start, skipfirst,
-			  blockend, buf);
+			  run_length, buf);
 	  disk->read_hook = 0;
 	  if (grub_errno)
 	    return -1;
@@ -457,7 +496,8 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
       else
 	grub_memset (buf, 0, blockend);
 
-      buf += blocksize - skipfirst;
+      buf += run_length;
+      i += run_blocks;
     }
 
   return len;
