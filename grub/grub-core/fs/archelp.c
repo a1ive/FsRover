@@ -64,7 +64,6 @@ handle_symlink (struct grub_archelp_data *data,
   grub_size_t flen;
   char *target;
   char *ptr;
-  char *lastslash;
   grub_size_t prefixlen;
   char *rest;
   char *linktarget;
@@ -80,57 +79,43 @@ handle_symlink (struct grub_archelp_data *data,
   if (grub_memcmp (*name, fn, flen) != 0
       || ((*name)[flen] != 0 && (*name)[flen] != '/'))
     return GRUB_ERR_NONE;
+  /* REST keeps its leading slash when the link is a leading component.  */
   rest = *name + flen;
-  lastslash = rest;
-  if (*rest)
-    rest++;
-  while (lastslash >= *name && *lastslash != '/')
-    lastslash--;
-  if (lastslash >= *name)
-    prefixlen = lastslash - *name;
-  else
-    prefixlen = 0;
 
-  if (prefixlen)
-    prefixlen++;
+  /* A relative target starts in the directory holding the link.  */
+  for (prefixlen = flen; prefixlen > 0 && (*name)[prefixlen - 1] != '/';
+       prefixlen--);
 
   linktarget = arcops->get_link_target (data);
   if (!linktarget)
     return grub_errno;
   if (linktarget[0] == '\0')
-    return GRUB_ERR_NONE;
+    {
+      grub_free (linktarget);
+      return GRUB_ERR_NONE;
+    }
+  if (linktarget[0] == '/')
+    prefixlen = 0;
   linktarget_len = grub_strlen (linktarget);
 
   if (grub_add (linktarget_len, grub_strlen (*name), &sz) ||
-      grub_add (sz, 2, &sz))
-    return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("link target length overflow"));
+      grub_add (sz, 1, &sz))
+    {
+      grub_free (linktarget);
+      return grub_error (GRUB_ERR_OUT_OF_RANGE, N_("link target length overflow"));
+    }
 
   target = grub_malloc (sz);
   if (!target)
-    return grub_errno;
+    {
+      grub_free (linktarget);
+      return grub_errno;
+    }
 
-  grub_strcpy (target + prefixlen, linktarget);
+  grub_memcpy (target, *name, prefixlen);
+  ptr = grub_stpcpy (target + prefixlen, linktarget);
+  grub_strcpy (ptr, rest);
   grub_free (linktarget);
-  if (target[prefixlen] == '/')
-    {
-      ptr = grub_stpcpy (target, target + prefixlen);
-      ptr = grub_stpcpy (ptr, rest);
-      *ptr = 0;
-      grub_dprintf ("archelp", "symlink redirected %s to %s\n",
-		    *name, target);
-      grub_free (*name);
-
-      canonicalize (target);
-      *name = target;
-      *restart = 1;
-      return GRUB_ERR_NONE;
-    }
-  if (prefixlen)
-    {
-      grub_memcpy (target, *name, prefixlen);
-      target[prefixlen-1] = '/';
-    }
-  grub_strcpy (target + prefixlen + linktarget_len, rest);
   grub_dprintf ("archelp", "symlink redirected %s to %s\n",
 		*name, target);
   grub_free (*name);
