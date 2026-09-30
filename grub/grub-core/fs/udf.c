@@ -1817,20 +1817,20 @@ grub_udf_read_symlink (grub_fshelp_node_t node)
 	  break;
 	case 3:
 	  /* in 4 bytes. out: 3 bytes.  */
-	  if (optr != out)
+	  if (optr != out && optr[-1] != '/')
 	    *optr++ = '/';
 	  *optr++ = '.';
 	  *optr++ = '.';
 	  break;
 	case 4:
 	  /* in 4 bytes. out: 2 bytes.  */
-	  if (optr != out)
+	  if (optr != out && optr[-1] != '/')
 	    *optr++ = '/';
 	  *optr++ = '.';
 	  break;
 	case 5:
 	  /* in 4 + n bytes. out, at most: 1 + 2 * n bytes.  */
-	  if (optr != out)
+	  if (optr != out && optr[-1] != '/')
 	    *optr++ = '/';
 	  if (!read_string (ptr + 4, s - 4, optr))
 	    goto fail_1;
