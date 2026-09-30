@@ -1175,7 +1175,12 @@ grub_diskfilter_make_raid (grub_size_t uuidlen, char *uuid, int nmemb,
     case 4:
     case 5:
     case 6:
-      totsize = (nmemb - ((unsigned) level / 3U)) * disk_size;
+      if (grub_mul ((grub_uint64_t) (nmemb - ((unsigned) level / 3U)),
+		    disk_size, &totsize))
+	{
+	  grub_free (uuid);
+	  return NULL;
+	}
       break;
 
     default:
