@@ -141,6 +141,9 @@ grub_file_open (const char *name, enum grub_file_type type)
   if (!file)
     grub_file_close (last_file);
 
+  if (file)
+    file->type = type;
+
   return file;
 
  fail:
@@ -203,6 +206,10 @@ grub_file_read (grub_file_t file, void *buf, grub_size_t len)
 grub_err_t
 grub_file_close (grub_file_t file)
 {
+  if (file->verify_pending)
+    grub_dprintf ("verify", "file %s closed without grub_verify_in_place() "
+		  "being called\n", file->name);
+
   if (file->fs->fs_close)
     (file->fs->fs_close) (file);
 

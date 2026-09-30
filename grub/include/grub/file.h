@@ -141,8 +141,21 @@ enum grub_file_type
     /* --skip-sig is specified.  */
     GRUB_FILE_TYPE_SKIP_SIGNATURE = 0x10000,
     GRUB_FILE_TYPE_NO_DECOMPRESS = 0x20000,
+    /*
+     * The caller loads the file to its final location itself and calls
+     * grub_verify_in_place() on it afterwards. Verifiers which can work on
+     * that buffer (measurement) are left to that call, so that the file does
+     * not have to be kept in memory twice. Verifiers which decide whether the
+     * file may be used at all still run at grub_file_open() time.
+     *
+     * Must be combined with GRUB_FILE_TYPE_NO_DECOMPRESS: the verify filter
+     * runs before compression filters, so without it grub_verifiers_open()
+     * and grub_verify_in_place() would hash different bytes (compressed vs.
+     * decompressed). grub_verifiers_open() enforces this combination.
+     */
+    GRUB_FILE_TYPE_VERIFY_IN_PLACE = 0x40000,
     /* Decode virtual disk images (vhd/vhdx/vdi/qcow/vmdk/dmg/isz filters).  */
-    GRUB_FILE_TYPE_FILTER_VDISK = 0x40000
+    GRUB_FILE_TYPE_FILTER_VDISK = 0x80000
   };
 
 /* File description.  */
@@ -171,6 +184,17 @@ struct grub_file
 
   /* If file is not easily seekable. Should be set by underlying layer.  */
   int not_easily_seekable;
+
+  /* The type this file was opened with, as passed to grub_file_open(). */
+  enum grub_file_type type;
+
+  /*
+   * Set by grub_verifiers_open() when GRUB_FILE_TYPE_VERIFY_IN_PLACE caused
+   * one or more in_place verifiers to be deferred to grub_verify_in_place().
+   * Cleared by grub_verify_in_place(). grub_file_close() logs a debug message
+   * if still set, indicating the caller forgot to call grub_verify_in_place().
+   */
+  int verify_pending;
 
   /* Filesystem-specific data.  */
   void *data;
