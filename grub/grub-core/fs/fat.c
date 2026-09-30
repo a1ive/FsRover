@@ -478,12 +478,75 @@ grub_fat_mount (grub_disk_t disk)
   return 0;
 }
 
+/* Return 1 and set NEXT_CLUSTER for a valid successor, 0 at end of chain,
+   or -1 on error.  */
+static int
+grub_fat_next_cluster (grub_disk_t disk, struct grub_fat_data *data,
+		       grub_uint32_t cluster, grub_uint32_t *next_cluster)
+{
+  grub_uint64_t fat_offset;
+
+  *next_cluster = 0;
+
+  switch (data->fat_size)
+    {
+    case 32:
+      fat_offset = (grub_uint64_t) cluster << 2;
+      break;
+    case 16:
+      fat_offset = (grub_uint64_t) cluster << 1;
+      break;
+    default:
+      /* case 12: */
+      fat_offset = (grub_uint64_t) cluster + (cluster >> 1);
+      break;
+    }
+
+  if (grub_disk_read (disk, data->fat_sector, fat_offset,
+		      (data->fat_size + 7) >> 3, next_cluster))
+    return -1;
+
+  *next_cluster = grub_le_to_cpu32 (*next_cluster);
+  switch (data->fat_size)
+    {
+#ifndef MODE_EXFAT
+    case 32:
+      *next_cluster &= 0x0FFFFFFF;
+      break;
+#endif
+    case 16:
+      *next_cluster &= 0xFFFF;
+      break;
+    case 12:
+      if (cluster & 1)
+	*next_cluster >>= 4;
+
+      *next_cluster &= 0x0FFF;
+      break;
+    }
+
+  grub_dprintf ("fat", "fat_size=%d, next_cluster=%u\n",
+		data->fat_size, *next_cluster);
+
+  if (*next_cluster >= data->cluster_eof_mark)
+    return 0;
+
+  if (*next_cluster < 2 || *next_cluster >= data->num_clusters
+      || *next_cluster == cluster)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "invalid cluster %u", *next_cluster);
+      return -1;
+    }
+
+  return 1;
+}
+
 static grub_ssize_t
 grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 		    grub_disk_read_hook_t read_hook, void *read_hook_data,
 		    grub_off_t offset, grub_size_t len, char *buf)
 {
-  grub_size_t size;
+  grub_size_t size, max_read;
   grub_uint32_t logical_cluster;
   unsigned logical_cluster_bits;
   grub_ssize_t ret = 0;
@@ -540,6 +603,8 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 		goto bad_cluster;
   logical_cluster = offset >> logical_cluster_bits;
   offset &= (1ULL << logical_cluster_bits) - 1;
+  max_read = (grub_size_t) disk->max_agglomerate
+    << (GRUB_DISK_CACHE_BITS + GRUB_DISK_SECTOR_BITS);
 
   if (logical_cluster < node->cur_cluster_num)
     {
@@ -551,63 +616,15 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
     {
       while (logical_cluster > node->cur_cluster_num)
 	{
-	  /* Find next cluster.  */
 	  grub_uint32_t next_cluster;
-		  grub_uint64_t fat_offset;
+	  int err;
 
-	  switch (node->data->fat_size)
-	    {
-	    case 32:
-	      fat_offset = (grub_uint64_t) node->cur_cluster << 2;
-	      break;
-	    case 16:
-	      fat_offset = (grub_uint64_t) node->cur_cluster << 1;
-	      break;
-	    default:
-	      /* case 12: */
-	      fat_offset = (grub_uint64_t) node->cur_cluster + (node->cur_cluster >> 1);
-	      break;
-	    }
-
-	  /* Read the FAT.  */
-	  if (grub_disk_read (disk, node->data->fat_sector, fat_offset,
-			      (node->data->fat_size + 7) >> 3,
-			      (char *) &next_cluster))
+	  err = grub_fat_next_cluster (disk, node->data,
+				       node->cur_cluster, &next_cluster);
+	  if (err < 0)
 	    return -1;
-
-	  next_cluster = grub_le_to_cpu32 (next_cluster);
-	  switch (node->data->fat_size)
-	    {
-#ifndef MODE_EXFAT
-	    case 32:
-	      next_cluster &= 0x0FFFFFFF;
-	      break;
-#endif
-	    case 16:
-	      next_cluster &= 0xFFFF;
-	      break;
-	    case 12:
-	      if (node->cur_cluster & 1)
-		next_cluster >>= 4;
-
-	      next_cluster &= 0x0FFF;
-	      break;
-	    }
-
-	  grub_dprintf ("fat", "fat_size=%d, next_cluster=%u\n",
-			node->data->fat_size, next_cluster);
-
-	  /* Check the end.  */
-	  if (next_cluster >= node->data->cluster_eof_mark)
+	  if (! err)
 	    return ret;
-
-	  if (next_cluster < 2 || next_cluster >= node->data->num_clusters
-	      || next_cluster == node->cur_cluster)
-	    {
-	      grub_error (GRUB_ERR_BAD_FS, "invalid cluster %u",
-			  next_cluster);
-	      return -1;
-	    }
 
 	  node->cur_cluster = next_cluster;
 	  node->cur_cluster_num++;
@@ -622,25 +639,67 @@ grub_fat_read_data (grub_disk_t disk, grub_fshelp_node_t node,
 
 		if (node->cur_cluster < 2 || node->cur_cluster >= node->data->num_clusters)
 			goto bad_cluster;
-      /* Read the data here.  */
-      sector = (node->data->cluster_sector
-		+ (((grub_disk_addr_t) node->cur_cluster - 2)
-		   << node->data->cluster_bits));
-		remaining = (1ULL << logical_cluster_bits) - offset;
-		size = remaining > len ? len : (grub_size_t) remaining;
+      /* Read one or more physically adjacent clusters.  */
+      {
+	grub_size_t run_length;
+	grub_uint32_t run_clusters = 1;
+	grub_uint32_t cluster = node->cur_cluster;
 
-      disk->read_hook = read_hook;
-      disk->read_hook_data = read_hook_data;
-      grub_disk_read (disk, sector, offset, size, buf);
-      disk->read_hook = 0;
-      if (grub_errno)
-	return -1;
+	sector = (node->data->cluster_sector
+		  + (((grub_disk_addr_t) cluster - 2) << node->data->cluster_bits));
+	remaining = (1ULL << logical_cluster_bits) - offset;
+	size = remaining > len ? len : (grub_size_t) remaining;
+	run_length = size;
 
-      len -= size;
-      buf += size;
-      ret += size;
-      logical_cluster++;
-      offset = 0;
+	while (run_length < len)
+	  {
+	    grub_uint32_t next_cluster;
+	    grub_size_t next_size;
+	    int err;
+
+	    remaining = 1ULL << logical_cluster_bits;
+	    next_size = remaining > len - run_length
+	      ? len - run_length : (grub_size_t) remaining;
+	    if (max_read && run_length + next_size > max_read)
+	      break;
+
+	    err = grub_fat_next_cluster (disk, node->data, cluster,
+					 &next_cluster);
+	    if (err < 0)
+	      return -1;
+	    if (! err)
+	      break;
+
+	    node->cur_cluster = next_cluster;
+	    node->cur_cluster_num++;
+
+	    /* More hops than clusters exist means the chain is cyclic. */
+	    if (node->cur_cluster_num >= node->data->num_clusters)
+	      {
+		grub_error (GRUB_ERR_BAD_FS, "cyclic FAT cluster chain");
+		return -1;
+	      }
+	    if (next_cluster != cluster + 1)
+	      break;
+
+	    cluster = next_cluster;
+	    run_length += next_size;
+	    run_clusters++;
+	  }
+
+	disk->read_hook = read_hook;
+	disk->read_hook_data = read_hook_data;
+	grub_disk_read (disk, sector, offset, run_length, buf);
+	disk->read_hook = 0;
+	if (grub_errno)
+	  return -1;
+
+	len -= run_length;
+	buf += run_length;
+	ret += run_length;
+	logical_cluster += run_clusters;
+	offset = 0;
+      }
     }
 
   return ret;
