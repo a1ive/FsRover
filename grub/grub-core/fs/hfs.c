@@ -1322,6 +1322,13 @@ grub_hfs_open (struct grub_file *file, const char *name)
       return grub_errno;
     }
 
+  if (!found)
+    {
+      grub_free (data);
+      grub_dl_unref (my_mod);
+      return grub_error (GRUB_ERR_FILE_NOT_FOUND, N_("file `%s' not found"), name);
+    }
+
   grub_memcpy (data->extents, found->fdrec.frec.extents, sizeof (grub_hfs_datarecord_t));
   file->size = grub_be_to_cpu32 (found->fdrec.frec.size);
   data->size = grub_be_to_cpu32 (found->fdrec.frec.size);
