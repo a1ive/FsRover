@@ -698,25 +698,48 @@ static grub_err_t
 read_segment (struct grub_diskfilter_segment *seg, grub_disk_addr_t sector,
 	      grub_size_t size, char *buf)
 {
-  grub_err_t err;
+  grub_err_t err = GRUB_ERR_NONE;
+
   switch (seg->type)
     {
     case GRUB_DISKFILTER_ZERO:
       grub_memset (buf, 0, size << GRUB_DISK_SECTOR_BITS);
       return GRUB_ERR_NONE;
 
+    case GRUB_DISKFILTER_MIRROR:
+      {
+	unsigned int i;
+
+	/* Every mirror member contains the same contiguous data.  */
+	for (i = 0; i < seg->node_count; i++)
+	  {
+	    if (grub_errno == GRUB_ERR_READ_ERROR
+		|| grub_errno == GRUB_ERR_UNKNOWN_DEVICE)
+	      grub_errno = GRUB_ERR_NONE;
+
+	    err = grub_diskfilter_read_node (&seg->nodes[i], sector, size, buf);
+	    if (! err)
+	      return GRUB_ERR_NONE;
+	    if (err != GRUB_ERR_READ_ERROR && err != GRUB_ERR_UNKNOWN_DEVICE)
+	      return err;
+	  }
+	/* A different member may supply each readable chunk.  Keep the
+	   original per-stripe retry path when no member supplies the run.  */
+	goto read_stripes;
+      }
+
     case GRUB_DISKFILTER_STRIPED:
       if (seg->node_count == 1)
 	return grub_diskfilter_read_node (&seg->nodes[0],
 					  sector, size, buf);
       /* Fallthrough.  */
-    case GRUB_DISKFILTER_MIRROR:
     case GRUB_DISKFILTER_RAID10:
       {
 	grub_disk_addr_t read_sector, far_ofs;
 	grub_uint64_t disknr, b, near, far, ofs;
 	unsigned int i, j;
 
+      read_stripes:
 	read_sector = grub_divmod64 (sector, seg->stripe_size, &b);
 	far = ofs = near = 1;
 	far_ofs = 0;
@@ -972,6 +995,29 @@ read_segment (struct grub_diskfilter_segment *seg, grub_disk_addr_t sector,
     }
 }
 
+/* Return true if two linear segments map adjacent logical sectors to the
+   same adjacent sectors in their backing node.  */
+static int
+linear_segments_are_contiguous (const struct grub_diskfilter_segment *first,
+				const struct grub_diskfilter_segment *second,
+				const struct grub_diskfilter_vg *vg)
+{
+  const struct grub_diskfilter_node *first_node;
+  const struct grub_diskfilter_node *second_node;
+
+  if (first->type != GRUB_DISKFILTER_STRIPED || first->node_count != 1
+      || second->type != GRUB_DISKFILTER_STRIPED || second->node_count != 1
+      || first->start_extent + first->extent_count != second->start_extent)
+    return 0;
+
+  first_node = &first->nodes[0];
+  second_node = &second->nodes[0];
+  return (first_node->pv == second_node->pv
+	  && first_node->lv == second_node->lv
+	  && second_node->start == first_node->start
+	     + first->extent_count * vg->extent_size);
+}
+
 static grub_err_t
 read_lv (struct grub_diskfilter_lv *lv, grub_disk_addr_t sector,
 	 grub_size_t size, char *buf)
@@ -984,30 +1030,45 @@ read_lv (struct grub_diskfilter_lv *lv, grub_disk_addr_t sector,
       grub_err_t err = 0;
       struct grub_diskfilter_vg *vg = lv->vg;
       struct grub_diskfilter_segment *seg = lv->segments;
+      struct grub_diskfilter_segment *first;
       grub_uint64_t extent;
       grub_uint64_t to_read;
+      unsigned int i;
 
       extent = grub_divmod64 (sector, vg->extent_size, NULL);
 
       /* Find the right segment.  */
-      {
-	unsigned int i;
-	for (i = 0; i < lv->segment_count; i++)
-	  {
-	    if ((seg->start_extent <= extent)
-		&& ((seg->start_extent + seg->extent_count) > extent))
-	      break;
-	    seg++;
-	  }
-	if (i == lv->segment_count)
-	  return grub_error (GRUB_ERR_READ_ERROR, "incorrect segment");
-      }
+      for (i = 0; i < lv->segment_count; i++)
+	{
+	  if ((seg->start_extent <= extent)
+	      && ((seg->start_extent + seg->extent_count) > extent))
+	    break;
+	  seg++;
+	}
+      if (i == lv->segment_count)
+	return grub_error (GRUB_ERR_READ_ERROR, "incorrect segment");
+
+      first = seg;
       to_read = ((seg->start_extent + seg->extent_count)
 		 * vg->extent_size) - sector;
       if (to_read > size)
 	to_read = size;
 
-      err = read_segment (seg, sector - seg->start_extent * vg->extent_size,
+      /* Coalesce adjacent LVM linear segments backed by the same node.  */
+      while (to_read < size && i + 1 < lv->segment_count
+	     && linear_segments_are_contiguous (seg, seg + 1, vg))
+	{
+	  grub_uint64_t next_size = (seg + 1)->extent_count * vg->extent_size;
+
+	  if (next_size > size - to_read)
+	    next_size = size - to_read;
+	  to_read += next_size;
+	  seg++;
+	  i++;
+	}
+
+      err = read_segment (first,
+			  sector - first->start_extent * vg->extent_size,
 			  to_read, buf);
       if (err)
 	return err;
