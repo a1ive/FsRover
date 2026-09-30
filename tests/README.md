@@ -68,7 +68,10 @@ match an uncached `rover_stat` walk (symlink components, missing and non-directo
 parents, case variants), repeated and listing-seeded lookups must not reach the
 backend dispatcher, the LRU bound (a small per-mount limit, since every insert is a
 real lookup) evicts oldest first, and concurrent lookups,
-listings and invalidations stay consistent. It does not mount anything. x86 uses `Win32` for the
+listings and invalidations stay consistent. It does not mount anything. `--readlink FIXTURES`
+checks `rover_readlink` on the ext2 image and on `dirlinks.tar` (relative, absolute and
+directory links, one used as a leading component): exact targets, truncation and
+length-only queries, EINVAL/ENOENT/ENOTSUP, and reads through directory links. x86 uses `Win32` for the
 probe project and `build/Win32/` for executable paths; ARM64 uses `ARM64` and
 requires an appropriate runtime host to execute.
 

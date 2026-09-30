@@ -101,7 +101,7 @@ install(TARGETS LinuxRover RUNTIME DESTINATION bin)
 include(CTest)
 if(BUILD_TESTING)
 	find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
-	add_executable(product_probe tests/product_probe.cpp tests/fusefs_probe.cpp tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c
+	add_executable(product_probe tests/product_probe.cpp tests/fusefs_probe.cpp tests/readlink_probe.cpp tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c
 		common/extract_core.cpp common/fusefs.cpp)
 	set_property(SOURCE tests/filemap_probe.c tests/printf_probe.c tests/strtol_probe.c APPEND PROPERTY COMPILE_OPTIONS
 		-include "${CMAKE_CURRENT_SOURCE_DIR}/grub/rover/config.h")

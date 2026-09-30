@@ -39,6 +39,7 @@
   <ItemGroup>
     <ClCompile Include="product_probe.cpp" />
     <ClCompile Include="fusefs_probe.cpp" />
+    <ClCompile Include="readlink_probe.cpp" />
     <ClCompile Include="filemap_probe.c">
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <ForcedIncludeFiles>$(ProjectDir)..\grub\rover\config.h</ForcedIncludeFiles>

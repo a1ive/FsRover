@@ -63,6 +63,21 @@ def make_tar(path, files, dirs=(), links=False, grouped=True):
             archive.addfile(info)
 
 
+def make_link_tar(path):
+    # Relative, absolute and directory links, one used as a leading component.
+    with tarfile.open(path, "w", format=tarfile.USTAR_FORMAT) as archive:
+        for name, data in (("hello.txt", FILES["hello.txt"]),
+                           ("nested/data.bin", FILES["nested/data.bin"])):
+            info = tarfile.TarInfo(name)
+            info.size, info.mode, info.mtime = len(data), 0o644, MTIME
+            archive.addfile(info, io.BytesIO(data))
+        for name, target in (("nested/up", "../hello.txt"), ("dirlink", "nested"),
+                             ("abs", "/nested/data.bin")):
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname, info.mtime = tarfile.SYMTYPE, target, MTIME
+            archive.addfile(info)
+
+
 def make_fat(path, broken=False):
     # Standard 1.44 MiB FAT12 superfloppy, 512-byte clusters, two FATs.
     disk = bytearray(2880 * 512)
@@ -290,6 +305,7 @@ def generate(root):
     (root / "unknown.img").write_bytes(bytes(4096))
     make_tar(root / "collisions.tar", COLLISIONS)
     make_tar(root / "links.tar", {"hello.txt": FILES["hello.txt"]}, links=True)
+    make_link_tar(root / "dirlinks.tar")
     make_tar(root / "cancel.tar", {"large.bin": bytes(range(256)) * 12289,
                                     "after.txt": b"must not be extracted"})
     make_ext2(root / "basic.ext2")
