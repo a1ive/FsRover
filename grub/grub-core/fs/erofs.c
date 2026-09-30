@@ -2296,6 +2296,30 @@ grub_erofs_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook,
 }
 
 static grub_err_t
+grub_erofs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_erofs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  data = erofs_mount (device->disk, true);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->inode, &fdiro, erofs_iterate_dir,
+			     erofs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = erofs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->inode)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  return grub_errno;
+}
+
+static grub_err_t
 grub_erofs_open (grub_file_t file, const char *name)
 {
   struct grub_erofs_data *data;
@@ -2442,6 +2466,7 @@ grub_erofs_mtime (grub_device_t device, grub_int64_t *tm)
 static struct grub_fs grub_erofs_fs = {
     .name = "erofs",
     .fs_dir = grub_erofs_dir,
+    .fs_readlink = grub_erofs_readlink,
     .fs_open = grub_erofs_open,
     .fs_read = grub_erofs_read,
     .fs_close = grub_erofs_close,

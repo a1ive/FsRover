@@ -1727,6 +1727,38 @@ fail:
 }
 
 static grub_err_t
+grub_ntfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_ntfs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_ntfs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->cmft, &fdiro, grub_ntfs_iterate_dir,
+			     grub_ntfs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_ntfs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro && fdiro != &data->cmft)
+    {
+      free_file (fdiro);
+      grub_free (fdiro);
+    }
+  free_file (&data->mmft);
+  free_file (&data->cmft);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
+static grub_err_t
 grub_ntfs_open (grub_file_t file, const char *name)
 {
   struct grub_ntfs_data *data = 0;
@@ -2214,6 +2246,7 @@ static struct grub_fs grub_ntfs_fs =
   {
     .name = "ntfs",
     .fs_dir = grub_ntfs_dir,
+    .fs_readlink = grub_ntfs_readlink,
     .fs_open = grub_ntfs_open,
     .fs_read = grub_ntfs_read,
     .fs_map_range = grub_ntfs_map,

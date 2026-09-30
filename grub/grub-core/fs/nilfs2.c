@@ -1144,6 +1144,33 @@ fail:
 }
 
 static grub_err_t
+grub_nilfs2_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_nilfs2_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_nilfs2_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->diropen, &fdiro, grub_nilfs2_iterate_dir,
+			     grub_nilfs2_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_nilfs2_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->diropen)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
+static grub_err_t
 grub_nilfs2_label (grub_device_t device, char **label)
 {
   struct grub_nilfs2_data *data;
@@ -1225,6 +1252,7 @@ grub_nilfs2_mtime (grub_device_t device, grub_int64_t * tm)
 static struct grub_fs grub_nilfs2_fs = {
   .name = "nilfs2",
   .fs_dir = grub_nilfs2_dir,
+  .fs_readlink = grub_nilfs2_readlink,
   .fs_open = grub_nilfs2_open,
   .fs_read = grub_nilfs2_read,
   .fs_close = grub_nilfs2_close,

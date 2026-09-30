@@ -621,6 +621,29 @@ fail:
 }
 
 static grub_err_t
+sysv_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_sysv_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = sysv_mount (device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file (path, &data->root, &fdiro, sysv_iterate_dir,
+		sysv_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = sysv_read_symlink (fdiro);
+
+fail:
+	if (fdiro != &data->root)
+		grub_free (fdiro);
+	grub_free (data);
+	return grub_errno;
+}
+
+static grub_err_t
 sysv_label (grub_device_t device, char **label)
 {
 	struct grub_sysv_data *data;
@@ -656,6 +679,7 @@ static struct grub_fs grub_sysv_fs =
 {
 	.name = "sysv",
 	.fs_dir = sysv_dir,
+	.fs_readlink = sysv_readlink,
 	.fs_open = sysv_open,
 	.fs_read = sysv_read,
 	.fs_close = sysv_close,

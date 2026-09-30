@@ -103,6 +103,10 @@ grub_pkg_dir (grub_device_t device, struct grub_pkg_ops *ops,
 grub_err_t
 grub_pkg_open (grub_file_t file, struct grub_pkg_ops *ops, const char *name);
 
+grub_err_t
+grub_pkg_readlink (grub_device_t device, struct grub_pkg_ops *ops,
+		   const char *name, char **target);
+
 /* these two need no ops, assign them to fs_read / fs_close directly */
 grub_ssize_t
 grub_pkg_read (grub_file_t file, char *buf, grub_size_t len);

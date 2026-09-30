@@ -89,6 +89,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GHO_EXT_META_SIZE	136
 #define GHO_EXT_INODE_DATA	48
 #define GHO_EXT_INLINE_MAX	60
+#define GHO_EXT_LINK_MAX	4096	/* ext PATH_MAX */
 #define GHO_EXT_MODE_MASK	0170000
 #define GHO_EXT_MODE_DIR	0040000
 #define GHO_EXT_MODE_REG	0100000
@@ -1774,6 +1775,51 @@ grub_gho_close (grub_file_t file)
 	return GRUB_ERR_NONE;
 }
 
+/* A symlink's target is its file data, inline or stored like a file.  */
+static grub_err_t
+grub_gho_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct gho_data *data;
+	struct gho_node *node;
+	struct grub_file file;
+	char *buf;
+
+	data = gho_mount (device->disk);
+	if (!data)
+		return grub_errno;
+	node = gho_lookup (data, path);
+	if (!node)
+		return grub_error (GRUB_ERR_FILE_NOT_FOUND, "file not found");
+	if (node->kind != GHO_NODE_SYMLINK)
+		return grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+
+	grub_memset (&file, 0, sizeof (file));
+	file.device = device;
+	if (grub_gho_open (&file, path))
+		return grub_errno;
+	if (file.size >= GHO_EXT_LINK_MAX)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "Ghost symlink too long");
+		goto fail;
+	}
+	buf = grub_malloc ((grub_size_t) file.size + 1);
+	if (!buf)
+		goto fail;
+	if (file.size
+	    && grub_gho_read (&file, buf, (grub_size_t) file.size)
+	       != (grub_ssize_t) file.size)
+	{
+		grub_free (buf);
+		goto fail;
+	}
+	buf[file.size] = '\0';
+	*target = buf;
+
+fail:
+	grub_gho_close (&file);
+	return grub_errno;
+}
+
 static grub_err_t
 grub_gho_label (grub_device_t device, char **label)
 {
@@ -1792,6 +1838,7 @@ static struct grub_fs grub_gho_fs =
 {
 	.name = "gho",
 	.fs_dir = grub_gho_dir,
+	.fs_readlink = grub_gho_readlink,
 	.fs_open = grub_gho_open,
 	.fs_read = grub_gho_read,
 	.fs_close = grub_gho_close,

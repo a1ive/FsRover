@@ -1121,6 +1121,40 @@ grub_iso9660_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_iso9660_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_iso9660_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+  struct grub_fshelp_node rootnode;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_iso9660_mount (device->disk);
+  if (!data)
+    goto out;
+
+  rootnode.data = data;
+  rootnode.alloc_dirents = 0;
+  rootnode.have_dirents = 1;
+  rootnode.have_symlink = 0;
+  rootnode.dirents[0] = data->voldesc.rootdir;
+
+  if (grub_fshelp_find_file (path, &rootnode, &fdiro, grub_iso9660_iterate_dir,
+			     grub_iso9660_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_iso9660_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &rootnode)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 
 /* Open a file named NAME and initialize FILE.  */
 static grub_err_t
@@ -1344,6 +1378,7 @@ static struct grub_fs grub_iso9660_fs =
   {
     .name = "iso9660",
     .fs_dir = grub_iso9660_dir,
+    .fs_readlink = grub_iso9660_readlink,
     .fs_open = grub_iso9660_open,
     .fs_read = grub_iso9660_read,
     .fs_map_range = grub_iso9660_map,

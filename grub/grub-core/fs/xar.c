@@ -854,6 +854,12 @@ grub_xar_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_xar_readlink (grub_device_t device, const char *path, char **target)
+{
+	return grub_pkg_readlink (device, &xar_ops, path, target);
+}
+
+static grub_err_t
 grub_xar_open (grub_file_t file, const char *name)
 {
 	return grub_pkg_open (file, &xar_ops, name);
@@ -869,6 +875,7 @@ static struct grub_fs grub_xar_fs =
 {
 	.name = "xar",
 	.fs_dir = grub_xar_dir,
+	.fs_readlink = grub_xar_readlink,
 	.fs_open = grub_xar_open,
 	.fs_read = grub_pkg_read,
 	.fs_close = grub_pkg_close,

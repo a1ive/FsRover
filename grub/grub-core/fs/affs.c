@@ -613,6 +613,33 @@ grub_affs_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_affs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_affs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_affs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->diropen, &fdiro, grub_affs_iterate_dir,
+			     grub_affs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_affs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->diropen)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 
 static grub_err_t
 grub_affs_label (grub_device_t device, char **label)
@@ -699,6 +726,7 @@ static struct grub_fs grub_affs_fs =
   {
     .name = "affs",
     .fs_dir = grub_affs_dir,
+    .fs_readlink = grub_affs_readlink,
     .fs_open = grub_affs_open,
     .fs_read = grub_affs_read,
     .fs_close = grub_affs_close,

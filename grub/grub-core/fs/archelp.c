@@ -348,3 +348,82 @@ fail:
 
   return grub_errno;
 }
+
+grub_err_t
+grub_archelp_readlink (struct grub_archelp_data *data,
+		       struct grub_archelp_ops *arcops,
+		       const char *name_in, char **target)
+{
+  char *fn;
+  char *name = grub_strdup (name_in + 1);
+  int symlinknest = 0;
+
+  if (!name)
+    return grub_errno;
+
+  canonicalize (name);
+
+  while (1)
+    {
+      grub_archelp_mode_t mode;
+      grub_int32_t mtime;
+      grub_size_t len;
+      int restart;
+
+      if (arcops->find_file (data, &fn, &mtime, &mode))
+	goto fail;
+
+      if (mode == GRUB_ARCHELP_ATTR_END)
+	{
+	  grub_error (GRUB_ERR_FILE_NOT_FOUND, N_("file `%s' not found"), name_in);
+	  break;
+	}
+
+      canonicalize (fn);
+
+      /* The final component is the link itself, not what it points to.  */
+      if (grub_strcmp (name, fn) == 0)
+	{
+	  grub_free (fn);
+	  if ((mode & GRUB_ARCHELP_ATTR_TYPE) != GRUB_ARCHELP_ATTR_LNK
+	      || !arcops->get_link_target)
+	    grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+	  else
+	    *target = arcops->get_link_target (data);
+	  break;
+	}
+
+      /* Explicit ("dir/") and implied directories are not links.  */
+      len = grub_strlen (name);
+      if (grub_strncmp (fn, name, len) == 0 && fn[len] == '/')
+	{
+	  grub_free (fn);
+	  grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+	  break;
+	}
+
+      if (handle_symlink (data, arcops, fn, &name, mode, &restart))
+	{
+	  grub_free (fn);
+	  goto fail;
+	}
+
+      grub_free (fn);
+
+      if (restart)
+	{
+	  arcops->rewind (data);
+	  if (++symlinknest == 8)
+	    {
+	      grub_error (GRUB_ERR_SYMLINK_LOOP,
+			  N_("too deep nesting of symlinks"));
+	      goto fail;
+	    }
+	}
+    }
+
+fail:
+  grub_free (name);
+
+  return grub_errno;
+}

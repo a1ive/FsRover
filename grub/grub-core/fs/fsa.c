@@ -1214,6 +1214,33 @@ fsa_link_path (const struct grub_fsa_data *data, const struct fsa_item *item)
 }
 
 static grub_err_t
+grub_fsa_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_fsa_data *data;
+	int index;
+
+	data = grub_fsa_mount (device->disk);
+	if (!data)
+		return grub_errno;
+	index = fsa_find_item (data, path);
+	if (index < 0)
+	{
+		grub_error (GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found", path);
+		goto fail;
+	}
+	if (data->items[index].type != FSA_OBJ_SYMLINK)
+	{
+		grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+		goto fail;
+	}
+	*target = grub_strdup (data->items[index].link);
+
+fail:
+	fsa_free_data (data);
+	return grub_errno;
+}
+
+static grub_err_t
 grub_fsa_open (struct grub_file *file, const char *name)
 {
 	struct grub_fsa_data *data;
@@ -1508,6 +1535,7 @@ static struct grub_fs grub_fsa_fs =
 {
 	.name = "fsa",
 	.fs_dir = grub_fsa_dir,
+	.fs_readlink = grub_fsa_readlink,
 	.fs_open = grub_fsa_open,
 	.fs_read = grub_fsa_read,
 	.fs_close = grub_fsa_close,

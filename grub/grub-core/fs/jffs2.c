@@ -1167,6 +1167,29 @@ fail:
 }
 
 static grub_err_t
+grub_jffs2_readlink(grub_device_t device, const char *path, char **target)
+{
+	struct grub_jffs2_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_jffs2_mount(device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file(path, data->root, &fdiro, grub_jffs2_iterate_dir,
+		grub_jffs2_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_jffs2_read_symlink(fdiro);
+
+fail:
+	if (fdiro != data->root)
+		grub_free(fdiro);
+	grub_jffs2_unmount(data);
+	return grub_errno;
+}
+
+static grub_err_t
 grub_jffs2_open(struct grub_file *file, const char *name)
 {
 	struct grub_jffs2_data *data;
@@ -1227,6 +1250,7 @@ static struct grub_fs grub_jffs2_fs =
 {
 	.name = "jffs2",
 	.fs_dir = grub_jffs2_dir,
+	.fs_readlink = grub_jffs2_readlink,
 	.fs_open = grub_jffs2_open,
 	.fs_read = grub_jffs2_read,
 	.fs_close = grub_jffs2_close,

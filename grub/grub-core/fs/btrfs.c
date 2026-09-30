@@ -1950,10 +1950,13 @@ find_pathname(struct grub_btrfs_data *data, grub_uint64_t objectid,
   return 0;
 }
 
+/* NOFOLLOW returns a final symlink component itself.  Symlinks are
+   spliced into the remaining path, so the final component of the
+   rewritten path is always the one the caller named.  */
 static grub_err_t
 find_path (struct grub_btrfs_data *data,
 	   const char *path, struct grub_btrfs_key *key,
-	   grub_uint64_t *tree, grub_uint8_t *type)
+	   grub_uint64_t *tree, grub_uint8_t *type, int nofollow)
 {
   const char *slash = path;
   grub_err_t err;
@@ -2106,7 +2109,8 @@ find_path (struct grub_btrfs_data *data,
 	}
 
       path = slash;
-      if (cdirel->type == GRUB_BTRFS_DIR_ITEM_TYPE_SYMLINK)
+      if (cdirel->type == GRUB_BTRFS_DIR_ITEM_TYPE_SYMLINK
+	  && !(nofollow && !*path))
 	{
 	  struct grub_btrfs_inode inode;
 	  char *tmp;
@@ -2264,7 +2268,7 @@ grub_btrfs_dir (grub_device_t device, const char *path,
   if (!data)
     return grub_errno;
 
-  err = find_path (data, path, &key_in, &tree, &type);
+  err = find_path (data, path, &key_in, &tree, &type, 0);
   if (err)
     {
       grub_btrfs_unmount (data);
@@ -2408,7 +2412,7 @@ grub_btrfs_open (struct grub_file *file, const char *name)
   if (!data)
     return grub_errno;
 
-  err = find_path (data, name, &key_in, &data->tree, &type);
+  err = find_path (data, name, &key_in, &data->tree, &type, 0);
   if (err)
     {
       grub_btrfs_unmount (data);
@@ -2432,6 +2436,58 @@ grub_btrfs_open (struct grub_file *file, const char *name)
   file->size = grub_le_to_cpu64 (inode.size);
 
   return err;
+}
+
+static grub_err_t
+grub_btrfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_btrfs_data *data = grub_btrfs_mount (device);
+  struct grub_btrfs_inode inode;
+  struct grub_btrfs_key key_in;
+  grub_uint64_t tree;
+  grub_uint8_t type;
+  grub_size_t size;
+  grub_size_t sz;
+  char *buf;
+
+  if (!data)
+    return grub_errno;
+
+  if (find_path (data, path, &key_in, &tree, &type, 1))
+    goto fail;
+  if (type != GRUB_BTRFS_DIR_ITEM_TYPE_SYMLINK)
+    {
+      grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+      goto fail;
+    }
+
+  if (grub_btrfs_read_inode (data, &inode, key_in.object_id, tree))
+    goto fail;
+
+  size = grub_le_to_cpu64 (inode.size);
+  if (grub_add (size, 1, &sz))
+    {
+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("buffer size overflow"));
+      goto fail;
+    }
+  buf = grub_malloc (sz);
+  if (!buf)
+    goto fail;
+
+  if (grub_btrfs_extent_read (data, key_in.object_id, tree, 0, buf, size)
+      != (grub_ssize_t) size)
+    {
+      if (!grub_errno)
+	grub_error (GRUB_ERR_BAD_FS, "short symlink read");
+      grub_free (buf);
+      goto fail;
+    }
+  buf[size] = '\0';
+  *target = buf;
+
+ fail:
+  grub_btrfs_unmount (data);
+  return grub_errno;
 }
 
 static grub_err_t
@@ -3076,6 +3132,7 @@ fail:
 static struct grub_fs grub_btrfs_fs = {
   .name = "btrfs",
   .fs_dir = grub_btrfs_dir,
+  .fs_readlink = grub_btrfs_readlink,
   .fs_open = grub_btrfs_open,
   .fs_read = grub_btrfs_read,
   .fs_map_range = grub_btrfs_map,

@@ -373,6 +373,35 @@ grub_romfs_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_romfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_romfs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+  struct grub_fshelp_node start;
+
+  data = grub_romfs_mount (device);
+  if (!data)
+    goto out;
+
+  start.addr = data->first_file;
+  start.data_addr = data->first_file;
+  start.data = data;
+
+  if (grub_fshelp_find_file (path, &start, &fdiro, grub_romfs_iterate_dir,
+			     grub_romfs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_romfs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &start)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  return grub_errno;
+}
+
+static grub_err_t
 grub_romfs_open (struct grub_file *file, const char *name)
 {
   struct grub_romfs_data *data = 0;
@@ -471,6 +500,7 @@ static struct grub_fs grub_romfs_fs =
   {
     .name = "romfs",
     .fs_dir = grub_romfs_dir,
+    .fs_readlink = grub_romfs_readlink,
     .fs_open = grub_romfs_open,
     .fs_read = grub_romfs_read,
     .fs_close = grub_romfs_close,

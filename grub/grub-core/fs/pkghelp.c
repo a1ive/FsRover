@@ -1120,6 +1120,30 @@ grub_pkg_find_entry (struct grub_pkg_data *data, const char *name)
 	return -1;
 }
 
+grub_err_t
+grub_pkg_readlink (grub_device_t device, struct grub_pkg_ops *ops,
+		   const char *name, char **target)
+{
+	struct grub_pkg_data *data;
+	int index;
+
+	data = pkg_mount (device->disk, ops);
+	if (!data)
+		return grub_errno;
+
+	index = grub_pkg_find_entry (data, name);
+	if (index < 0)
+		grub_error (GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found", name);
+	else if (!data->entries[index].is_lnk)
+		grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+	else
+		*target = grub_strdup (data->entries[index].target
+				       ? data->entries[index].target : "");
+
+	pkg_unmount (data);
+	return grub_errno;
+}
+
 /* File access */
 
 struct pkg_file

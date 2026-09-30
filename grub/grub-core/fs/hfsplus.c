@@ -1043,6 +1043,33 @@ grub_hfsplus_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_hfsplus_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_hfsplus_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_hfsplus_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->dirroot, &fdiro, grub_hfsplus_iterate_dir,
+			     grub_hfsplus_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_hfsplus_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->dirroot)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 
 static grub_err_t
 grub_hfsplus_label (grub_device_t device, char **label)
@@ -1184,6 +1211,7 @@ static struct grub_fs grub_hfsplus_fs =
   {
     .name = "hfsplus",
     .fs_dir = grub_hfsplus_dir,
+    .fs_readlink = grub_hfsplus_readlink,
     .fs_open = grub_hfsplus_open,
     .fs_read = grub_hfsplus_read,
     .fs_close = grub_hfsplus_close,

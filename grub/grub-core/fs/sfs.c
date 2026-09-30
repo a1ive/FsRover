@@ -748,6 +748,34 @@ grub_sfs_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_sfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_sfs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_sfs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->diropen, &fdiro, grub_sfs_iterate_dir,
+			     grub_sfs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_sfs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->diropen)
+    grub_free (fdiro);
+  grub_free (data->label);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 
 static grub_err_t
 grub_sfs_label (grub_device_t device, char **label)
@@ -781,6 +809,7 @@ static struct grub_fs grub_sfs_fs =
   {
     .name = "sfs",
     .fs_dir = grub_sfs_dir,
+    .fs_readlink = grub_sfs_readlink,
     .fs_open = grub_sfs_open,
     .fs_read = grub_sfs_read,
     .fs_close = grub_sfs_close,

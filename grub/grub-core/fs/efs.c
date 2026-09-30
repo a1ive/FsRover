@@ -615,6 +615,29 @@ out:
 }
 
 static grub_err_t
+grub_efs_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_efs_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_efs_mount (device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file (path, &data->root, &fdiro, grub_efs_iterate_dir,
+		grub_efs_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_efs_read_symlink (fdiro);
+
+fail:
+	if (fdiro != &data->root)
+		grub_free (fdiro);
+	grub_free (data);
+	return grub_errno;
+}
+
+static grub_err_t
 grub_efs_label (grub_device_t device, char **label)
 {
 	struct grub_efs_data *data;
@@ -649,6 +672,7 @@ static struct grub_fs grub_efs_fs =
 {
 	.name = "efs",
 	.fs_dir = grub_efs_dir,
+	.fs_readlink = grub_efs_readlink,
 	.fs_open = grub_efs_open,
 	.fs_read = grub_efs_read,
 	.fs_close = grub_efs_close,

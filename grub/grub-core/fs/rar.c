@@ -123,6 +123,7 @@ struct grub_rar_item
 	unsigned is_link:1;
 	unsigned mtime_set:1;
 	unsigned unsupported:1;	/* encrypted or unknown method */
+	char *link;		/* RAR5 link target; RAR4 keeps it as data */
 };
 
 struct grub_rar_data
@@ -274,7 +275,10 @@ rar_free_data (struct grub_rar_data *data)
 	if (!data)
 		return;
 	for (i = 0; i < data->num_items; i++)
+	{
 		grub_free (data->items[i].name);
+		grub_free (data->items[i].link);
+	}
 	grub_free (data->items);
 	grub_free (data);
 }
@@ -575,6 +579,9 @@ struct rar5_extra_info
 {
 	int encrypted;
 	int is_link;
+	int win_link;
+	const grub_uint8_t *link;	/* points into the header buffer */
+	grub_size_t link_len;
 };
 
 static void
@@ -605,11 +612,33 @@ rar5_parse_extra (const grub_uint8_t *p, grub_size_t size,
 			info->encrypted = 1;
 		else if (id == RAR5_EXTRA_LINK)
 		{
-			grub_uint64_t type;
-			if (rar_read_vint (p + num, rec_size - num, &type)
-			    && (type == RAR5_LINK_UNIX_SYMLINK
-				|| type == RAR5_LINK_WIN_SYMLINK))
+			/* type, flags, name length, name */
+			const grub_uint8_t *q = p + num;
+			grub_size_t left = rec_size - num;
+			grub_uint64_t type, lflags, len;
+			unsigned n;
+
+			n = rar_read_vint (q, left, &type);
+			if (n && (type == RAR5_LINK_UNIX_SYMLINK
+				  || type == RAR5_LINK_WIN_SYMLINK))
+			{
 				info->is_link = 1;
+				info->win_link = (type == RAR5_LINK_WIN_SYMLINK);
+				q += n;
+				left -= n;
+				n = rar_read_vint (q, left, &lflags);
+				if (n)
+				{
+					q += n;
+					left -= n;
+					n = rar_read_vint (q, left, &len);
+				}
+				if (n && len <= left - n && len <= RAR_MAX_NAME)
+				{
+					info->link = q + n;
+					info->link_len = (grub_size_t) len;
+				}
+			}
 		}
 
 		p += rec_size;
@@ -797,6 +826,23 @@ rar5_parse (struct grub_rar_data *data)
 			item->unp_size = unp_size;
 			item->is_dir = (fflags & RAR5_FFLAG_DIR) != 0;
 			item->is_link = extra.is_link;
+			if (extra.link)
+			{
+				grub_size_t i;
+
+				item->link = grub_malloc (extra.link_len + 1);
+				if (!item->link)
+				{
+					err = GRUB_ERR_OUT_OF_MEMORY;
+					goto out;
+				}
+				grub_memcpy (item->link, extra.link, extra.link_len);
+				item->link[extra.link_len] = '\0';
+				if (extra.win_link)
+					for (i = 0; i < extra.link_len; i++)
+						if (item->link[i] == '\\')
+							item->link[i] = '/';
+			}
 			if (fflags & RAR5_FFLAG_UTIME)
 			{
 				item->mtime = mtime;
@@ -1495,6 +1541,74 @@ grub_rar_close (grub_file_t file)
 	return GRUB_ERR_NONE;
 }
 
+#define RAR_LINK_MAX	4096
+
+/* RAR5 records the target in the header; RAR4 stores it as file data.  */
+static grub_err_t
+grub_rar_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_rar_data *data;
+	struct grub_file file;
+	int index;
+	char *buf;
+
+	data = grub_rar_mount (device->disk);
+	if (!data)
+		return grub_errno;
+	index = rar_find_item (data, path);
+	if (index < 0)
+	{
+		grub_error (GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found", path);
+		goto done;
+	}
+	if (!data->items[index].is_link)
+	{
+		grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+		goto done;
+	}
+	if (data->items[index].link)
+	{
+		*target = grub_strdup (data->items[index].link);
+		goto done;
+	}
+	if (data->is_rar5)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "rar link without a target");
+		goto done;
+	}
+	rar_free_data (data);
+
+	grub_memset (&file, 0, sizeof (file));
+	file.device = device;
+	if (grub_rar_open (&file, path))
+		return grub_errno;
+	if (file.size >= RAR_LINK_MAX)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "rar link target too long");
+		goto close;
+	}
+	buf = grub_malloc ((grub_size_t) file.size + 1);
+	if (!buf)
+		goto close;
+	if (file.size
+	    && grub_rar_read (&file, buf, (grub_size_t) file.size)
+	       != (grub_ssize_t) file.size)
+	{
+		grub_free (buf);
+		goto close;
+	}
+	buf[file.size] = '\0';
+	*target = buf;
+
+close:
+	grub_rar_close (&file);
+	return grub_errno;
+
+done:
+	rar_free_data (data);
+	return grub_errno;
+}
+
 static grub_err_t
 grub_rar_label (grub_device_t device, char **label)
 {
@@ -1530,6 +1644,7 @@ static struct grub_fs grub_rar_fs =
 {
 	.name = "rar",
 	.fs_dir = grub_rar_dir,
+	.fs_readlink = grub_rar_readlink,
 	.fs_open = grub_rar_open,
 	.fs_read = grub_rar_read,
 	.fs_close = grub_rar_close,

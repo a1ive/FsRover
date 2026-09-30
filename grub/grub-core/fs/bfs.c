@@ -919,6 +919,30 @@ grub_bfs_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_bfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_bfs_superblock sb;
+  grub_err_t err;
+
+  err = mount (device->disk, &sb);
+  if (err)
+    return err;
+
+  {
+    struct grub_fshelp_node node = {
+      .disk = device->disk,
+      .sb = &sb
+    };
+    err = find_file (path, device->disk, &sb, &node.ino, GRUB_FSHELP_SYMLINK);
+    if (err)
+      return err;
+    *target = read_symlink (&node);
+  }
+
+  return grub_errno;
+}
+
+static grub_err_t
 grub_bfs_open (struct grub_file *file, const char *name)
 {
   struct grub_bfs_superblock sb;
@@ -1091,6 +1115,7 @@ static struct grub_fs grub_bfs_fs = {
   .name = "bfs",
 #endif
   .fs_dir = grub_bfs_dir,
+  .fs_readlink = grub_bfs_readlink,
   .fs_open = grub_bfs_open,
   .fs_read = grub_bfs_read,
   .fs_close = grub_bfs_close,

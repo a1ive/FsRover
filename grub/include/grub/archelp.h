@@ -63,4 +63,10 @@ grub_archelp_open (struct grub_archelp_data *data,
 		   struct grub_archelp_ops *ops,
 		   const char *name_in);
 
+/* Return the target of the link NAME_IN without following it.  */
+grub_err_t
+grub_archelp_readlink (struct grub_archelp_data *data,
+		       struct grub_archelp_ops *ops,
+		       const char *name_in, char **target);
+
 #endif

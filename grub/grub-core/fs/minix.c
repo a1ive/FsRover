@@ -164,6 +164,7 @@ struct grub_minix_data
   grub_uint32_t block_per_zone;
   grub_minix_ino_t ino;
   int linknest;
+  int nofollow;
   grub_disk_t disk;
   int filename_size;
   grub_size_t block_size;
@@ -360,24 +361,40 @@ grub_minix_read_inode (struct grub_minix_data *data, grub_minix_ino_t ino)
 }
 
 
+/* Read the target of the symlink in the current inode.  */
+static char *
+grub_minix_read_symlink (struct grub_minix_data *data)
+{
+  char *symlink;
+  grub_size_t sz = GRUB_MINIX_INODE_SIZE (data);
+
+  symlink = grub_malloc (sz + 1);
+  if (!symlink)
+    return NULL;
+  if (grub_minix_read_file (data, 0, 0, 0, sz, symlink) < 0)
+    {
+      grub_free (symlink);
+      return NULL;
+    }
+
+  symlink[sz] = '\0';
+  return symlink;
+}
+
 /* Lookup the symlink the current inode points to.  INO is the inode
    number of the directory the symlink is relative to.  */
 static grub_err_t
 grub_minix_lookup_symlink (struct grub_minix_data *data, grub_minix_ino_t ino)
 {
   char *symlink;
-  grub_size_t sz = GRUB_MINIX_INODE_SIZE (data);
+  int nofollow;
 
   if (++data->linknest > GRUB_MINIX_MAX_SYMLNK_CNT)
     return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
 
-  symlink = grub_malloc (sz + 1);
+  symlink = grub_minix_read_symlink (data);
   if (!symlink)
     return grub_errno;
-  if (grub_minix_read_file (data, 0, 0, 0, sz, symlink) < 0)
-    goto fail;
-
-  symlink[sz] = '\0';
 
   /* The symlink is an absolute path, go back to the root inode.  */
   if (symlink[0] == '/')
@@ -387,7 +404,11 @@ grub_minix_lookup_symlink (struct grub_minix_data *data, grub_minix_ino_t ino)
   if (grub_minix_read_inode (data, ino))
     goto fail;
 
+  /* The target of a leading component is always followed.  */
+  nofollow = data->nofollow;
+  data->nofollow = 0;
   grub_minix_find_file (data, symlink);
+  data->nofollow = nofollow;
 
  fail:
   grub_free(symlink);
@@ -453,7 +474,8 @@ grub_minix_find_file (struct grub_minix_data *data, const char *path)
 
 	      /* Follow the symlink.  */
 	      if ((GRUB_MINIX_INODE_MODE (data)
-		   & GRUB_MINIX_IFLNK) == GRUB_MINIX_IFLNK)
+		   & GRUB_MINIX_IFLNK) == GRUB_MINIX_IFLNK
+		  && !(data->nofollow && !*next))
 		{
 		  grub_minix_lookup_symlink (data, dirino);
 		  if (grub_errno)
@@ -520,6 +542,7 @@ grub_minix_mount (grub_disk_t disk)
 
   data->disk = disk;
   data->linknest = 0;
+  data->nofollow = 0;
 #ifdef MODE_MINIX3
   /* These tests are endian-independent. No need to byteswap.  */
   if (data->sblock.block_size == 0xffff)
@@ -635,6 +658,35 @@ grub_minix_dir (grub_device_t device, const char *path,
 }
 
 
+static grub_err_t
+grub_minix_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_minix_data *data;
+
+  data = grub_minix_mount (device->disk);
+  if (!data)
+    return grub_errno;
+
+  if (grub_minix_read_inode (data, GRUB_MINIX_ROOT_INODE))
+    goto fail;
+
+  data->nofollow = 1;
+  if (grub_minix_find_file (data, path))
+    goto fail;
+
+  if ((GRUB_MINIX_INODE_MODE (data) & GRUB_MINIX_IFLNK) != GRUB_MINIX_IFLNK)
+    {
+      grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+      goto fail;
+    }
+
+  *target = grub_minix_read_symlink (data);
+
+ fail:
+  grub_free (data);
+  return grub_errno;
+}
+
 /* Open a file named NAME and initialize FILE.  */
 static grub_err_t
 grub_minix_open (struct grub_file *file, const char *name)
@@ -715,6 +767,7 @@ static struct grub_fs grub_minix_fs =
 #endif
 #endif
     .fs_dir = grub_minix_dir,
+    .fs_readlink = grub_minix_readlink,
     .fs_open = grub_minix_open,
     .fs_read = grub_minix_read,
     .fs_close = grub_minix_close,

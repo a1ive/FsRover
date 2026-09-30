@@ -1113,10 +1113,34 @@ out:
 	return grub_errno;
 }
 
+static grub_err_t
+grub_yaffs_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_yaffs_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = yaffs_mount (device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file (path, &data->root, &fdiro, yaffs_iterate_directory,
+		yaffs_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = yaffs_read_symlink (fdiro);
+
+fail:
+	if (fdiro != &data->root)
+		grub_free (fdiro);
+	yaffs_free_data (data);
+	return grub_errno;
+}
+
 static struct grub_fs grub_yaffs_fs =
 {
 	.name = "yaffs",
 	.fs_dir = grub_yaffs_dir,
+	.fs_readlink = grub_yaffs_readlink,
 	.fs_open = grub_yaffs_open,
 	.fs_read = grub_yaffs_read,
 	.fs_close = grub_yaffs_close,

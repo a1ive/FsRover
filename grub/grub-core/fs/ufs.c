@@ -784,6 +784,41 @@ grub_ufs_dir (grub_device_t device, const char *path,
 }
 
 
+static grub_err_t
+grub_ufs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_ufs_data *data;
+
+  data = grub_ufs_mount (device->disk);
+  if (!data)
+    return grub_errno;
+
+  if (grub_ufs_read_inode (data, GRUB_UFS_INODE, 0))
+    goto fail;
+
+  if (!path || path[0] != '/')
+    {
+      grub_error (GRUB_ERR_BAD_FILENAME, N_("invalid file name `%s'"), path);
+      goto fail;
+    }
+
+  data->nofollow = 1;
+  if (grub_ufs_find_file (data, path))
+    goto fail;
+
+  if ((INODE_MODE (data) & GRUB_UFS_ATTR_TYPE) != GRUB_UFS_ATTR_LNK)
+    {
+      grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+      goto fail;
+    }
+
+  *target = grub_ufs_read_symlink (data);
+
+ fail:
+  grub_free (data);
+  return grub_errno;
+}
+
 /* Open a file named NAME and initialize FILE.  */
 static grub_err_t
 grub_ufs_open (struct grub_file *file, const char *name)
@@ -924,6 +959,7 @@ static struct grub_fs grub_ufs_fs =
 #endif
 #endif
     .fs_dir = grub_ufs_dir,
+    .fs_readlink = grub_ufs_readlink,
     .fs_open = grub_ufs_open,
     .fs_read = grub_ufs_read,
     .fs_close = grub_ufs_close,

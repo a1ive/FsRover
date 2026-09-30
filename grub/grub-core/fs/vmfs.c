@@ -1477,6 +1477,29 @@ fail:
 }
 
 static grub_err_t
+grub_vmfs_readlink(grub_device_t device, const char *path, char **target)
+{
+	struct grub_vmfs_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_vmfs_mount(device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file(path, &data->root, &fdiro, grub_vmfs_iterate_dir,
+		grub_vmfs_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_vmfs_read_symlink(fdiro);
+
+fail:
+	if (fdiro != &data->root)
+		grub_free(fdiro);
+	grub_vmfs_unmount(data);
+	return grub_errno;
+}
+
+static grub_err_t
 grub_vmfs_open(struct grub_file *file, const char *name)
 {
 	struct grub_vmfs_data *data;
@@ -1568,6 +1591,7 @@ static struct grub_fs grub_vmfs_fs =
 {
 	.name = "vmfs",
 	.fs_dir = grub_vmfs_dir,
+	.fs_readlink = grub_vmfs_readlink,
 	.fs_open = grub_vmfs_open,
 	.fs_read = grub_vmfs_read,
 	.fs_close = grub_vmfs_close,

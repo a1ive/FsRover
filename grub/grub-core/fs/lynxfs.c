@@ -592,10 +592,34 @@ fail:
 	return grub_errno;
 }
 
+static grub_err_t
+grub_lynxfs_readlink(grub_device_t device, const char *path, char **target)
+{
+	struct grub_lynxfs_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_lynxfs_mount(device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file(path, &data->diropen, &fdiro, grub_lynxfs_iterate_dir,
+		grub_lynxfs_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_lynxfs_read_symlink(fdiro);
+
+fail:
+	if (fdiro != &data->diropen)
+		grub_free(fdiro);
+	grub_free(data);
+	return grub_errno;
+}
+
 static struct grub_fs grub_lynxfs_fs =
 {
 	.name = "lynxfs",
 	.fs_dir = grub_lynxfs_dir,
+	.fs_readlink = grub_lynxfs_readlink,
 	.fs_open = grub_lynxfs_open,
 	.fs_read = grub_lynxfs_read,
 	.fs_close = grub_lynxfs_close,

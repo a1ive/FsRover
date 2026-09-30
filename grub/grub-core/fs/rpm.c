@@ -436,6 +436,12 @@ grub_rpm_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_rpm_readlink (grub_device_t device, const char *path, char **target)
+{
+	return grub_pkg_readlink (device, &rpm_ops, path, target);
+}
+
+static grub_err_t
 grub_rpm_open (grub_file_t file, const char *name)
 {
 	return grub_pkg_open (file, &rpm_ops, name);
@@ -457,6 +463,7 @@ static struct grub_fs grub_rpm_fs =
 {
 	.name = "rpm",
 	.fs_dir = grub_rpm_dir,
+	.fs_readlink = grub_rpm_readlink,
 	.fs_open = grub_rpm_open,
 	.fs_read = grub_pkg_read,
 	.fs_close = grub_pkg_close,

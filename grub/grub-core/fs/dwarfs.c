@@ -2571,6 +2571,44 @@ out:
 	return err;
 }
 
+/* Symlink inodes follow the directories; symlink_table maps each one to
+   its target in the symlinks string table.  */
+static grub_err_t
+dwarfs_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct dwarfs_data *data;
+	grub_uint32_t inode;
+	grub_uint32_t mode;
+	grub_uint64_t index;
+
+	data = dwarfs_mount (device->disk);
+	if (!data)
+		return grub_errno;
+	if (dwarfs_lookup (data, path, &inode) != 0
+		|| dwarfs_inode_mode (data, inode, &mode) != 0)
+		goto fail;
+	if ((mode & DWARFS_MODE_TYPE_MASK) != DWARFS_MODE_SYMLINK
+		|| inode < data->symlink_inode_offset)
+	{
+		grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a DwarFS symlink");
+		goto fail;
+	}
+	if (dwarfs_array_uint (data, &data->symlink_table,
+		inode - data->symlink_inode_offset, &index) != 0)
+		goto fail;
+	if (index > GRUB_UINT_MAX)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "invalid DwarFS symlink index");
+		goto fail;
+	}
+	*target = dwarfs_string_lookup (data, &data->symlinks,
+		(grub_uint32_t) index);
+
+fail:
+	dwarfs_free (data);
+	return grub_errno;
+}
+
 static grub_err_t
 dwarfs_open (grub_file_t file, const char *name)
 {
@@ -2720,6 +2758,7 @@ static struct grub_fs grub_dwarfs_fs =
 {
 	.name = "dwarfs",
 	.fs_dir = dwarfs_dir,
+	.fs_readlink = dwarfs_readlink,
 	.fs_open = dwarfs_open,
 	.fs_read = dwarfs_read,
 	.fs_close = dwarfs_close,

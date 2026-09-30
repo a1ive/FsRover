@@ -96,6 +96,13 @@ struct grub_fs
   /* Get writing time of filesystem. */
   grub_err_t (*fs_mtime) (grub_device_t device, grub_int64_t *timebuf);
 
+  /* Return the target of the symbolic link PATH in TARGET, without
+     following the final component.  The target is returned in a
+     grub_malloc'ed buffer and should be freed by the caller.  A PATH
+     that is not a symbolic link fails with GRUB_ERR_BAD_FILE_TYPE.  */
+  grub_err_t (*fs_readlink) (grub_device_t device, const char *path,
+			     char **target);
+
 #ifdef GRUB_UTIL
   /* Determine sectors available for embedding.  */
   grub_err_t (*fs_embed) (grub_device_t device, unsigned int *nsectors,

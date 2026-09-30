@@ -219,6 +219,23 @@ grub_cpio_dir (grub_device_t device, const char *path_in,
 }
 
 static grub_err_t
+grub_cpio_readlink (grub_device_t device, const char *path_in, char **target)
+{
+  struct grub_archelp_data *data;
+  grub_err_t err;
+
+  data = grub_cpio_mount (device->disk);
+  if (!data)
+    return grub_errno;
+
+  err = grub_archelp_readlink (data, &arcops, path_in, target);
+
+  grub_free (data);
+
+  return err;
+}
+
+static grub_err_t
 grub_cpio_open (grub_file_t file, const char *name_in)
 {
   struct grub_archelp_data *data;
@@ -272,6 +289,7 @@ grub_cpio_close (grub_file_t file)
 static struct grub_fs grub_cpio_fs = {
   .name = FSNAME,
   .fs_dir = grub_cpio_dir,
+  .fs_readlink = grub_cpio_readlink,
   .fs_open = grub_cpio_open,
   .fs_read = grub_cpio_read,
   .fs_close = grub_cpio_close,

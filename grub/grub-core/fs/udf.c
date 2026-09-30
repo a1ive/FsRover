@@ -1951,6 +1951,41 @@ fail:
 }
 
 static grub_err_t
+grub_udf_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_udf_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+  struct grub_fshelp_node *rootnode = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_udf_mount (device->disk);
+  if (!data)
+    goto out;
+
+  rootnode = grub_malloc (get_fshelp_size (data));
+  if (!rootnode)
+    goto fail;
+  if (grub_udf_read_icb_ad (data, &data->root_icb, rootnode))
+    goto fail;
+
+  if (grub_fshelp_find_file (path, rootnode, &fdiro, grub_udf_iterate_dir,
+			     grub_udf_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_udf_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != rootnode)
+    grub_free (fdiro);
+  grub_free (rootnode);
+  grub_udf_free_data (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
+static grub_err_t
 grub_udf_open (struct grub_file *file, const char *name)
 {
   struct grub_udf_data *data;
@@ -2251,6 +2286,7 @@ fail:
 static struct grub_fs grub_udf_fs = {
   .name = "udf",
   .fs_dir = grub_udf_dir,
+  .fs_readlink = grub_udf_readlink,
   .fs_open = grub_udf_open,
   .fs_read = grub_udf_read,
   .fs_map_range = grub_udf_map,

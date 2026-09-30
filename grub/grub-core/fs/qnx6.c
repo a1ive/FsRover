@@ -900,10 +900,34 @@ fail:
 	return grub_errno;
 }
 
+static grub_err_t
+grub_qnx6_readlink(grub_device_t device, const char *path, char **target)
+{
+	grub_qnx6_data_t *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_qnx6_mount(device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file(path, &data->diropen, &fdiro, grub_qnx6_iterate_dir,
+		grub_qnx6_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_qnx6_read_symlink(fdiro);
+
+fail:
+	if (fdiro != &data->diropen)
+		grub_free(fdiro);
+	grub_qnx6_free_data(data);
+	return grub_errno;
+}
+
 static struct grub_fs grub_qnx6_fs =
 {
 	.name = "qnx6",
 	.fs_dir = grub_qnx6_dir,
+	.fs_readlink = grub_qnx6_readlink,
 	.fs_open = grub_qnx6_open,
 	.fs_read = grub_qnx6_read,
 	.fs_close = grub_qnx6_close,

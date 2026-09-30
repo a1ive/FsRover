@@ -836,6 +836,34 @@ grub_squash_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_squash_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_squash_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+  struct grub_fshelp_node root;
+
+  data = squash_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (make_root_node (data, &root))
+    goto fail;
+
+  if (grub_fshelp_find_file (path, &root, &fdiro, grub_squash_iterate_dir,
+			     grub_squash_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_squash_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &root)
+    grub_free (fdiro);
+  squash_unmount (data);
+ out:
+  return grub_errno;
+}
+
+static grub_err_t
 grub_squash_open (struct grub_file *file, const char *name)
 {
   struct grub_squash_data *data = 0;
@@ -1143,6 +1171,7 @@ static struct grub_fs grub_squash_fs =
   {
     .name = "squash4",
     .fs_dir = grub_squash_dir,
+    .fs_readlink = grub_squash_readlink,
     .fs_open = grub_squash_open,
     .fs_read = grub_squash_read,
     .fs_close = grub_squash_close,

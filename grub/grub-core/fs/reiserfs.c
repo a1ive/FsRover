@@ -1358,6 +1358,48 @@ grub_reiserfs_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_reiserfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_reiserfs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+  struct grub_fshelp_node root;
+  struct grub_reiserfs_key root_key;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_reiserfs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  root_key.directory_id = grub_cpu_to_le32_compile_time (1);
+  root_key.object_id = grub_cpu_to_le32_compile_time (2);
+  root_key.u.v2.offset_type = 0;
+  grub_reiserfs_set_key_type (&root_key, GRUB_REISERFS_DIRECTORY, 2);
+  grub_reiserfs_set_key_offset (&root_key, 1);
+  if (grub_reiserfs_get_item (data, &root_key, &root, 1) != GRUB_ERR_NONE)
+    goto fail;
+  if (root.block_number == 0)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "root not found");
+      goto fail;
+    }
+
+  if (grub_fshelp_find_file (path, &root, &fdiro, grub_reiserfs_iterate_dir,
+			     grub_reiserfs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_reiserfs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &root)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 /* Return the label of the device DEVICE in LABEL.  The label is
    returned in a grub_malloc'ed buffer and should be freed by the
    caller.  */
@@ -1424,6 +1466,7 @@ static struct grub_fs grub_reiserfs_fs =
   {
     .name = "reiserfs",
     .fs_dir = grub_reiserfs_dir,
+    .fs_readlink = grub_reiserfs_readlink,
     .fs_open = grub_reiserfs_open,
     .fs_read = grub_reiserfs_read,
     .fs_close = grub_reiserfs_close,

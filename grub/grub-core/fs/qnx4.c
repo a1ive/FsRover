@@ -515,10 +515,34 @@ fail:
 	return grub_errno;
 }
 
+static grub_err_t
+grub_qnx4_readlink(grub_device_t device, const char *path, char **target)
+{
+	struct grub_qnx4_data *data;
+	struct grub_fshelp_node *fdiro = NULL;
+
+	data = grub_qnx4_mount(device->disk);
+	if (!data)
+		return grub_errno;
+
+	if (grub_fshelp_find_file(path, &data->diropen, &fdiro, grub_qnx4_iterate_dir,
+		grub_qnx4_read_symlink, GRUB_FSHELP_SYMLINK))
+		goto fail;
+
+	*target = grub_qnx4_read_symlink(fdiro);
+
+fail:
+	if (fdiro != &data->diropen)
+		grub_free(fdiro);
+	grub_free(data);
+	return grub_errno;
+}
+
 static struct grub_fs grub_qnx4_fs =
 {
 	.name = "qnx4",
 	.fs_dir = grub_qnx4_dir,
+	.fs_readlink = grub_qnx4_readlink,
 	.fs_open = grub_qnx4_open,
 	.fs_read = grub_qnx4_read,
 	.fs_close = grub_qnx4_close,

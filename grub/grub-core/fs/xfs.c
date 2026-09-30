@@ -1209,6 +1209,33 @@ grub_xfs_dir (grub_device_t device, const char *path,
   return grub_errno;
 }
 
+static grub_err_t
+grub_xfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_xfs_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_xfs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->diropen, &fdiro, grub_xfs_iterate_dir,
+			     grub_xfs_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_xfs_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->diropen)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
 
 /* Open a file named NAME and initialize FILE.  */
 static grub_err_t
@@ -1463,6 +1490,7 @@ static struct grub_fs grub_xfs_fs =
   {
     .name = "xfs",
     .fs_dir = grub_xfs_dir,
+    .fs_readlink = grub_xfs_readlink,
     .fs_open = grub_xfs_open,
     .fs_read = grub_xfs_read,
     .fs_map_range = grub_xfs_map,

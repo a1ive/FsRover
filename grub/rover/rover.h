@@ -254,6 +254,17 @@ typedef struct rover_stat rover_stat_t;
 
 int rover_stat (const char *path, rover_stat_t *st);
 
+/*
+ * Target of the symbolic link PATH, as stored on disk; the final component
+ * is not followed.  Stores at most SIZE - 1 bytes plus a NUL in BUF and the
+ * full target length in *LEN when LEN is not NULL, so LEN >= SIZE means the
+ * target was truncated.  Returns 0 or a GRUB error: rover_last_errno() is
+ * EINVAL when PATH is not a symbolic link and ENOTSUP when the filesystem
+ * cannot read link targets.
+ */
+int rover_readlink (const char *path, char *buf, unsigned long long size,
+	unsigned long long *len);
+
 /* Filesystem name of a device given without parens ("hd0,gpt2" ->
    "ntfs"), NULL if none.  The returned string is static.  */
 const char *rover_fs_name (const char *device);

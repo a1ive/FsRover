@@ -1135,6 +1135,8 @@ dir_hook_wrapper (const char *name, grub_size_t namelen,
   return ctx->hook (name_buf, &info, ctx->hook_data);
 }
 
+/* Without FOLLOW_SYMLINKS a final symlink component is returned itself;
+   symlinks in leading components are always followed.  */
 grub_err_t
 path_lookup (const struct grub_redoxfs_data *data,
          const char *path_arg,
@@ -1272,7 +1274,7 @@ restart:
       while (pos < pathlen && path[pos] == '/')
     pos++;
 
-      if (follow_symlinks
+      if ((follow_symlinks || pos < pathlen)
       && (grub_le_to_cpu16 (entry_node.mode) & REDOXFS_MODE_TYPE) == REDOXFS_MODE_SYMLINK)
     {
       grub_uint64_t target_len;
@@ -1447,6 +1449,54 @@ grub_redoxfs_open (struct grub_file *file, const char *name)
   return GRUB_ERR_NONE;
 }
 
+static grub_err_t
+grub_redoxfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_redoxfs_data *data;
+  struct grub_redoxfs_node node;
+  grub_uint64_t target_len;
+  char *buf;
+
+  data = grub_redoxfs_mount (device->disk);
+  if (!data)
+    return grub_errno;
+
+  if (path_lookup (data, path, 0, 0, &node) != GRUB_ERR_NONE)
+    goto fail;
+
+  if ((grub_le_to_cpu16 (node.mode) & REDOXFS_MODE_TYPE) != REDOXFS_MODE_SYMLINK)
+    {
+      grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+      goto fail;
+    }
+
+  target_len = grub_le_to_cpu64 (node.size);
+  if (target_len == 0 || target_len >= 3969)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "redoxfs corruption detected");
+      goto fail;
+    }
+
+  buf = redoxfs_malloc ((grub_size_t) target_len + 1);
+  if (!buf)
+    goto fail;
+
+  if (grub_redoxfs_read_file_data (data, &node, 0, buf, (grub_size_t) target_len)
+      != (grub_ssize_t) target_len)
+    {
+      redoxfs_free (buf);
+      grub_error (GRUB_ERR_BAD_FS, "redoxfs corruption detected");
+      goto fail;
+    }
+
+  buf[target_len] = '\0';
+  *target = buf;
+
+ fail:
+  grub_redoxfs_unmount (data);
+  return grub_errno;
+}
+
 static grub_ssize_t
 grub_redoxfs_read (struct grub_file *file, char *buf, grub_size_t len)
 {
@@ -1565,6 +1615,7 @@ grub_redoxfs_mtime (grub_device_t device, grub_int64_t *tm)
 static struct grub_fs grub_redoxfs_fs = {
   .name = "redoxfs",
   .fs_dir = grub_redoxfs_dir,
+  .fs_readlink = grub_redoxfs_readlink,
   .fs_open = grub_redoxfs_open,
   .fs_read = grub_redoxfs_read,
   .fs_close = grub_redoxfs_close,

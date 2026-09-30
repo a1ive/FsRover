@@ -234,6 +234,7 @@ struct grub_jfs_data
   int caseins;
   int pos;
   int linknest;
+  int nofollow;
   int namecomponentlen;
 } GRUB_PACKED;
 
@@ -427,6 +428,7 @@ grub_jfs_mount (grub_disk_t disk)
   data->disk = disk;
   data->pos = 0;
   data->linknest = 0;
+  data->nofollow = 0;
 
   /* Read the inode of the first fileset.  */
   if (grub_disk_read (data->disk, GRUB_JFS_FS1_INODE_BLK, 0,
@@ -766,7 +768,8 @@ grub_jfs_find_file (struct grub_jfs_data *data, const char *path,
 
 	      /* Check if this is a symlink.  */
 	      if ((grub_le_to_cpu32 (data->currinode.mode)
-		   & GRUB_JFS_FILETYPE_MASK) == GRUB_JFS_FILETYPE_LNK)
+		   & GRUB_JFS_FILETYPE_MASK) == GRUB_JFS_FILETYPE_LNK
+		  && !(data->nofollow && !*next))
 		{
 		  grub_jfs_lookup_symlink (data, dirino);
 		  if (grub_errno)
@@ -780,39 +783,59 @@ grub_jfs_find_file (struct grub_jfs_data *data, const char *path,
 }
 
 
-static grub_err_t
-grub_jfs_lookup_symlink (struct grub_jfs_data *data, grub_uint32_t ino)
+/* Read the target of the symlink in the current inode.  */
+static char *
+grub_jfs_read_symlink (struct grub_jfs_data *data)
 {
   grub_size_t size;
   char *symlink;
 
-  if (++data->linknest > GRUB_JFS_MAX_SYMLNK_CNT)
-    return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
-
   /* CVE-2025-0685: the on-disk size must neither truncate nor overflow
      the terminator allocation below.  */
   if (grub_le_to_cpu64 (data->currinode.size) >= GRUB_SIZE_MAX)
-    return grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+      return NULL;
+    }
   size = grub_le_to_cpu64 (data->currinode.size);
 
   symlink = grub_malloc (size + 1);
   if (!symlink)
-    return grub_errno;
+    return NULL;
   if (size <= sizeof (data->currinode.symlink.path))
     grub_memcpy (symlink, (char *) (data->currinode.symlink.path), size);
   else if (grub_jfs_read_file (data, 0, 0, 0, size, symlink) < 0)
     {
       grub_free (symlink);
-      return grub_errno;
+      return NULL;
     }
 
   symlink[size] = '\0';
+  return symlink;
+}
+
+static grub_err_t
+grub_jfs_lookup_symlink (struct grub_jfs_data *data, grub_uint32_t ino)
+{
+  char *symlink;
+  int nofollow;
+
+  if (++data->linknest > GRUB_JFS_MAX_SYMLNK_CNT)
+    return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
+
+  symlink = grub_jfs_read_symlink (data);
+  if (!symlink)
+    return grub_errno;
 
   /* The symlink is an absolute path, go back to the root inode.  */
   if (symlink[0] == '/')
     ino = 2;
 
+  /* The target of a leading component is always followed.  */
+  nofollow = data->nofollow;
+  data->nofollow = 0;
   grub_jfs_find_file (data, symlink, ino);
+  data->nofollow = nofollow;
 
   grub_free (symlink);
 
@@ -876,6 +899,37 @@ grub_jfs_dir (grub_device_t device, const char *path,
 
   grub_dl_unref (my_mod);
 
+  return grub_errno;
+}
+
+static grub_err_t
+grub_jfs_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_jfs_data *data;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_jfs_mount (device->disk);
+  if (!data)
+    goto out;
+
+  data->nofollow = 1;
+  if (grub_jfs_find_file (data, path, GRUB_JFS_AGGR_INODE))
+    goto fail;
+
+  if ((grub_le_to_cpu32 (data->currinode.mode)
+       & GRUB_JFS_FILETYPE_MASK) != GRUB_JFS_FILETYPE_LNK)
+    {
+      grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
+      goto fail;
+    }
+
+  *target = grub_jfs_read_symlink (data);
+
+ fail:
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
   return grub_errno;
 }
 
@@ -1006,6 +1060,7 @@ static struct grub_fs grub_jfs_fs =
   {
     .name = "jfs",
     .fs_dir = grub_jfs_dir,
+    .fs_readlink = grub_jfs_readlink,
     .fs_open = grub_jfs_open,
     .fs_read = grub_jfs_read,
     .fs_close = grub_jfs_close,

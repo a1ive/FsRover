@@ -1064,6 +1064,33 @@ grub_ext2_dir (grub_device_t device, const char *path, grub_fs_dir_hook_t hook,
 }
 
 static grub_err_t
+grub_ext2_readlink (grub_device_t device, const char *path, char **target)
+{
+  struct grub_ext2_data *data;
+  struct grub_fshelp_node *fdiro = 0;
+
+  grub_dl_ref (my_mod);
+
+  data = grub_ext2_mount (device->disk);
+  if (!data)
+    goto out;
+
+  if (grub_fshelp_find_file (path, &data->diropen, &fdiro, grub_ext2_iterate_dir,
+			     grub_ext2_read_symlink, GRUB_FSHELP_SYMLINK))
+    goto fail;
+
+  *target = grub_ext2_read_symlink (fdiro);
+
+ fail:
+  if (fdiro != &data->diropen)
+    grub_free (fdiro);
+  grub_free (data);
+ out:
+  grub_dl_unref (my_mod);
+  return grub_errno;
+}
+
+static grub_err_t
 grub_ext2_label (grub_device_t device, char **label)
 {
   struct grub_ext2_data *data;
@@ -1312,6 +1339,7 @@ static struct grub_fs grub_ext2_fs =
   {
     .name = "ext2",
     .fs_dir = grub_ext2_dir,
+    .fs_readlink = grub_ext2_readlink,
     .fs_open = grub_ext2_open,
     .fs_read = grub_ext2_read,
     .fs_map_range = grub_ext2_map,

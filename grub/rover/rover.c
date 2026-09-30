@@ -790,6 +790,80 @@ fail:
 	return err;
 }
 
+int
+rover_readlink (const char *path, char *buf, unsigned long long size,
+	unsigned long long *len)
+{
+	grub_device_t dev = NULL;
+	grub_fs_t fs;
+	char *device_name = NULL;
+	char *target = NULL;
+	const char *fs_path;
+	grub_size_t n;
+	int err;
+
+	grub_errno = GRUB_ERR_NONE;
+	if (path[0] != '(')
+		return grub_error (GRUB_ERR_BAD_FILENAME, "no device in path `%s'", path);
+
+	device_name = grub_file_get_device_name (path);
+	if (grub_errno)
+		goto fail;
+
+	dev = grub_device_open (device_name);
+	if (!dev)
+		goto fail;
+
+	fs = grub_fs_probe (dev);
+	if (!fs)
+		goto fail;
+
+	if (!fs->fs_readlink)
+	{
+		grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+			"%s cannot read symbolic links", fs->name);
+		goto fail;
+	}
+
+	fs_path = grub_strchr (path, ')') + 1;
+	if (*fs_path == '\0')
+		fs_path = "/";
+
+	if ((fs->fs_readlink) (dev, fs_path, &target))
+		goto fail;
+	if (!target)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "no target for `%s'", path);
+		goto fail;
+	}
+
+	n = grub_strlen (target);
+	if (len)
+		*len = n;
+	if (size)
+	{
+		if (n > size - 1)
+			n = (grub_size_t) (size - 1);
+		grub_memcpy (buf, target, n);
+		buf[n] = '\0';
+	}
+
+	grub_free (target);
+	grub_free (device_name);
+	grub_device_close (dev);
+	grub_errno = GRUB_ERR_NONE;
+	return 0;
+
+fail:
+	err = grub_errno;
+	grub_free (target);
+	grub_free (device_name);
+	if (dev)
+		grub_device_close (dev);
+	grub_errno = err;
+	return err;
+}
+
 const char *
 rover_fs_name (const char *device)
 {

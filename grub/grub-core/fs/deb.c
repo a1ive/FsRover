@@ -311,6 +311,12 @@ grub_deb_dir (grub_device_t device, const char *path,
 }
 
 static grub_err_t
+grub_deb_readlink (grub_device_t device, const char *path, char **target)
+{
+	return grub_pkg_readlink (device, &deb_ops, path, target);
+}
+
+static grub_err_t
 grub_deb_open (grub_file_t file, const char *name)
 {
 	return grub_pkg_open (file, &deb_ops, name);
@@ -332,6 +338,7 @@ static struct grub_fs grub_deb_fs =
 {
 	.name = "deb",
 	.fs_dir = grub_deb_dir,
+	.fs_readlink = grub_deb_readlink,
 	.fs_open = grub_deb_open,
 	.fs_read = grub_pkg_read,
 	.fs_close = grub_pkg_close,

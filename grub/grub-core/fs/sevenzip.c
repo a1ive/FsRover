@@ -2364,6 +2364,56 @@ grub_7z_close (grub_file_t file)
 	return GRUB_ERR_NONE;
 }
 
+#define SZ_LINK_MAX	4096
+
+/* A Unix symlink stores its target as the entry's data.  */
+static grub_err_t
+grub_7z_readlink (grub_device_t device, const char *path, char **target)
+{
+	struct grub_7z_data *data;
+	struct grub_file file;
+	int index;
+	char *buf;
+
+	data = grub_7z_mount (device->disk);
+	if (!data)
+		return grub_errno;
+	index = sz_find_item (data, path);
+	if (index < 0)
+		grub_error (GRUB_ERR_FILE_NOT_FOUND, "file `%s' not found", path);
+	else if (!sz_is_symlink (data, (grub_uint32_t) index))
+		grub_error (GRUB_ERR_BAD_FILE_TYPE, "not a symbolic link");
+	sz_free_data (data);
+	if (grub_errno)
+		return grub_errno;
+
+	grub_memset (&file, 0, sizeof (file));
+	file.device = device;
+	if (grub_7z_open (&file, path))
+		return grub_errno;
+	if (file.size >= SZ_LINK_MAX)
+	{
+		grub_error (GRUB_ERR_BAD_FS, "7z link target too long");
+		goto fail;
+	}
+	buf = grub_malloc ((grub_size_t) file.size + 1);
+	if (!buf)
+		goto fail;
+	if (file.size
+	    && grub_7z_read (&file, buf, (grub_size_t) file.size)
+	       != (grub_ssize_t) file.size)
+	{
+		grub_free (buf);
+		goto fail;
+	}
+	buf[file.size] = '\0';
+	*target = buf;
+
+fail:
+	grub_7z_close (&file);
+	return grub_errno;
+}
+
 static grub_err_t
 grub_7z_mtime (grub_device_t device, grub_int64_t *tm)
 {
@@ -2391,6 +2441,7 @@ static struct grub_fs grub_7z_fs =
 {
 	.name = "7z",
 	.fs_dir = grub_7z_dir,
+	.fs_readlink = grub_7z_readlink,
 	.fs_open = grub_7z_open,
 	.fs_read = grub_7z_read,
 	.fs_close = grub_7z_close,
