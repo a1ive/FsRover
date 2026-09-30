@@ -247,6 +247,7 @@ struct grub_ufs_data
   struct grub_ufs_inode inode;
   int ino;
   int linknest;
+  int nofollow;
   int log2_blksz;
 };
 
@@ -445,26 +446,25 @@ grub_ufs_read_inode (struct grub_ufs_data *data, int ino, char *inode)
 }
 
 
-/* Lookup the symlink the current inode points to.  INO is the inode
-   number of the directory the symlink is relative to.  */
-static grub_err_t
-grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
+/* Read the target of the symlink in the current inode.  */
+static char *
+grub_ufs_read_symlink (struct grub_ufs_data *data)
 {
   char *symlink;
   grub_size_t sz;
 
-  if (++data->linknest > GRUB_UFS_MAX_SYMLNK_CNT)
-    return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
-
   /* CVE-2025-0677: the on-disk size must neither truncate nor overflow
      the terminator allocation below.  */
   if (INODE_SIZE (data) >= GRUB_SIZE_MAX)
-    return grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink too large");
+      return NULL;
+    }
   sz = INODE_SIZE (data);
 
   symlink = grub_malloc (sz + 1);
   if (!symlink)
-    return grub_errno;
+    return NULL;
   /* Normally we should just check that data->inode.nblocks == 0.
      However old Linux doesn't maintain nblocks correctly and so it's always
      0. If size is bigger than inline space then the symlink is surely not
@@ -472,16 +472,33 @@ grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
   /* Check against zero is paylindromic, no need to swap.  */
   if (data->inode.nblocks == 0
       && INODE_SIZE (data) <= sizeof (data->inode.symlink))
-    grub_strlcpy (symlink, (char *) data->inode.symlink, sz);
+    grub_memcpy (symlink, (char *) data->inode.symlink, sz);
   else
     {
       if (grub_ufs_read_file (data, 0, 0, 0, sz, symlink) < 0)
 	{
 	  grub_free(symlink);
-	  return grub_errno;
+	  return NULL;
 	}
     }
   symlink[sz] = '\0';
+  return symlink;
+}
+
+/* Lookup the symlink the current inode points to.  INO is the inode
+   number of the directory the symlink is relative to.  */
+static grub_err_t
+grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
+{
+  char *symlink;
+  int nofollow;
+
+  if (++data->linknest > GRUB_UFS_MAX_SYMLNK_CNT)
+    return grub_error (GRUB_ERR_SYMLINK_LOOP, N_("too deep nesting of symlinks"));
+
+  symlink = grub_ufs_read_symlink (data);
+  if (!symlink)
+    return grub_errno;
 
   /* The symlink is an absolute path, go back to the root inode.  */
   if (symlink[0] == '/')
@@ -494,7 +511,11 @@ grub_ufs_lookup_symlink (struct grub_ufs_data *data, int ino)
       return grub_errno;
     }
 
+  /* The target of a leading component is always followed.  */
+  nofollow = data->nofollow;
+  data->nofollow = 0;
   grub_ufs_find_file (data, symlink);
+  data->nofollow = nofollow;
 
   grub_free (symlink);
 
@@ -579,7 +600,8 @@ grub_ufs_find_file (struct grub_ufs_data *data, const char *path)
 	      grub_ufs_read_inode (data, grub_ufs_to_cpu32 (dirent.ino), 0);
 
 	      if ((INODE_MODE(data) & GRUB_UFS_ATTR_TYPE)
-		  == GRUB_UFS_ATTR_LNK)
+		  == GRUB_UFS_ATTR_LNK
+		  && !(data->nofollow && !*next))
 		{
 		  grub_ufs_lookup_symlink (data, dirino);
 		  if (grub_errno)
@@ -628,6 +650,7 @@ grub_ufs_mount (grub_disk_t disk)
 
 	  data->disk = disk;
 	  data->linknest = 0;
+	  data->nofollow = 0;
 	  return data;
 	}
       sblklist++;
