@@ -1558,9 +1558,21 @@ host.
 ### Behaviour of a mounted volume
 
 - **Read-only.**
-- Entries identified by the driver as symbolic links are omitted from mounted
-  directories. Accessing a link, including a path through a directory link,
-  reports **not supported**.
+- **Symbolic links** from Linux, macOS and other Unix images depend on the
+  backend:
+  - **WinFsp** shows them as real Windows symbolic links (`<SYMLINK>` /
+    `<SYMLINKD>` in `dir`) with the target stored in the image. Relative targets
+    stay relative. An absolute target such as `/usr/lib` names that path on the
+    same drive, as it does inside the image, not on the host.
+  - **Dokan** cannot present symbolic links, so a link appears as the file or
+    directory it points to. Links whose target is missing or that loop are left
+    out of listings. A directory link that leads back to a directory on its own
+    path (`up -> ..`) is also left out of listings so that recursive tools stop,
+    but it can still be opened by name.
+  - Either way, paths through directory links resolve. This includes archive
+    formats whose own lookup does not follow links (7z, RAR, …). Links whose
+    target a driver cannot read (registry link keys, ReFS and WIM reparse
+    points) appear as the ordinary entry the driver exposes.
 - The volume reports **case-sensitive search**, **case-preserved names** and
   **Unicode on disk**, with a maximum path component length of 255.
 - The Windows volume label is the grub device name (`hd0,gpt2`, `loop0`, …) and

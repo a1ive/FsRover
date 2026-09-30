@@ -39,6 +39,11 @@ EXT2_FILES = {
 }
 EXT2_DIRS = {"nested", "empty-dir"}
 EXT2_LINKS = {"link.txt": "hello.txt", "dirlink": "nested"}
+# Mount-core link semantics: chains, absolute, dangling, self-loop and a
+# directory link back to the root; "nested/..." links live in that directory.
+LINK_EXT2_LINKS = {"link.txt": "hello.txt", "dirlink": "nested", "chain": "dirlink",
+                   "abs": "/nested/data.bin", "dangling": "missing", "loop": "loop",
+                   "nested/up": "..", "nested/sib": "../link.txt"}
 SIGNAL_FILES = {f"signal-{index:02d}.bin": bytes([index]) * (256 * 1024)
                 for index in range(32)}
 
@@ -133,7 +138,7 @@ def make_fat(path, broken=False):
     path.write_bytes(disk)
 
 
-def make_ext2(path):
+def make_ext2(path, links=EXT2_LINKS):
     # Minimal revision-1 ext2: 1 KiB blocks, one block group, direct blocks only.
     block, total_blocks, total_inodes = 1024, 256, 64
     inode_size, first_ino = 128, 11
@@ -172,7 +177,7 @@ def make_ext2(path):
         return bytes(data)
 
     inodes, next_inode = {"root": 2}, first_ino
-    for name in sorted(EXT2_DIRS) + sorted(EXT2_FILES) + sorted(EXT2_LINKS):
+    for name in sorted(EXT2_DIRS) + sorted(EXT2_FILES) + sorted(links):
         inodes[name] = next_inode
         next_inode += 1
 
@@ -190,13 +195,16 @@ def make_ext2(path):
     root = [(inodes["root"], ".", "dir"), (inodes["root"], "..", "dir")]
     root += [(inodes[name], name, "reg") for name in sorted(EXT2_FILES) if "/" not in name]
     root += [(inodes[name], name, "dir") for name in sorted(EXT2_DIRS)]
-    root += [(inodes[name], name, "symlink") for name in sorted(EXT2_LINKS)]
+    root += [(inodes[name], name, "symlink") for name in sorted(links) if "/" not in name]
     image[layout["root"] * block:(layout["root"] + 1) * block] = directory(root)
     for name in sorted(EXT2_DIRS):
         entries = [(inodes[name], ".", "dir"), (inodes["root"], "..", "dir")]
         for other in sorted(EXT2_FILES):
             if other.startswith(name + "/"):
                 entries.append((inodes[other], other.split("/", 1)[1], "reg"))
+        for other in sorted(links):
+            if other.startswith(name + "/"):
+                entries.append((inodes[other], other.split("/", 1)[1], "symlink"))
         image[layout[name] * block:(layout[name] + 1) * block] = directory(entries)
     for name, content in EXT2_FILES.items():
         for index, number in enumerate(layout[name]):
@@ -213,7 +221,7 @@ def make_ext2(path):
         put_inode(inodes[name], make_inode(dir_mode, block, [layout[name]], links=2))
     for name, content in EXT2_FILES.items():
         put_inode(inodes[name], make_inode(reg_mode, len(content), layout[name]))
-    for name, target in EXT2_LINKS.items():
+    for name, target in links.items():
         raw = target.encode("utf-8")
         put_inode(inodes[name], make_inode(link_mode, len(raw), [], target=raw))
 
@@ -309,5 +317,6 @@ def generate(root):
     make_tar(root / "cancel.tar", {"large.bin": bytes(range(256)) * 12289,
                                     "after.txt": b"must not be extracted"})
     make_ext2(root / "basic.ext2")
+    make_ext2(root / "links.ext2", LINK_EXT2_LINKS)
     make_loop_tar(root / "loop.tar")
     make_tar(root / "signal.tar", SIGNAL_FILES)

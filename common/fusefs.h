@@ -35,6 +35,15 @@ struct fusefs_cache;
 /* Roughly 250 bytes per entry: at most ~16 MiB per mount. */
 constexpr size_t FUSEFS_CACHE_MAX = 65536;
 
+/* How a symbolic link is presented.  Links in leading path components are
+   always resolved by the core, so both modes accept paths through them. */
+enum class fusefs_links
+{
+	native,	/* S_IFLNK plus fusefs_readlink(): FUSE, WinFsp reparse points */
+	follow,	/* the link is shown as its target (Dokan has no reparse
+		   points); dangling links and loops are left out of listings */
+};
+
 struct fusefs
 {
 	std::string device;
@@ -46,6 +55,7 @@ struct fusefs
 	   sizes).  */
 	uint32_t sector_size;
 	uint32_t serial;
+	fusefs_links links;
 	std::function<bool (const std::function<void ()> &)> dispatch;
 	/* Path -> metadata LRU.  The volume is read-only, so entries stay valid
 	   until the name decoding changes (see fusefs_invalidate). */
@@ -76,7 +86,8 @@ void fusefs_init (fusefs *fs, const std::string &device,
 	const std::string &fs_name, unsigned long long size,
 	unsigned int sector_size,
 	std::function<bool (const std::function<void ()> &)> dispatch,
-	size_t cache_max = FUSEFS_CACHE_MAX);
+	size_t cache_max = FUSEFS_CACHE_MAX,
+	fusefs_links links = fusefs_links::native);
 
 int fusefs_getattr (fusefs *fs, const char *path, fusefs_stat *st);
 int fusefs_open (fusefs *fs, const char *path, int flags, uint64_t *handle);
@@ -86,6 +97,15 @@ int fusefs_release (fusefs *fs, uint64_t *handle);
 int fusefs_readdir (fusefs *fs, const char *path, fusefs_fill_dir fill,
 	void *data);
 int fusefs_statfs (fusefs *fs, fusefs_statvfs *st);
+
+/* Target of the link PATH as stored on disk, NUL-terminated and truncated
+   to SIZE - 1 bytes; -EINVAL when PATH is not a link (always so in follow
+   mode). */
+int fusefs_readlink (fusefs *fs, const char *path, char *buf, size_t size);
+
+/* Canonical mount path ("/" or "/a/b") of what PATH resolves to, with every
+   link, "." and ".." resolved. */
+int fusefs_realpath (fusefs *fs, const char *path, std::string *out);
 
 /* Drop cached metadata.  Call after rover_set_fs_char_encoding() returns:
    names decoded with the old setting no longer resolve the same way. */

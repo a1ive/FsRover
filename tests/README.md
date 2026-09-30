@@ -63,9 +63,13 @@ mock Rover or duplicate the extraction implementation. Its C mapping companion,
 `filemap_probe.c`, compiles with the GRUB headers/configuration separately from
 the C++ frontend and calls the actual `grub_file_map_range` and read APIs.
 `--fusefs FIXTURES` drives the shared mount core (`common/fusefs.cpp`) directly on
-the generated ext2 and FAT12 images: cached getattr/readdir/open results must
-match an uncached `rover_stat` walk (symlink components, missing and non-directory
-parents, case variants), repeated and listing-seeded lookups must not reach the
+the generated ext2 (`basic.ext2`, `links.ext2`) and FAT12 images, in both link
+modes (native `S_IFLNK` + readlink, and follow). Cached getattr/readdir/open/readlink
+results must match an uncached POSIX walk over `rover_stat`/`rover_readlink`
+(links in leading components, chains, absolute, dangling and looping links, `.`
+and `..`, missing and non-directory parents, case variants). Follow-mode listings
+must leave out dangling links, loops and directory links back onto their own path.
+Repeated and listing-seeded lookups must not reach the
 backend dispatcher, the LRU bound (a small per-mount limit, since every insert is a
 real lookup) evicts oldest first, and concurrent lookups,
 listings and invalidations stay consistent. It does not mount anything. `--readlink FIXTURES`

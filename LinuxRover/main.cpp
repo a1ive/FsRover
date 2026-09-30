@@ -338,6 +338,13 @@ fs_getattr (const char *path, struct stat *st, fuse_file_info *)
 }
 
 int
+fs_readlink (const char *path, char *buf, size_t size)
+{
+	fusefs *fs = current_fs ();
+	return fs ? fusefs_readlink (fs, path, buf, size) : -EIO;
+}
+
+int
 fs_open (const char *path, fuse_file_info *info)
 {
 	fusefs *fs = current_fs ();
@@ -592,6 +599,7 @@ main (int argc, char **argv)
 		device.sector_size,
 		[] (const std::function<void ()> &fn) { fn (); return true; });
 	operations.getattr = fs_getattr;
+	operations.readlink = fs_readlink;
 	operations.open = fs_open;
 	operations.read = fs_read;
 	operations.release = fs_release;

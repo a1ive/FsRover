@@ -135,6 +135,7 @@ error_status (int error)
 	case -EINVAL: return STATUS_INVALID_PARAMETER;
 	case -ENOTSUP: return STATUS_NOT_SUPPORTED;
 	case -ELOOP: return STATUS_REPARSE_POINT_NOT_RESOLVED;
+	case -ENAMETOOLONG: return STATUS_NAME_TOO_LONG;
 	case -ETIMEDOUT: return STATUS_IO_TIMEOUT;
 	case -EROFS: return STATUS_MEDIA_WRITE_PROTECTED;
 	case -EOVERFLOW: return STATUS_INTEGER_OVERFLOW;
@@ -571,8 +572,12 @@ dokanfs_mount (const std::string &device, const std::string &fs,
 	}
 
 	dokan_mount *m = new dokan_mount;
+	/* WinFsp turns links into reparse points; Dokan cannot serve them, so
+	   links there are shown as what they point to. */
 	fusefs_init (&m->core, device, fs, size, sector_size,
-		[] (const std::function<void ()> &fn) { return backend_call (fn); });
+		[] (const std::function<void ()> &fn) { return backend_call (fn); },
+		FUSEFS_CACHE_MAX, g_backend == dokanfs_backend::winfsp
+			? fusefs_links::native : fusefs_links::follow);
 	m->mountpoint = std::wstring (1, letter) + L":\\";
 	m->open_explorer = open_explorer;
 	m->winfsp = false;

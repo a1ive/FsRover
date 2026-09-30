@@ -18,6 +18,8 @@
 
 #include <windows.h>
 
+#include <string.h>
+
 #include <atomic>
 #include <cstdlib>
 #include <string>
@@ -147,6 +149,31 @@ fs_getattr (const char *path, fuse_stat *out)
 }
 
 int
+fs_readlink (const char *path, char *buf, size_t size)
+{
+	fusefs *fs = current_fs ();
+	int rc = fs ? fusefs_readlink (fs, path, buf, size) : -EIO;
+	if (rc)
+		return rc;
+
+	/* WinFsp's in-volume resolver empties the path when a target ending in
+	   "." or ".." lands on the volume root ("up -> .." one level down), and
+	   a trailing slash anywhere else leaves a doubled separator.  Such a
+	   target always names a directory, so add the slash for the root only. */
+	size_t length = strlen (buf);
+	const char *last = strrchr (buf, '/');
+	last = last ? last + 1 : buf;
+	std::string where;
+	if ((!strcmp (last, ".") || !strcmp (last, "..")) && length + 1 < size
+		&& !fusefs_realpath (fs, path, &where) && where == "/")
+	{
+		buf[length] = '/';
+		buf[length + 1] = '\0';
+	}
+	return 0;
+}
+
+int
 fs_open (const char *path, fuse_file_info *info)
 {
 	fusefs *fs = current_fs ();
@@ -219,6 +246,7 @@ fs_init (fuse_conn_info *conn)
 fuse_operations g_ops =
 {
 	.getattr = fs_getattr,
+	.readlink = fs_readlink,
 	.open = fs_open,
 	.read = fs_read,
 	.statfs = fs_statfs,
@@ -326,7 +354,9 @@ winfspfs_mount (fusefs *fs, wchar_t letter, bool open_explorer,
 	for (char &c : label)
 		if (c == ',')
 			c = '_';
-	std::string options = "ro,volname=" + label + ",ExactFileSystemName=FsRover";
+	/* rellinks: an absolute link target names a path on this volume, as it
+	   does inside the image, not on the host. */
+	std::string options = "ro,rellinks,volname=" + label + ",ExactFileSystemName=FsRover";
 	char *argv[] = { arg0, arg1, options.data () };
 	fuse_args args = { 3, argv, 0 };
 	wchar_t drive[3] = { letter, L':', 0 };
