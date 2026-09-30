@@ -630,6 +630,20 @@ add_part (struct iterate_dir_ctx *ctx,
   ctx->symlink[size + len2] = 0;
 }
 
+/* Start a new component: separate it from the previous one unless that
+   was continued or already ends with a slash (the root).  */
+static void
+add_separator (struct iterate_dir_ctx *ctx)
+{
+  grub_size_t size;
+
+  if (!ctx->symlink || ctx->was_continue)
+    return;
+  size = grub_strlen (ctx->symlink);
+  if (size && ctx->symlink[size - 1] != '/')
+    add_part (ctx, "/", 1);
+}
+
 static grub_err_t
 susp_iterate_dir (struct grub_iso9660_susp_entry *entry,
 		  void *_ctx)
@@ -740,12 +754,9 @@ susp_iterate_dir (struct grub_iso9660_susp_entry *entry,
 		/* The data on pos + 2 is the actual data, pos + 1
 		   is the length.  Both are part of the `Component
 		   Record'.  */
-		if (ctx->symlink && !ctx->was_continue)
-		  {
-		    add_part (ctx, "/", 1);
-		    if (grub_errno)
-		      return grub_errno;
-		  }
+		add_separator (ctx);
+		if (grub_errno)
+		  return grub_errno;
 
 		add_part (ctx, (char *) &entry->u.data[1 + pos + 2],
 			  entry->u.data[1 + pos + 1]);
@@ -754,11 +765,17 @@ susp_iterate_dir (struct grub_iso9660_susp_entry *entry,
 	      }
 
 	    case 2:
-	      add_part (ctx, "./", 2);
+	      add_separator (ctx);
+	      if (!grub_errno)
+		add_part (ctx, ".", 1);
+	      ctx->was_continue = 0;
 	      break;
 
 	    case 4:
-	      add_part (ctx, "../", 3);
+	      add_separator (ctx);
+	      if (!grub_errno)
+		add_part (ctx, "..", 2);
+	      ctx->was_continue = 0;
 	      break;
 
 	    case 8:
