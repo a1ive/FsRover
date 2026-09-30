@@ -50,7 +50,9 @@ typedef int (*grub_fshelp_iterate_dir_hook_t) (const char *filename,
    iterate over all directory entries in the current node.
    READ_SYMLINK is used to read the symlink if a node is a symlink.
    EXPECTTYPE is the type node that is expected by the called, an
-   error is generated if the node is not of the expected type.  */
+   error is generated if the node is not of the expected type.
+   GRUB_FSHELP_SYMLINK returns the final component itself instead of
+   following it; symlinks in the leading components are still followed.  */
 grub_err_t
 EXPORT_FUNC(grub_fshelp_find_file) (const char *path,
 				    grub_fshelp_node_t rootnode,

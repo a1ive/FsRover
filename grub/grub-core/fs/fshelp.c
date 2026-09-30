@@ -162,7 +162,7 @@ static grub_err_t
 find_file (char *currpath,
 	   iterate_dir_func iterate_dir, lookup_file_func lookup_file,
 	   read_symlink_func read_symlink,
-	   struct grub_fshelp_find_file_ctx *ctx)
+	   struct grub_fshelp_find_file_ctx *ctx, int nofollow)
 {
   char *name, *next;
   grub_err_t err;
@@ -216,8 +216,9 @@ find_file (char *currpath,
 
       push_node (ctx, foundnode, foundtype);
 
-      /* Read in the symlink and follow it.  */
-      if (ctx->currnode->type == GRUB_FSHELP_SYMLINK)
+      /* Read in the symlink and follow it, unless it is the final
+	 component of a lookup that asked for the link itself.  */
+      if (ctx->currnode->type == GRUB_FSHELP_SYMLINK && !(nofollow && !*next))
 	{
 	  char *symlink;
 
@@ -249,7 +250,7 @@ find_file (char *currpath,
 
 
 	  /* Lookup the node the symlink points to.  */
-	  find_file (symlink, iterate_dir, lookup_file, read_symlink, ctx);
+	  find_file (symlink, iterate_dir, lookup_file, read_symlink, ctx, 0);
 	  grub_free (symlink);
 
 	  if (grub_errno)
@@ -291,7 +292,8 @@ grub_fshelp_find_file_real (const char *path, grub_fshelp_node_t rootnode,
   duppath = grub_strdup (path);
   if (!duppath)
     return grub_errno;
-  err = find_file (duppath, iterate_dir, lookup_file, read_symlink, &ctx);
+  err = find_file (duppath, iterate_dir, lookup_file, read_symlink, &ctx,
+		   expecttype == GRUB_FSHELP_SYMLINK);
   grub_free (duppath);
   if (err)
     {
@@ -310,6 +312,8 @@ grub_fshelp_find_file_real (const char *path, grub_fshelp_node_t rootnode,
     err = grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a regular file"));
   else if (expecttype == GRUB_FSHELP_DIR && foundtype != expecttype)
     err = grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a directory"));
+  else if (expecttype == GRUB_FSHELP_SYMLINK && foundtype != expecttype)
+    err = grub_error (GRUB_ERR_BAD_FILE_TYPE, N_("not a symbolic link"));
   else
     return 0;
 
@@ -334,7 +338,9 @@ grub_fshelp_find_file_real (const char *path, grub_fshelp_node_t rootnode,
    iterate over all directory entries in the current node.
    READ_SYMLINK is used to read the symlink if a node is a symlink.
    EXPECTTYPE is the type node that is expected by the called, an
-   error is generated if the node is not of the expected type.  */
+   error is generated if the node is not of the expected type.
+   GRUB_FSHELP_SYMLINK returns the final component itself instead of
+   following it; symlinks in the leading components are still followed.  */
 grub_err_t
 grub_fshelp_find_file (const char *path, grub_fshelp_node_t rootnode,
 		       grub_fshelp_node_t *foundnode,
