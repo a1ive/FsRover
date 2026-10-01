@@ -24,6 +24,7 @@
 #include <grub/fs.h>
 #include <grub/fshelp.h>
 #include <grub/lockdown.h>
+#include <grub/safemath.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -154,7 +155,14 @@ grub_romfs_read_symlink (grub_fshelp_node_t node)
 {
   char *ret;
   grub_err_t err;
-  ret = grub_malloc (grub_be_to_cpu32 (node->file.size) + 1);
+  grub_size_t sz;
+
+  if (grub_add ((grub_size_t) grub_be_to_cpu32 (node->file.size), 1, &sz))
+    {
+      grub_error (GRUB_ERR_OUT_OF_RANGE, "symlink size overflow");
+      return NULL;
+    }
+  ret = grub_malloc (sz);
   if (!ret)
     return NULL;
   err = grub_disk_read (node->data->disk,
