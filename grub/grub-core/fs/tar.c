@@ -57,6 +57,28 @@ static inline unsigned long long
 read_number (const char *str, grub_size_t size)
 {
   unsigned long long ret = 0;
+
+  /* GNU base-256: a set high bit in the first byte means the rest of the
+     field is a big-endian binary number (used for sizes >= 8 GiB and the
+     like).  0xff starts a negative value, which only makes sense for
+     pre-1970 mtimes; report those as 0.  Values that do not fit return
+     all ones so the callers' range checks reject them.  */
+  if (size && (*str & 0x80))
+    {
+      const grub_uint8_t *p = (const grub_uint8_t *) str;
+
+      if (*p == 0xff)
+	return 0;
+      ret = *p++ & 0x7f;
+      while (--size)
+	{
+	  if (ret >> 56)
+	    return ~0ULL;
+	  ret = (ret << 8) | *p++;
+	}
+      return ret;
+    }
+
   /* Pre-POSIX tars pad the numeric fields with leading spaces rather than
      zeroes; POSIX allows either.  Without this every field of such a
      header, the entry size included, reads back as zero.  */
@@ -120,6 +142,149 @@ struct grub_archelp_data
 };
 
 static grub_err_t
+set_linkname (struct grub_archelp_data *data, const char *str, grub_size_t len)
+{
+  if (data->linkname_alloc < len + 1)
+    {
+      char *n;
+      n = grub_malloc (len + 1);
+      if (!n)
+	return grub_errno;
+      grub_free (data->linkname);
+      data->linkname = n;
+      data->linkname_alloc = len + 1;
+    }
+  grub_memcpy (data->linkname, str, len);
+  data->linkname[len] = 0;
+  return GRUB_ERR_NONE;
+}
+
+/* POSIX.1-2001 (pax) extended header overrides for the next entry.  */
+#define PAX_MAX_SIZE	(1024 * 1024)
+
+struct pax_info
+{
+  int have_size, have_mtime;
+  unsigned long long size;
+  grub_int32_t mtime;
+};
+
+static unsigned long long
+read_decimal (const char *str, const char *end, int *neg)
+{
+  unsigned long long ret = 0;
+
+  *neg = 0;
+  if (str < end && *str == '-')
+    {
+      *neg = 1;
+      str++;
+    }
+  while (str < end && *str >= '0' && *str <= '9')
+    ret = ret * 10 + (*str++ - '0');
+  return ret;
+}
+
+/* Parse the "<len> <key>=<value>\n" records of a pax extended header ('x';
+   Solaris 'X' uses the same layout).  Only the keys that matter for
+   browsing are honoured: path, linkpath, size and mtime.  An empty value
+   cancels the keyword, i.e. the ustar header field stays in effect.  */
+static grub_err_t
+read_pax (struct grub_archelp_data *data, grub_size_t len, char **name,
+	  int *have_longname, int *have_longlink, struct pax_info *pax)
+{
+  grub_err_t err = GRUB_ERR_NONE;
+  char *buf, *p, *end;
+
+  if (len > PAX_MAX_SIZE)
+    return grub_error (GRUB_ERR_BAD_FS, N_("pax header too large"));
+
+  buf = grub_malloc (len + 1);
+  if (!buf)
+    return grub_errno;
+  err = grub_disk_read (data->disk, 0, data->hofs + GRUB_DISK_SECTOR_SIZE,
+			len, buf);
+  if (err)
+    goto out;
+  buf[len] = 0;
+
+  p = buf;
+  end = buf + len;
+  while (p < end && *p)
+    {
+      char *rec = p, *rend, *key, *val;
+      grub_size_t reclen = 0, vlen;
+      int neg;
+
+      while (p < end && *p >= '0' && *p <= '9' && reclen <= len)
+	reclen = reclen * 10 + (*p++ - '0');
+      if (p == rec || p >= end || *p != ' ' || reclen > (grub_size_t) (end - rec)
+	  || reclen <= (grub_size_t) (p + 1 - rec) || rec[reclen - 1] != '\n')
+	{
+	  err = grub_error (GRUB_ERR_BAD_FS, N_("invalid pax header"));
+	  goto out;
+	}
+      rend = rec + reclen - 1;
+      key = p + 1;
+      for (val = key; val < rend && *val != '='; val++)
+	;
+      if (val == rend)
+	{
+	  err = grub_error (GRUB_ERR_BAD_FS, N_("invalid pax header"));
+	  goto out;
+	}
+      *val++ = 0;
+      *rend = 0;
+      vlen = rend - val;
+      p = rend + 1;
+
+      if (vlen == 0)
+	continue;
+
+      if (grub_strcmp (key, "path") == 0)
+	{
+	  grub_free (*name);
+	  *name = grub_malloc (vlen + 1);
+	  if (!*name)
+	    {
+	      err = grub_errno;
+	      goto out;
+	    }
+	  grub_memcpy (*name, val, vlen + 1);
+	  *have_longname = 1;
+	}
+      else if (grub_strcmp (key, "linkpath") == 0)
+	{
+	  err = set_linkname (data, val, vlen);
+	  if (err)
+	    goto out;
+	  *have_longlink = 1;
+	}
+      else if (grub_strcmp (key, "size") == 0)
+	{
+	  pax->size = read_decimal (val, rend, &neg);
+	  pax->have_size = !neg;
+	}
+      else if (grub_strcmp (key, "mtime") == 0)
+	{
+	  unsigned long long t = read_decimal (val, rend, &neg);
+
+	  /* Fractional seconds are dropped; out-of-range stamps keep the
+	     header value.  */
+	  if (t <= 0x7fffffffULL)
+	    {
+	      pax->mtime = neg ? -(grub_int32_t) t : (grub_int32_t) t;
+	      pax->have_mtime = 1;
+	    }
+	}
+    }
+
+ out:
+  grub_free (buf);
+  return err;
+}
+
+static grub_err_t
 grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 		     grub_int32_t *mtime,
 		     grub_archelp_mode_t *mode)
@@ -127,11 +292,13 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
   struct head hd;
   int reread = 0, have_longname = 0, have_longlink = 0;
   grub_size_t sz;
+  struct pax_info pax = { 0 };
 
   data->hofs = data->next_hofs;
   *name = NULL;
 
-  for (reread = 0; reread < 3; reread++)
+  /* Metadata entries (GNU 'L'/'K', pax 'x'/'g'/'X') precede the real one.  */
+  for (reread = 0; reread < 8; reread++)
     {
       if (grub_disk_read (data->disk, 0, data->hofs, sizeof (hd), &hd))
 	return grub_errno;
@@ -145,6 +312,30 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
       if (!head_ok (data->disk, data->hofs, &hd))
 	return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
 
+      if (hd.typeflag == 'x' || hd.typeflag == 'X' || hd.typeflag == 'g')
+	{
+	  grub_size_t paxsize;
+
+	  if (grub_cast (read_number (hd.size, sizeof (hd.size)), &paxsize))
+	    return grub_error (GRUB_ERR_BAD_FS, N_("pax header size overflow"));
+
+	  /* Global headers ('g') only carry archive-wide defaults such as
+	     git-archive's commit id; skip them.  */
+	  if (hd.typeflag != 'g')
+	    {
+	      grub_err_t err;
+
+	      err = read_pax (data, paxsize, name, &have_longname,
+			      &have_longlink, &pax);
+	      if (err)
+		return err;
+	    }
+	  data->hofs += GRUB_DISK_SECTOR_SIZE
+	    + ((paxsize + GRUB_DISK_SECTOR_SIZE - 1) &
+	       ~(GRUB_DISK_SECTOR_SIZE - 1));
+	  continue;
+	}
+
       if (hd.typeflag == 'L')
 	{
 	  grub_err_t err;
@@ -154,6 +345,7 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	      grub_add (namesize, 1, &sz))
 	    return grub_error (GRUB_ERR_BAD_FS, N_("name size overflow"));
 
+	  grub_free (*name);
 	  *name = grub_malloc (sz);
 	  if (*name == NULL)
 	    return grub_errno;
@@ -227,14 +419,20 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 
       if (grub_cast (read_number (hd.size, sizeof (hd.size)), &data->size))
 	return grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
+      if (pax.have_size)
+	data->size = pax.size;
 
       data->dofs = data->hofs + GRUB_DISK_SECTOR_SIZE;
-      data->next_hofs = data->dofs + ((data->size + GRUB_DISK_SECTOR_SIZE - 1) &
-			   ~(GRUB_DISK_SECTOR_SIZE - 1));
+      /* pax and base-256 sizes can come close to 2^64.  */
+      if (ALIGN_UP_OVF (data->size, GRUB_DISK_SECTOR_SIZE, &data->next_hofs) ||
+	  grub_add (data->dofs, data->next_hofs, &data->next_hofs))
+	return grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
       if (mtime)
 	{
 	  if (grub_cast (read_number (hd.mtime, sizeof (hd.mtime)), mtime))
 	    return grub_error (GRUB_ERR_BAD_FS, N_("mtime overflow"));
+	  if (pax.have_mtime)
+	    *mtime = pax.mtime;
 	}
       if (mode)
 	{
@@ -289,10 +487,11 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
       return GRUB_ERR_NONE;
     }
 
-  if (*name == NULL)
-    return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
-
-  return GRUB_ERR_NONE;
+  /* Too many metadata entries in a row: nothing was filled in for the
+     caller, so this cannot be reported as an entry.  */
+  grub_free (*name);
+  *name = NULL;
+  return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
 }
 
 static char *
