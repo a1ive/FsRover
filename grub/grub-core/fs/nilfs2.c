@@ -888,6 +888,12 @@ grub_nilfs2_read_symlink (grub_fshelp_node_t node)
 	return 0;
     }
 
+  if (grub_le_to_cpu64 (diro->inode.i_size) >= GRUB_SIZE_MAX)
+    {
+      grub_error (GRUB_ERR_OUT_OF_RANGE, "symlink size overflow");
+      return 0;
+    }
+
   symlink = grub_malloc (grub_le_to_cpu64 (diro->inode.i_size) + 1);
   if (!symlink)
     return 0;
