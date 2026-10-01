@@ -13,8 +13,23 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(FUSE3 REQUIRED IMPORTED_TARGET fuse3)
+# libFuzzer build: instruments rover-grub and builds fuzz targets only.
+option(ROVER_FUZZ "Build libFuzzer targets instead of LinuxRover" OFF)
+set(ROVER_FUZZ_SANITIZERS "address,undefined" CACHE STRING
+	"Sanitizers combined with -fsanitize=fuzzer")
+
+if(ROVER_FUZZ)
+	if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang" OR NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+		message(FATAL_ERROR "ROVER_FUZZ requires Clang (CC=clang CXX=clang++)")
+	endif()
+	set(ROVER_FUZZ_FLAGS -g -O1 -fno-omit-frame-pointer)
+	if(ROVER_FUZZ_SANITIZERS)
+		list(APPEND ROVER_FUZZ_FLAGS -fsanitize=${ROVER_FUZZ_SANITIZERS} -fno-sanitize-recover=all)
+	endif()
+else()
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(FUSE3 REQUIRED IMPORTED_TARGET fuse3)
+endif()
 
 # Keep the Linux archive in lockstep with the curated MSVC source inventory.
 # CMake substitutes the two host backends below; GUI-only sources are never read.
@@ -75,15 +90,33 @@ target_compile_options(rover-grub PRIVATE
 	-Wno-missing-field-initializers
 	-Wno-unknown-pragmas
 	-Wno-comment
-	-Wno-maybe-uninitialized
+	$<$<C_COMPILER_ID:GNU>:-Wno-maybe-uninitialized>
 	-Wno-format
 	-Wno-parentheses
 	-Wno-type-limits
+	$<$<C_COMPILER_ID:Clang>:-Wno-tautological-constant-out-of-range-compare>
 	-Wno-unused-const-variable
 	-Wno-pointer-sign
 	-Wno-unused-but-set-variable
 	-Wno-unused-variable
 	-Wno-implicit-fallthrough)
+
+if(ROVER_FUZZ)
+	target_compile_definitions(rover-grub PRIVATE ROVER_FUZZ=1)
+	target_compile_options(rover-grub PRIVATE ${ROVER_FUZZ_FLAGS} -fsanitize=fuzzer-no-link)
+	if(ROVER_FUZZ_SANITIZERS)
+		# GRUB_AS_LIST() and RT_UOFFSETOF() take &((T *) 0)->field; real NULL
+		# loads still fault and ASan already covers object bounds.
+		target_compile_options(rover-grub PRIVATE -fno-sanitize=null,object-size)
+	endif()
+	target_link_options(rover-grub INTERFACE ${ROVER_FUZZ_FLAGS})
+
+	add_executable(fs_fuzz fuzz/fs_fuzz.c)
+	target_compile_options(fs_fuzz PRIVATE -Wall -Wextra -Werror ${ROVER_FUZZ_FLAGS} -fsanitize=fuzzer)
+	target_link_options(fs_fuzz PRIVATE -fsanitize=fuzzer)
+	target_link_libraries(fs_fuzz PRIVATE rover-grub)
+	return()
+endif()
 
 add_executable(LinuxRover
 	LinuxRover/main.cpp

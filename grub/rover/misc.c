@@ -68,6 +68,9 @@ grub_exit (void)
 {
 #if defined(_WIN32)
 	ExitProcess (1);
+#elif defined(ROVER_FUZZ)
+	/* Let libFuzzer record grub_fatal() as a crash. */
+	abort ();
 #else
 	exit (1);
 #endif
