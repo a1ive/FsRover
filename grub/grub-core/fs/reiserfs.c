@@ -681,8 +681,15 @@ static char *
 grub_reiserfs_read_symlink (grub_fshelp_node_t node)
 {
   char *symlink_buffer = 0;
-  grub_size_t len = node->size;
+  grub_size_t len;
   grub_ssize_t ret;
+
+  if (node->size >= GRUB_SIZE_MAX)
+    {
+      grub_error (GRUB_ERR_OUT_OF_RANGE, N_("symlink size overflow"));
+      return 0;
+    }
+  len = node->size;
 
   symlink_buffer = grub_malloc (len + 1);
   if (! symlink_buffer)
