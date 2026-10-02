@@ -12,13 +12,16 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 ## Features
 
 - Browse physical disks, optical discs, disk images, partitions, RAID, and logical volumes.
-- Extract files or mount a filesystem as a Windows drive through WinFsp or Dokany.
+- Extract files, or mount a filesystem read-only as a Windows drive (WinFsp or Dokany) or a
+  Linux FUSE mount.
 - Open nested and compressed disk images as virtual disks.
-- Inspect files with built-in properties, hashes, text, image, hex, and metadata storage-map views.
+- Inspect files with built-in properties, hashes, text, image, hex, and storage-map views.
+- Read S.M.A.R.T. health data from physical disks.
 - Unlock LUKS1, LUKS2, BitLocker, GELI, VeraCrypt/TrueCrypt, and plain dm-crypt volumes.
 - Search a disk or image for lost partitions (NTFS, FAT, exFAT, ext2/3/4, XFS, Btrfs, HFS/HFS+,
   APFS, ReFS, F2FS, UFS, JFS, ReiserFS, ISO9660, UDF, backup GPT and orphaned EBR entries),
   quickly or sector by sector, and open them read-only without rewriting the partition table.
+- Script everything from the command line with `CliRover` (Windows) and `LinuxRover` (Linux).
 
 ## Download
 
@@ -28,15 +31,17 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 
 ## Supported Filesystems
 
-- **Linux:** Btrfs, cramfs, DwarFS, EROFS, ext2/3/4, F2FS, JFS, JFFS2, NILFS2, ReiserFS, UBIFS, XFS, YAFFS1/2
-- **Windows:** FAT12/16/32, exFAT, NTFS, ReFS 1.x/3.x
-- **macOS:** APFS, HFS, HFS+
-- **Unix and other:** ADFS, AFFS, AFS, BFS, SGI EFS, FATX/XTAF, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, System V, UFS1/2, UnixWare BFS, VxFS, ZFS
+- **Linux and flash:** Btrfs, cramfs, DwarFS, EROFS, ext2/3/4, F2FS, JFS, JFFS2, littlefs, NILFS2, ReiserFS, UBIFS, XFS, YAFFS1/2, ZFS
+- **Windows:** FAT12/16/32, exFAT, NTFS, ReFS 1.x/3.x, registry hives
+- **macOS:** APFS, HFS, HFS+/HFSX
+- **Unix and other:** ADFS, AFFS, AFS, BFS, SGI EFS, FATX/XTAF, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, System V, UFS1/2, UnixWare BFS, VMFS, VxFS
 - **Optical media:** ISO9660, UDF, Xbox XDVDFS, CUE/BIN, Nero NRG, CloneCD CCD/IMG/SUB, Alcohol 120% MDS
-- **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, NSIS installers, CAB, MSI, LZH/LHA, ARJ, FsArchiver FSA, Proxmox VMA, DEB, RPM, XAR
+- **Archives:** cpio, SquashFS, tar, WIM, ZIP, RAR, 7z, NSIS installers, CAB, MSI, LZH/LHA, ARJ, FsArchiver FSA, Proxmox VMA, DEB, RPM, XAR, SQLite databases
 - **Firmware:** UEFI capsules, firmware volumes (FFS1/2/3), Intel flash descriptor images, coreboot CBFS
+- **Embedded:** Hikvision DVR disks
 
-File-level or filesystem-native encryption is not supported.
+File-level and filesystem-native encryption is not supported.
+See [FsRover/help.md](FsRover/help.md) for per-format details and limitations.
 
 ## Other Supported Formats
 
