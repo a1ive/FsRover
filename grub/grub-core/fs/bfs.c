@@ -785,7 +785,14 @@ read_symlink (grub_fshelp_node_t node)
   else
 #endif
     {
-      grub_size_t symsize = grub_bfs_to_cpu64 (node->ino.size);
+      grub_size_t symsize;
+
+      if (grub_bfs_to_cpu64 (node->ino.size) >= GRUB_SIZE_MAX)
+	{
+	  grub_error (GRUB_ERR_OUT_OF_RANGE, N_("symlink size overflow"));
+	  return NULL;
+	}
+      symsize = grub_bfs_to_cpu64 (node->ino.size);
       alloc = grub_malloc (symsize + 1);
       if (!alloc)
 	return NULL;
