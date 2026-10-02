@@ -33,9 +33,21 @@
 #include <grub/mm.h>
 #include <grub/types.h>
 
+#include "rover.h"
+
 GRUB_MOD_LICENSE ("GPLv3+");
 
 #define POSIXDISK_CDROM_ID	0x80000000UL
+
+static rover_host_open_hook host_open_hook;
+static void *host_open_data;
+
+void
+rover_set_host_open_hook (rover_host_open_hook cb, void *data)
+{
+	host_open_hook = cb;
+	host_open_data = data;
+}
 
 struct posixdisk_device
 {
@@ -194,6 +206,14 @@ posixdisk_open (const char *name, grub_disk_t disk)
 	if (!dev)
 		return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "not a posixdisk");
 	fd = open (dev->path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0 && (errno == EACCES || errno == EPERM) && host_open_hook)
+	{
+		int saved = errno;
+
+		fd = host_open_hook (dev->path, host_open_data);
+		if (fd < 0)
+			errno = saved;
+	}
 	if (fd < 0)
 		return grub_error (GRUB_ERR_UNKNOWN_DEVICE, "cannot open %s (%s)",
 			dev->path, strerror (errno));

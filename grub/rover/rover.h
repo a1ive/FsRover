@@ -321,6 +321,14 @@ int rover_posixfile_add (const char *devname, const char *path, int decompress);
 int rover_posixfile_del (const char *devname);
 const char *rover_posixfile_get_path (const char *devname);
 
+/* Linux: when opening a host block device (DEVICE is "/dev/sda") fails for
+   lack of permission, ask CB for a descriptor instead -- one udisks2 or a
+   privileged helper opened for the caller.  CB returns an open read-only
+   descriptor, which rover then owns and closes, or -1.  It runs on the
+   rover thread and must not call rover.  NULL removes the hook.  */
+typedef int (*rover_host_open_hook) (const char *device, void *data);
+void rover_set_host_open_hook (rover_host_open_hook cb, void *data);
+
 /*
  * Lost partition search.  A scan walks grub device DEVICE ("hd0",
  * "img0") at the offsets where partitions usually begin, looking for
