@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=FsRover
+GenericName=Filesystem Browser
+GenericName[zh_CN]=文件系统浏览器
+Comment=Browse and extract filesystems, disk images and archives read-only
+Comment[zh_CN]=以只读方式浏览和提取文件系统、磁盘镜像与归档
+Exec=GtkRover %F
+Icon=drive-harddisk
+Terminal=false
+Categories=System;Filesystem;Utility;
+Keywords=disk;image;partition;filesystem;recovery;iso;vhd;
+MimeType=application/x-raw-disk-image;application/x-cd-image;application/x-iso9660-image;application/x-vhd-disk;application/x-vhdx-disk;application/x-virtualbox-vdi;application/x-vmdk-disk;application/x-qemu-disk;application/x-ext2-image;application/x-ext4-image;application/x-squashfs;application/vnd.efi.img;
+StartupNotify=true

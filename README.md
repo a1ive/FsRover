@@ -69,6 +69,23 @@ example `--mount='(img0,gpt1)'`. Running `LinuxRover --list` as a user that can
 read the corresponding `/dev` nodes exposes native disks as `hdN` and optical
 drives as `cdN`; root is commonly required for raw block devices.
 
+### GTK GUI
+
+When the GTK 4 development package (4.12 or newer) is installed, the same build
+also produces `GtkRover`, a desktop browser with the features of the Windows
+GUI: viewers (text, hex, image, Markdown), properties and checksums, file maps,
+extraction, encrypted volume unlocking, lost partition search, raw image export
+and read-only FUSE mounts. libmagic adds file content descriptions.
+
+```sh
+sudo apt install libgtk-4-dev libmagic-dev gettext
+build/linux/GtkRover disk.img
+```
+
+GtkRover never needs to run as root. **Access Physical Disks** asks udisks2 (or,
+where it is missing, `pkexec`) to open the disks read-only and hands only the
+descriptors to the program.
+
 ## Credits
 
 - [GNU GRUB](https://www.gnu.org/software/grub/)
