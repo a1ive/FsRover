@@ -407,20 +407,24 @@ grub_affs_iterate_dir (grub_fshelp_node_t dir,
 {
   unsigned int i;
   struct grub_affs_file file;
-  struct grub_fshelp_node *node, *orig_node;
+  struct grub_fshelp_node *node;
   struct grub_affs_data *data = dir->data;
-  grub_uint32_t *hashtable;
+  grub_uint32_t *hashtable = NULL;
 
   /* Create the directory entries for `.' and `..'.  */
-  node = orig_node = grub_zalloc (sizeof (*node));
+  node = grub_zalloc (sizeof (*node));
   if (!node)
-    return 1;
+    goto fail;
 
+  /* Each hook takes ownership of its node, even when it returns zero.  */
   *node = *dir;
   if (hook (".", GRUB_FSHELP_DIR, node, hook_data))
     return 1;
   if (dir->parent)
     {
+      node = grub_zalloc (sizeof (*node));
+      if (!node)
+	goto fail;
       *node = *dir->parent;
       if (hook ("..", GRUB_FSHELP_DIR, node, hook_data))
 	return 1;
@@ -428,7 +432,7 @@ grub_affs_iterate_dir (grub_fshelp_node_t dir,
 
   hashtable = grub_calloc (data->htsize, sizeof (*hashtable));
   if (!hashtable)
-    return 1;
+    goto fail;
 
   grub_disk_read (data->disk,
 		  (grub_uint64_t) dir->block << data->log_blocksize,
@@ -460,8 +464,6 @@ grub_affs_iterate_dir (grub_fshelp_node_t dir,
 
 	  if (grub_affs_create_node (dir, hook, hook_data, &node, next, &file))
 	    {
-	      /* Node has been replaced in function. */
-	      grub_free (orig_node);
 	      grub_free (hashtable);
 	      return 1;
 	    }
@@ -471,7 +473,6 @@ grub_affs_iterate_dir (grub_fshelp_node_t dir,
     }
 
  fail:
-  grub_free (orig_node);
   grub_free (hashtable);
   return 0;
 }
