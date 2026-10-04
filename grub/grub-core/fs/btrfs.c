@@ -2384,7 +2384,10 @@ grub_btrfs_dir (grub_device_t device, const char *path,
 	      info.size = grub_le_to_cpu64 (inode.size);
 	    }
 	  if (hook (cdirel->name, &info, hook_data))
-	    goto out;
+	    {
+	      r = 0;
+	      goto out;
+	    }
 	  cdirel->name[grub_le_to_cpu16 (cdirel->n)] = c;
 	}
       r = next (data, &desc, &elemaddr, &elemsize, &key_out);
