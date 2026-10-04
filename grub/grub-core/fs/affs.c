@@ -570,6 +570,7 @@ grub_affs_dir_iter (const char *filename, enum grub_fshelp_filetype filetype,
   grub_memset (&info, 0, sizeof (info));
   info.dir = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_DIR);
   info.symlink = ((filetype & GRUB_FSHELP_TYPE_MASK) == GRUB_FSHELP_SYMLINK);
+  info.case_insensitive = !!(filetype & GRUB_FSHELP_CASE_INSENSITIVE);
   info.mtimeset = 1;
   info.mtime = aftime2ctime (&node->di.mtime);
   info.inodeset = 1;
