@@ -104,6 +104,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define EXT4_FEATURE_INCOMPAT_64BIT		0x0080
 #define EXT4_FEATURE_INCOMPAT_MMP		0x0100
 #define EXT4_FEATURE_INCOMPAT_FLEX_BG		0x0200
+#define EXT4_FEATURE_INCOMPAT_EA_INODE		0x0400
 #define EXT4_FEATURE_INCOMPAT_CSUM_SEED		0x2000
 #define EXT4_FEATURE_INCOMPAT_LARGEDIR		0x4000 /* >2GB or 3 level htree */
 #define EXT4_FEATURE_INCOMPAT_ENCRYPT          0x10000
@@ -137,11 +138,14 @@ GRUB_MOD_LICENSE ("GPLv3+");
  *                 it should support 3 level htrees and then move
  *                 EXT4_FEATURE_INCOMPAT_LARGEDIR to
  *                 EXT2_DRIVER_SUPPORTED_INCOMPAT.
+ * ea_inode:       Not really back-incompatible - was added to allow read from
+ *                 ea_inode enabled filesystem.
  */
 #define EXT2_DRIVER_IGNORED_INCOMPAT ( EXT3_FEATURE_INCOMPAT_RECOVER \
 				     | EXT4_FEATURE_INCOMPAT_MMP \
 				     | EXT4_FEATURE_INCOMPAT_CSUM_SEED \
-				     | EXT4_FEATURE_INCOMPAT_LARGEDIR)
+				     | EXT4_FEATURE_INCOMPAT_LARGEDIR \
+				     | EXT4_FEATURE_INCOMPAT_EA_INODE)
 
 #define EXT3_JOURNAL_MAGIC_NUMBER	0xc03b3998U
 
