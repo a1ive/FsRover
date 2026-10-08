@@ -1035,7 +1035,7 @@ grub_refs_mount(grub_disk_t disk)
 	grub_uint32_t l1_off, l1_count;
 	grub_uint32_t ref_count, ref_base;
 	int have_chkp = 0;
-	int v314;
+	int v312;
 	int pass;
 	grub_uint32_t i;
 
@@ -1096,8 +1096,8 @@ grub_refs_mount(grub_disk_t disk)
 		data->bpc_mask = ((grub_uint64_t) 1 << data->bpc_shift) - 1;
 	}
 
-	v314 = (data->version_major > 3
-		|| (data->version_major == 3 && data->version_minor >= 14));
+	v312 = (data->version_major > 3
+		|| (data->version_major == 3 && data->version_minor >= 12));
 
 	node = grub_malloc(data->block_size);
 	if (!node)
@@ -1147,11 +1147,11 @@ grub_refs_mount(grub_disk_t disk)
 	/* level 2 tree root references */
 	ref_count = refs_get32(node + (data->v1 ? 0x58 : 0x90));
 	ref_base = data->v1 ? 0x5C : 0x94;
-	if (v314)
+	if (v312)
 	{
 		grub_uint32_t ref_start = refs_get32(node + ref_base);
 
-		/* ReFS 3.14 stores the absolute list offset in its first slot. */
+		/* ReFS 3.12+ stores the absolute list offset in its first slot. */
 		if (ref_start)
 			ref_base = ref_start;
 	}
