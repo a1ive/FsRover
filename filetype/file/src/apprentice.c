@@ -32,7 +32,7 @@
 #include "file.h"
 
 #ifndef	lint
-FILE_RCSID("@(#)$File: apprentice.c,v 1.377 2026/08/28 15:26:23 christos Exp $")
+FILE_RCSID("@(#)$File: apprentice.c,v 1.381 2026/10/13 18:38:06 christos Exp $")
 #endif	/* lint */
 
 #include "magic.h"
@@ -726,7 +726,7 @@ fail:
 file_protected int
 file_apprentice(struct magic_set *ms, const char *fn, int action)
 {
-	char *p;
+	char *p, *sfn;
 	int fileerr, errs = -1;
 	size_t i, j;
 
@@ -740,7 +740,7 @@ file_apprentice(struct magic_set *ms, const char *fn, int action)
 	free(ms->fnamebuf);
 	ms->file = NULL;
 	if ((ms->fnamebuf = strdup(fn)) == NULL) {
-		file_oomem(ms, strlen(fn));
+out:		file_oomem(ms, strlen(fn));
 		return -1;
 	}
 
@@ -755,7 +755,9 @@ file_apprentice(struct magic_set *ms, const char *fn, int action)
 			return -1;
 		}
 	}
-	fn = ms->fnamebuf;
+	fn = sfn = strdup(ms->fnamebuf);
+	if (fn == NULL)
+		goto out;
 
 	while (fn) {
 		p = CCAST(char *, strchr(fn, PATHSEP));
@@ -767,6 +769,7 @@ file_apprentice(struct magic_set *ms, const char *fn, int action)
 		errs = MAX(errs, fileerr);
 		fn = p;
 	}
+	free(sfn);
 
 	if (errs == -1) {
 		for (i = 0; i < MAGIC_SETS; i++) {
@@ -1140,13 +1143,11 @@ apprentice_sort(const void *a, const void *b)
 			// Don't warn for DER
 			if (mpa.type == FILE_DER)
 				return 0;
-#ifndef FILEXRAY_SUPPRESS_MAGIC_WARNINGS
 			file_magwarn1("Duplicate magic entry `%s'",
 			    ma->mp->desc);
 #ifndef COMPILE_ONLY
 			file_mdump(ma->mp);
 			file_mdump(mb->mp);
-#endif
 #endif
 			return 0;
 		}
@@ -1350,12 +1351,9 @@ load_1(struct magic_set *ms, int action, const char *fn, int *errs,
 	    ms->line++) {
 		if (ms->magwarn >= ms->magwarn_max)
 			break;
+		len = file_trimline(line, len, &lineno);
 		if (len == 0) /* null line, garbage, etc */
 			continue;
-		if (line[len - 1] == '\n') {
-			lineno++;
-			line[len - 1] = '\0'; /* delete newline */
-		}
 		switch (line[0]) {
 		case '\0':	/* empty, do not parse */
 		case '#':	/* comment, do not parse */
@@ -1412,6 +1410,7 @@ load_1(struct magic_set *ms, int action, const char *fn, int *errs,
 	(void)fclose(f);
 }
 
+#ifdef HAVE_DIRENT_H
 /*
  * parse a file or directory of files
  * const char *fn: name of magic file or directory
@@ -1421,6 +1420,7 @@ cmpstrp(const void *p1, const void *p2)
 {
         return strcmp(*RCAST(char *const *, p1), *RCAST(char *const *, p2));
 }
+#endif
 
 
 file_private uint32_t
@@ -1531,14 +1531,14 @@ apprentice_load(struct magic_set *ms, const char *fn, int action)
 {
 	int errs = 0;
 	uint32_t i, j;
-	size_t files = 0, maxfiles = 0;
-	char **filearr = NULL, *mfn;
-	struct stat st;
 	struct magic_map *map;
 	struct magic_entry_set mset[MAGIC_SETS];
 #ifdef HAVE_DIRENT_H
+	struct stat st;
+	size_t files = 0, maxfiles = 0;
 	DIR *dir;
 	struct dirent *d;
+	char **filearr = NULL, *mfn;
 #endif
 
 	memset(mset, 0, sizeof(mset));
@@ -1642,7 +1642,9 @@ apprentice_load(struct magic_set *ms, const char *fn, int action)
 	}
 
 out:
+#ifdef HAVE_DIRENT_H
 	free(filearr);
+#endif
 	for (j = 0; j < MAGIC_SETS; j++)
 		magic_entry_free(mset[j].me, mset[j].count);
 

@@ -35,7 +35,7 @@
 #include "file.h"
 
 #ifndef lint
-FILE_RCSID("@(#)$File: cdf.c,v 1.130 2026/08/28 15:45:34 christos Exp $")
+FILE_RCSID("@(#)$File: cdf.c,v 1.133 2026/10/14 16:54:08 christos Exp $")
 #endif
 
 #include <assert.h>
@@ -1021,18 +1021,19 @@ cdf_read_property_info(const cdf_stream_t *sst, const cdf_header_t *h,
 	}
 	shp = CAST(const cdf_section_header_t *,
 	    cdf_offset(sst->sst_tab, offs));
-	if (cdf_check_stream_offset(sst, h, shp, sizeof(*shp), __LINE__) == -1)
+	memcpy(&sh, shp, sizeof(sh));
+	if (cdf_check_stream_offset(sst, h, &sh, sizeof(sh), __LINE__) == -1)
 		goto out;
-	sh.sh_len = CDF_TOLE4(shp->sh_len);
+	sh.sh_len = CDF_TOLE4(sh.sh_len);
 	if (sh.sh_len > CDF_SHLEN_LIMIT) {
 		errno = EFTYPE;
 		goto out;
 	}
 
-	if (cdf_check_stream_offset(sst, h, shp, sh.sh_len, __LINE__) == -1)
+	if (cdf_check_stream_offset(sst, h, &sh, sh.sh_len, __LINE__) == -1)
 		goto out;
 
-	sh.sh_properties = CDF_TOLE4(shp->sh_properties);
+	sh.sh_properties = CDF_TOLE4(sh.sh_properties);
 	DPRINTF(("section len: %u properties %u\n", sh.sh_len,
 	    sh.sh_properties));
 	if (sh.sh_properties > CDF_PROP_LIMIT)
@@ -1043,7 +1044,7 @@ cdf_read_property_info(const cdf_stream_t *sst, const cdf_header_t *h,
 	inp += *count;
 	*count += sh.sh_properties;
 	p = CAST(const uint8_t *, cdf_offset(sst->sst_tab, offs + sizeof(sh)));
-	e = CAST(const uint8_t *, cdf_offset(shp, sh.sh_len));
+	e = CAST(const uint8_t *, cdf_offset(&sh, sh.sh_len));
 	if (p >= e || cdf_check_stream_offset(sst, h, e, 0, __LINE__) == -1)
 		goto out;
 
@@ -1242,6 +1243,9 @@ cdf_unpack_catalog(const cdf_header_t *h, const cdf_stream_t *sst,
 		extract_catalog_field(uint16_t, ce_num, 4);
 		extract_catalog_field(uint64_t, ce_timestamp, 8);
 		reclen = cep->ce_namlen;
+
+		if (reclen == 0)
+			break;
 
 		if (reclen < 14) {
 			cep->ce_namlen = 0;
@@ -1458,6 +1462,7 @@ cdf_dump_dir(const cdf_info_t *info, const cdf_header_t *h,
 		d = &dir->dir_tab[i];
 		for (j = 0; j < sizeof(name); j++)
 			name[j] = (char)CDF_TOLE2(d->d_name[j]);
+		name[sizeof(name} - 1] = '\0';
 		(void)fprintf(stderr, "Directory %" SIZE_T_FORMAT "u: %s\n",
 		    i, name);
 		if (d->d_type < __arraycount(types))
