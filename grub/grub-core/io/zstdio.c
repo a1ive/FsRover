@@ -81,7 +81,7 @@ grub_zstdio_open (grub_file_t io, enum grub_file_type type)
   if (file == NULL)
     return NULL;
 
-  zstdio = grub_zalloc (sizeof (zstdio_t) + ZSTD_DStreamInSize () +
+  zstdio = grub_zalloc (sizeof (*zstdio) + ZSTD_DStreamInSize () +
                         ZSTD_DStreamOutSize ());
   if (zstdio == NULL)
     {

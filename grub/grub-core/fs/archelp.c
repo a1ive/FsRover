@@ -325,6 +325,7 @@ grub_archelp_open (struct grub_archelp_data *data,
 	    {
 	      grub_error (GRUB_ERR_SYMLINK_LOOP,
 			  N_("too deep nesting of symlinks"));
+	      grub_free (fn);
 	      goto fail;
 	    }
 	  goto no_match;

@@ -1485,7 +1485,21 @@ free_array (void)
 	  grub_free (lv->name);
 	  grub_free (lv->idname);
 	  for (i = 0; i < lv->segment_count; i++)
-	    grub_free (lv->segments[i].nodes);
+	    {
+	      /*
+	       * Node names are owned by the node (e.g. the LVM parser strdup()s
+	       * the stripe/mirror member names); free them too.  RAID arrays
+	       * built by grub_diskfilter_make_raid() leave name == NULL, so this
+	       * is a no-op there.
+	       */
+	      if (lv->segments[i].nodes)
+		{
+		  unsigned j;
+		  for (j = 0; j < lv->segments[i].node_count; j++)
+		    grub_free (lv->segments[i].nodes[j].name);
+		}
+	      grub_free (lv->segments[i].nodes);
+	    }
 	  grub_free (lv->segments);
 	  grub_free (lv->internal_id);
 	  grub_free (lv);

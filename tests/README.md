@@ -1,5 +1,65 @@
 # Product regression tests
 
+## GRUB synchronization regressions
+
+`upstream_sync.py` exercises TAR (USTAR, GNU, PAX, v7 and base-256), CPIO,
+ext2 symlinks, GPT entry strides, and striped/cached LVM volumes through the CLI.
+Malformed cases include oversized archive names, metadata-only archives, link
+loops, the CPIO end-marker collision, invalid GPT strides, and truncated LVM
+metadata before and after an ignored-feature LV has been allocated. Images are
+generated from Python data structures. Use a fresh output directory for each run:
+
+```sh
+python tests/upstream_sync.py --generate --fixtures build/sync-fixtures
+python tests/upstream_sync.py --cli build/x64/CliRover.exe --fixtures build/sync-fixtures --output build/sync-x64
+```
+
+On Linux, add images made by `mkfs.ext4`, `mkfs.btrfs`, `mksquashfs` and `zstd`:
+
+```sh
+python3 tests/upstream_sync.py --generate-media --fixtures build/sync-fixtures
+python3 tests/upstream_sync.py --cli build/linux/LinuxRover --fixtures build/sync-fixtures --output build/sync-linux
+```
+
+These images cover directory listings, extraction, directory symlinks, gzip/LZO/
+XZ/Zstandard SquashFS metadata, and multi-buffer Zstandard stream decompression.
+Extracted bytes are compared with the input payloads; all tested images are
+hashed before and after the run. They are generated images, not physical-media
+tests. CLI extraction skips a final symlink, so link-resolution cases put the
+link in a leading path component.
+
+Two optional Linux probes compile the actual driver sources with ASan/UBSan.
+The LVM probe replaces disk I/O with a bounded image buffer and tracks parser
+allocations. It fails each allocation in turn, checking for leaks and duplicate
+frees, including copies of cached-volume node names. Its VG registration stub
+does not exercise diskfilter registration; the CLI cases cover that path.
+The core probe checks LUKS2 indices 0/31/32/63/64/255, a malformed keyslot,
+zero/one AF stripes, and dates in 1900/1970/2038/2100. It does not unlock a LUKS
+volume. Build the normal Linux library first, then run from the repository root:
+
+```sh
+cc -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover tests/lvm_alloc_probe.c \
+  build/linux/librover-grub.a -Wl,--gc-sections -o build/linux/lvm_alloc_probe
+build/linux/lvm_alloc_probe build/sync-fixtures/lvm.img 1
+build/linux/lvm_alloc_probe build/sync-fixtures/lvm-truncated.img 0
+build/linux/lvm_alloc_probe build/sync-fixtures/lvm-late-truncated.img 0
+cc -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover -Igrub/grub-core/lib -Igrub/grub-core/lib/json \
+  tests/upstream_core_probe.c build/linux/librover-grub.a \
+  -Wl,--gc-sections -o build/linux/upstream_core_probe
+build/linux/upstream_core_probe
+```
+
+The probes instrument their included driver sources. The linked library keeps
+its normal build flags. When running the full product suite under WSL, put its
+output on the Linux filesystem: the multi-TiB sparse FAT fixtures can exceed
+the sparse-file limits of `/mnt/c`.
+
+## General product suite
+
 These tests generate their own ZIP, TAR, FAT12 and ext2 images and run the actual
 CLI, shared extraction core and metadata mapping APIs. Python 3.10+ and the standard library are
 sufficient; no image downloads, mounts, administrator privileges or third-party

@@ -279,6 +279,14 @@ read_chunk (struct grub_squash_data *data, void *buf, grub_size_t len,
 	      return err;
 	    }
 
+	  /*
+	   * A decompressor may legitimately produce fewer than csize bytes: GRUB
+	   * over-reads fixed-size on-disk structs, so a struct at the end of a
+	   * metadata block yields a short read.  Zero the target first so the
+	   * untouched tail is defined rather than leaking uninitialised memory
+	   * into the parser.
+	   */
+	  grub_memset (buf, 0, csize);
 	  if (data->decompress (tmp, bsize, offset,
 				buf, csize, data) < 0)
 	    {
@@ -323,7 +331,20 @@ lzo_decompress (char *inbuf, grub_size_t insize, grub_off_t off,
       grub_free (udata);
       return -1;
     }
-  grub_memcpy (outbuf, udata + off, len);
+  /*
+   * The block may hold fewer than off + len bytes when the caller over-reads a
+   * fixed-size struct at its end.  Copy only what was decompressed and zero the
+   * rest, instead of reading past the decompressed data in udata.
+   */
+  {
+    grub_size_t avail = (off < usize) ? (grub_size_t) (usize - off) : 0;
+
+    if (avail > len)
+      avail = len;
+    grub_memcpy (outbuf, udata + off, avail);
+    if (avail < len)
+      grub_memset (outbuf + avail, 0, len - avail);
+  }
   grub_free (udata);
   return len;
 }
@@ -552,12 +573,25 @@ squash_mount (grub_disk_t disk)
   return data;
 }
 
+/*
+ * A symlink target is a path; reject absurd lengths coming from a crafted inode
+ * instead of trying to allocate a buffer for them.  4096 is Linux PATH_MAX,
+ * above any target a real SquashFS image stores.
+ */
+#define GRUB_SQUASH_SYMLINK_MAX	4096
+
 static char *
 grub_squash_read_symlink (grub_fshelp_node_t node)
 {
   char *ret;
   grub_err_t err;
   grub_uint32_t sz;
+
+  if (grub_le_to_cpu32 (node->ino.symlink.namelen) > GRUB_SQUASH_SYMLINK_MAX)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink is too long");
+      return NULL;
+    }
 
   if (grub_add (grub_le_to_cpu32 (node->ino.symlink.namelen), 1, &sz))
     {
@@ -623,7 +657,13 @@ grub_squash_iterate_dir (grub_fshelp_node_t dir,
     node = grub_malloc (sz);
     if (!node)
       return 0;
-    grub_memcpy (node, dir, sz);
+    /*
+     * dir occupies sizeof (*dir) + (dir->stsize - 1) stack entries: the struct
+     * already contains one stack[] slot, so copying sz here would read one slot
+     * past the end of dir.
+     */
+    grub_memcpy (node, dir,
+		 sizeof (*dir) + (dir->stsize - 1) * sizeof (dir->stack[0]));
     if (hook (".", GRUB_FSHELP_DIR, node, hook_data))
       return 1;
 
@@ -639,7 +679,8 @@ grub_squash_iterate_dir (grub_fshelp_node_t dir,
 	if (!node)
 	  return 0;
 
-	grub_memcpy (node, dir, sz);
+	grub_memcpy (node, dir,
+		     sizeof (*dir) + (dir->stsize - 1) * sizeof (dir->stack[0]));
 
 	node->stsize--;
 	err = read_chunk (dir->data, &node->ino, sizeof (node->ino),
@@ -733,7 +774,8 @@ grub_squash_iterate_dir (grub_fshelp_node_t dir,
 	      return 0;
 	    }
 
-	  grub_memcpy (node, dir, sz - sizeof(dir->stack[0]));
+	  grub_memcpy (node, dir,
+		       sizeof (*dir) + (dir->stsize - 1) * sizeof (dir->stack[0]));
 
 	  node->ino = ino;
 	  node->stack[node->stsize].ino_chunk = grub_le_to_cpu32 (dh.ino_chunk);
@@ -823,13 +865,18 @@ grub_squash_dir (grub_device_t device, const char *path,
 
   err = make_root_node (data, &root);
   if (err)
-    return err;
+    {
+      squash_unmount (data);
+      return err;
+    }
 
   grub_fshelp_find_file (path, &root, &fdiro, grub_squash_iterate_dir,
 			 grub_squash_read_symlink, GRUB_FSHELP_DIR);
   if (!grub_errno)
     grub_squash_iterate_dir (fdiro, grub_squash_dir_iter, &ctx);
 
+  if (fdiro != &root)
+    grub_free (fdiro);
   squash_unmount (data);
 
   return grub_errno;
@@ -877,7 +924,10 @@ grub_squash_open (struct grub_file *file, const char *name)
 
   err = make_root_node (data, &root);
   if (err)
-    return err;
+    {
+      squash_unmount (data);
+      return err;
+    }
 
   grub_fshelp_find_file (name, &root, &fdiro, grub_squash_iterate_dir,
 			 grub_squash_read_symlink, GRUB_FSHELP_REG);

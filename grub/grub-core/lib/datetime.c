@@ -78,7 +78,7 @@ grub_unixtime2datetime (grub_int64_t nix, struct grub_datetime *datetime)
      are bissextile*/
   /* Convenience: let's have 3 consecutive non-bissextile years
      at the beginning of the counting date. So count from 1901. */
-  int days_epoch;
+  grub_int64_t days_epoch;
   /* Number of days since 1st January, 1 (proleptic). */
   unsigned days;
   /* Seconds into current day.  */

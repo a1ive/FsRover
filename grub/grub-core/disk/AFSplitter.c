@@ -78,6 +78,13 @@ AF_merge (const gcry_md_spec_t * hash, grub_uint8_t * src, grub_uint8_t * dst,
   if (hash->mdlen > GRUB_CRYPTO_MAX_MDLEN || hash->mdlen == 0)
     return GPG_ERR_INV_ARG;
 
+  /*
+   * The loop below computes "blocknumbers - 1"; a zero stripe count from a
+   * crafted header would underflow that to SIZE_MAX and read far past src.
+   */
+  if (blocknumbers == 0)
+    return GPG_ERR_INV_ARG;
+
   bufblock = grub_zalloc (blocksize);
   if (bufblock == NULL)
     return GPG_ERR_OUT_OF_MEMORY;

@@ -293,6 +293,12 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
   int reread = 0, have_longname = 0, have_longlink = 0;
   grub_size_t sz;
   struct pax_info pax = { 0 };
+	grub_uint64_t disk_sectors = grub_disk_native_sectors (data->disk);
+	grub_uint64_t max_size = (~(grub_uint64_t) 0);
+
+	/* Archive metadata must fit on the device when its size is known. */
+	if (disk_sectors <= ((~(grub_uint64_t) 0) >> GRUB_DISK_SECTOR_BITS))
+		max_size = disk_sectors << GRUB_DISK_SECTOR_BITS;
 
   data->hofs = data->next_hofs;
   *name = NULL;
@@ -301,23 +307,29 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
   for (reread = 0; reread < 8; reread++)
     {
       if (grub_disk_read (data->disk, 0, data->hofs, sizeof (hd), &hd))
-	return grub_errno;
+	goto fail;
 
       if (!hd.name[0] && !hd.prefix[0])
 	{
 	  *mode = GRUB_ARCHELP_ATTR_END;
-	  return GRUB_ERR_NONE;
+	  goto fail;
 	}
 
       if (!head_ok (data->disk, data->hofs, &hd))
-	return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
+	{
+	  grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
+	  goto fail;
+	}
 
       if (hd.typeflag == 'x' || hd.typeflag == 'X' || hd.typeflag == 'g')
 	{
 	  grub_size_t paxsize;
 
 	  if (grub_cast (read_number (hd.size, sizeof (hd.size)), &paxsize))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("pax header size overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("pax header size overflow"));
+	      goto fail;
+	    }
 
 	  /* Global headers ('g') only carry archive-wide defaults such as
 	     git-archive's commit id; skip them.  */
@@ -328,7 +340,7 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	      err = read_pax (data, paxsize, name, &have_longname,
 			      &have_longlink, &pax);
 	      if (err)
-		return err;
+		goto fail;
 	    }
 	  data->hofs += GRUB_DISK_SECTOR_SIZE
 	    + ((paxsize + GRUB_DISK_SECTOR_SIZE - 1) &
@@ -340,21 +352,26 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	{
 	  grub_err_t err;
 	  grub_size_t namesize;
+	  grub_uint64_t raw_size = read_number (hd.size, sizeof (hd.size));
 
-	  if (grub_cast (read_number (hd.size, sizeof (hd.size)), &namesize) ||
+	  if (raw_size > max_size || raw_size > GRUB_SIZE_MAX ||
+	      grub_cast (raw_size, &namesize) ||
 	      grub_add (namesize, 1, &sz))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("name size overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("name size overflow"));
+	      goto fail;
+	    }
 
 	  grub_free (*name);
 	  *name = grub_malloc (sz);
 	  if (*name == NULL)
-	    return grub_errno;
+	    goto fail;
 	  err = grub_disk_read (data->disk, 0,
 				data->hofs + GRUB_DISK_SECTOR_SIZE, namesize,
 				*name);
 	  (*name)[namesize] = 0;
 	  if (err)
-	    return err;
+	    goto fail;
 	  data->hofs += GRUB_DISK_SECTOR_SIZE
 	    + ((namesize + GRUB_DISK_SECTOR_SIZE - 1) &
 	       ~(GRUB_DISK_SECTOR_SIZE - 1));
@@ -366,17 +383,22 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	{
 	  grub_err_t err;
 	  grub_size_t linksize;
+	  grub_uint64_t raw_size = read_number (hd.size, sizeof (hd.size));
 
-	  if (grub_cast (read_number (hd.size, sizeof (hd.size)), &linksize) ||
+	  if (raw_size > max_size || raw_size > GRUB_SIZE_MAX ||
+	      grub_cast (raw_size, &linksize) ||
 	      grub_add (linksize, 1, &sz))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("link size overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("link size overflow"));
+	      goto fail;
+	    }
 
 	  if (data->linkname_alloc < sz)
 	    {
 	      char *n;
 	      n = grub_calloc (2, sz);
 	      if (!n)
-		return grub_errno;
+		goto fail;
 	      grub_free (data->linkname);
 	      data->linkname = n;
 	      data->linkname_alloc = 2 * (sz);
@@ -386,7 +408,7 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 				data->hofs + GRUB_DISK_SECTOR_SIZE, linksize,
 				data->linkname);
 	  if (err)
-	    return err;
+	    goto fail;
 	  data->linkname[linksize] = 0;
 	  data->hofs += GRUB_DISK_SECTOR_SIZE
 	    + ((linksize + GRUB_DISK_SECTOR_SIZE - 1) &
@@ -404,10 +426,13 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	    extra_size++;
 
 	  if (grub_add (sizeof (hd.name) + 2, extra_size, &sz))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("long name size overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("long name size overflow"));
+	      goto fail;
+	    }
 	  *name = grub_malloc (sz);
 	  if (*name == NULL)
-	    return grub_errno;
+	    goto fail;
 	  if (hd.prefix[0])
 	    {
 	      grub_memcpy (*name, hd.prefix, extra_size);
@@ -418,7 +443,10 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	}
 
       if (grub_cast (read_number (hd.size, sizeof (hd.size)), &data->size))
-	return grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
+	{
+	  grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
+	  goto fail;
+	}
       if (pax.have_size)
 	data->size = pax.size;
 
@@ -426,11 +454,17 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
       /* pax and base-256 sizes can come close to 2^64.  */
       if (ALIGN_UP_OVF (data->size, GRUB_DISK_SECTOR_SIZE, &data->next_hofs) ||
 	  grub_add (data->dofs, data->next_hofs, &data->next_hofs))
-	return grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
+	{
+	  grub_error (GRUB_ERR_BAD_FS, N_("data size overflow"));
+	  goto fail;
+	}
       if (mtime)
 	{
 	  if (grub_cast (read_number (hd.mtime, sizeof (hd.mtime)), mtime))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("mtime overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("mtime overflow"));
+	      goto fail;
+	    }
 	  if (pax.have_mtime)
 	    *mtime = pax.mtime;
 	}
@@ -438,7 +472,10 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	{
 	  grub_uint32_t modeval;
 	  if (grub_cast (read_number (hd.mode, sizeof (hd.mode)), &modeval))
-	    return grub_error (GRUB_ERR_BAD_FS, N_("mode overflow"));
+	    {
+	      grub_error (GRUB_ERR_BAD_FS, N_("mode overflow"));
+	      goto fail;
+	    }
 
 	  *mode = modeval;
 
@@ -476,7 +513,7 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
 	      char *n;
 	      n = grub_malloc (101);
 	      if (!n)
-		return grub_errno;
+		goto fail;
 	      grub_free (data->linkname);
 	      data->linkname = n;
 	      data->linkname_alloc = 101;
@@ -487,11 +524,12 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
       return GRUB_ERR_NONE;
     }
 
-  /* Too many metadata entries in a row: nothing was filled in for the
-     caller, so this cannot be reported as an entry.  */
-  grub_free (*name);
-  *name = NULL;
-  return grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
+  grub_error (GRUB_ERR_BAD_FS, "invalid tar archive");
+
+fail:
+	grub_free (*name);
+	*name = NULL;
+	return grub_errno;
 }
 
 static char *

@@ -759,6 +759,14 @@ grub_ext2_mount (grub_disk_t disk)
   return 0;
 }
 
+/*
+ * A symlink target is a path.  inode.size comes straight from the
+ * on-disk data, so reject absurd values instead of trying to allocate
+ * and read a buffer for them.  4096 is PATH_MAX so use this to bound
+ * an ext2/3/4 symlink target.
+ */
+#define GRUB_EXT2_SYMLINK_MAXLEN	4096
+
 static char *
 grub_ext2_read_symlink (grub_fshelp_node_t node)
 {
@@ -777,6 +785,12 @@ grub_ext2_read_symlink (grub_fshelp_node_t node)
          grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET, "symlink is encrypted");
          return 0;
        }
+    }
+
+  if (grub_le_to_cpu32 (diro->inode.size) > GRUB_EXT2_SYMLINK_MAXLEN)
+    {
+      grub_error (GRUB_ERR_BAD_FS, "symlink is too long");
+      return NULL;
     }
 
   if (grub_add (grub_le_to_cpu32 (diro->inode.size), 1, &sz))

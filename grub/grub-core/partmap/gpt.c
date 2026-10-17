@@ -60,7 +60,7 @@ grub_gpt_partition_map_iterate (grub_disk_t disk,
   struct grub_msdos_partition_mbr mbr;
   grub_uint64_t entries;
   unsigned int i;
-  int last_offset = 0;
+  grub_uint64_t last_offset = 0;
   int sector_log = 0;
 
   /* Read the protective MBR.  */
@@ -92,6 +92,18 @@ grub_gpt_partition_map_iterate (grub_disk_t disk,
 
   grub_dprintf ("gpt", "Read a valid GPT header\n");
 
+  /*
+   * partentry_size drives last_offset below.  A zero or too-small value
+   * leaves last_offset stuck at 0 so 'entries' never advances, making
+   * the maxpart loop re-read the same sector up to 2^32 times (a
+   * denial-of-service hang).  Per the UEFI spec the entry size is a
+   * multiple of 128 == sizeof (struct grub_gpt_partentry); require that so
+   * the loop always makes forward progress and terminates at the disk end.
+   */
+  if (grub_le_to_cpu32 (gpt.partentry_size) < sizeof (entry)
+      || grub_le_to_cpu32 (gpt.partentry_size) % sizeof (entry) != 0)
+    return grub_error (GRUB_ERR_BAD_PART_TABLE, "invalid GPT entry size");
+
   entries = grub_le_to_cpu64 (gpt.partitions) << sector_log;
   for (i = 0; i < grub_le_to_cpu32 (gpt.maxpart); i++)
     {
@@ -108,7 +120,7 @@ grub_gpt_partition_map_iterate (grub_disk_t disk,
 		      - grub_le_to_cpu64 (entry.start) + 1)  << sector_log;
 	  part.offset = entries;
 	  part.number = i;
-	  part.index = last_offset;
+	  part.index = (int) last_offset;
 	  part.partmap = &grub_gpt_partition_map;
 	  part.parent = disk->partition;
 
@@ -120,10 +132,16 @@ grub_gpt_partition_map_iterate (grub_disk_t disk,
 	    return grub_errno;
 	}
 
+      /*
+       * Advance into the entry array using 64-bit arithmetic.  Carrying with
+       * a loop (rather than testing for an exact == GRUB_DISK_SECTOR_SIZE)
+       * keeps last_offset in [0, 512) for any spec-legal entry size, including
+       * sizes that do not divide a sector (or exceed one, e.g. 1024/2048),
+       * and avoids the signed overflow the previous "int last_offset" had. */
       last_offset += grub_le_to_cpu32 (gpt.partentry_size);
-      if (last_offset == GRUB_DISK_SECTOR_SIZE)
+      while (last_offset >= GRUB_DISK_SECTOR_SIZE)
 	{
-	  last_offset = 0;
+	  last_offset -= GRUB_DISK_SECTOR_SIZE;
 	  entries++;
 	}
     }

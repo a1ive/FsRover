@@ -75,6 +75,21 @@ grub_cpio_find_file (struct grub_archelp_data *data, char **name,
   if (grub_cast (read_number (hd.mode, ARRAY_SIZE (hd.mode)), &modeval))
     return grub_error (GRUB_ERR_BAD_FS, N_("mode overflow"));
 
+  /*
+   * GRUB_ARCHELP_ATTR_END (0xffffffff) is archelp.c's internal out-of-band
+   * signal for "no more entries": grub_archelp_dir()/grub_archelp_open()
+   * check *mode against it and, if it matches, stop iterating without ever
+   * touching (and so without freeing) the *name this function is about to
+   * allocate and return ownership of.  modeval comes straight from the
+   * untrusted header with no range restriction beyond the uint32_t cast
+   * above, so a crafted entry can set it to exactly this value: the caller
+   * would then leak this entry's name buffer AND silently stop seeing every
+   * entry after it, as if the archive ended early.  Reject it here, before
+   * anything is allocated for this entry.
+   */
+  if (modeval == GRUB_ARCHELP_ATTR_END)
+    return grub_error (GRUB_ERR_BAD_FS, N_("invalid mode value"));
+
   if (grub_cast (read_number (hd.namesize, ARRAY_SIZE (hd.namesize)), &namesize))
     return grub_error (GRUB_ERR_BAD_FS, N_("namesize overflow"));
 

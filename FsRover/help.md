@@ -70,7 +70,8 @@ declare an unknown incompatible feature are refused.
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved
 
-One driver covers all three generations.
+One driver covers all three generations. Symbolic-link targets longer than
+4096 bytes are rejected.
 
 **Features used to mount:** `filetype`, `extents`, `flex_bg`, `meta_bg`,
 `64bit`.
@@ -133,7 +134,7 @@ ReiserFS 3.5 and 3.6. Reiser4 is a different format and is not supported.
 layout and are not recognised.
 
 **Compression:** zlib, LZO, XZ, LZ4, Zstandard. The legacy LZMA1 compressor id
-is not supported.
+is not supported. Symbolic-link targets longer than 4096 bytes are rejected.
 
 #### UBIFS — `ubifs`
 

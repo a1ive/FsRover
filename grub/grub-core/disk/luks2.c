@@ -250,7 +250,9 @@ luks2_parse_digest (grub_luks2_digest_t *out, const grub_json_t *digest)
       if (grub_json_getchild (&o, &segments, i) ||
 	  grub_json_getuint64 (&bit, &o, NULL))
 	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Invalid segment");
-      out->segments |= (1 << bit);
+      if (bit >= 64)
+	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Segment index out of range");
+      out->segments |= ((grub_uint64_t) 1 << bit);
     }
 
   if (grub_json_getsize (&size, &keyslots))
@@ -263,7 +265,9 @@ luks2_parse_digest (grub_luks2_digest_t *out, const grub_json_t *digest)
       if (grub_json_getchild (&o, &keyslots, i) ||
 	  grub_json_getuint64 (&bit, &o, NULL))
 	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Invalid keyslot");
-      out->keyslots |= (1 << bit);
+      if (bit >= 64)
+	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Keyslot index out of range");
+      out->keyslots |= ((grub_uint64_t) 1 << bit);
     }
 
   return GRUB_ERR_NONE;
@@ -275,6 +279,13 @@ luks2_get_keyslot (grub_luks2_keyslot_t *k, grub_luks2_digest_t *d, grub_luks2_s
 {
   grub_json_t keyslots, keyslot, digests, digest, segments, segment;
   grub_size_t json_idx, size;
+
+  /*
+   * Seed the keyslot index with the array position so it is always defined,
+   * even if parsing fails before the real index is read below.  The caller
+   * prints k->idx in its failure diagnostic.
+   */
+  k->idx = keyslot_json_idx;
 
   /* Get nth keyslot */
   if (grub_json_getvalue (&keyslots, root, "keyslots") ||
@@ -296,7 +307,7 @@ luks2_get_keyslot (grub_luks2_keyslot_t *k, grub_luks2_digest_t *d, grub_luks2_s
 	  luks2_parse_digest (d, &digest))
 	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Could not parse digest index %" PRIuGRUB_SIZE, json_idx);
 
-      if ((d->keyslots & (1 << k->idx)))
+      if (k->idx < 64 && (d->keyslots & ((grub_uint64_t) 1 << k->idx)))
 	break;
     }
   if (json_idx == size)
@@ -314,7 +325,7 @@ luks2_get_keyslot (grub_luks2_keyslot_t *k, grub_luks2_digest_t *d, grub_luks2_s
 	  luks2_parse_segment (s, &segment))
 	return grub_error (GRUB_ERR_BAD_ARGUMENT, "Could not parse segment index %" PRIuGRUB_SIZE, json_idx);
 
-      if ((d->segments & (1 << s->idx)))
+      if (s->idx < 64 && (d->segments & ((grub_uint64_t) 1 << s->idx)))
 	break;
     }
   if (json_idx == size)
