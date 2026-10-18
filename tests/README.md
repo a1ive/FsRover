@@ -1,5 +1,66 @@
 # Product regression tests
 
+## FBFS and APFS regressions
+
+`fs_boundaries.py` runs 15 synthetic FBFS checks through the CLI: versions 1.6/1.7,
+short names, records crossing a 510-byte sector payload, a terminator in the last
+valid byte, zero list sectors, truncated records, missing terminators and missing
+filename NUL bytes. Extraction checks compare SHA-256 hashes. Use a fresh output
+directory:
+
+```sh
+python tests/fs_boundaries.py --cli build/x64/CliRover.exe --output build/fs-boundaries-x64
+```
+
+Substitute `build/Win32/CliRover.exe` or `build/linux/LinuxRover` for other hosts.
+The optional `--media DIR` adds existing `1.607.fba`, `1.701.fba`,
+`rover-apfs-gpt.img`, `rover-apfs-udrw.dmg` and `rover-apfs-lzfse.dmg` samples.
+Their names refer to the local regression collection; the script does not download
+or generate them. FBA extraction is checked against a separate Python reader of
+the archive records and payload offsets. APFS README content is checked against
+the sample's SHA-256 manifest. All input images are hashed before and after use.
+
+For an independent APFS comparison, extract `rover-apfs-gpt.img` with 7-Zip,
+excluding `documents/nested/readme-symlink.txt`, and pass that directory with
+`--oracle DIR` alongside `--media`. The CLI skips symlinks when extracting trees.
+The comparison checks the ten other regular files against 7-Zip.
+`sparse-16m.bin` is checked separately against the image manifest: 7-Zip 26.00
+produces a different hash for that file. These existing APFS images provide basic
+filesystem and DMG regression coverage; they do not establish coverage of every
+decmpfs compression type.
+
+Two C probes include the actual driver sources. `fbfs_list_probe.c` checks 50
+exact-size list buffers, record types and rewind behavior. `apfs_compression_probe.c`
+checks 100 cases covering stored-block markers and lengths, all 16 accepted zlib
+escape bytes, LZFSE `bvx-`/`bvxn` streams, malformed headers, and multi-block PLAIN
+and zlib resource forks with a partial last block and truncated input. Resource
+forks are synthetic embedded buffers; the probe does not mount APFS or exercise
+stream-backed xattr lookup.
+
+After building the Linux library, run from the repository root (tested with GCC 13):
+
+```sh
+gcc-13 -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover tests/fbfs_list_probe.c \
+  build/linux/librover-grub.a -Wl,--gc-sections -o build/linux/fbfs_list_probe
+build/linux/fbfs_list_probe
+gcc-13 -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover -Igrub/grub-core/lib/lzfse \
+  -Igrub/grub-core/lib/libzbitmap tests/apfs_compression_probe.c \
+  grub/grub-core/lib/lzfse/lzfse_decode.c \
+  grub/grub-core/lib/lzfse/lzfse_decode_base.c \
+  grub/grub-core/lib/lzfse/lzfse_fse.c \
+  grub/grub-core/lib/lzfse/lzvn_decode_base.c \
+  grub/grub-core/lib/libzbitmap/libzbitmap.c \
+  build/linux/librover-grub.a -Wl,--gc-sections -o build/linux/apfs_compression_probe
+build/linux/apfs_compression_probe
+```
+
+The included driver sources and the listed compression decoders use sanitizers;
+the remaining linked library keeps its normal Release flags.
+
 ## GRUB synchronization regressions
 
 `upstream_sync.py` exercises TAR (USTAR, GNU, PAX, v7 and base-256), CPIO,

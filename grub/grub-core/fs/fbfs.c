@@ -16,6 +16,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stddef.h>
 #include <grub/types.h>
 #include <grub/fs.h>
 #include <grub/mm.h>
@@ -33,6 +34,8 @@ struct grub_archelp_data
 {
 	grub_disk_t disk;
 	grub_size_t name_offset;
+	grub_size_t list_size;
+	grub_size_t entry_offset;
 	grub_uint32_t ofs;
 	grub_uint32_t pri_size;
 	struct fbm_file* p;
@@ -43,23 +46,53 @@ static grub_err_t
 grub_fbfs_find_file(struct grub_archelp_data* data, char** name,
 	grub_int32_t* mtime, grub_archelp_mode_t* mode)
 {
-	if (!data->p)
-		data->p = (struct fbm_file*)data->fb_list;
-	else
-		data->p = (struct fbm_file*)((char*)data->p + data->p->size + 2);
+	grub_size_t entry_size, name_offset, name_len, i;
+	const char *filename;
 
+	if (!data->p)
+		data->entry_offset = 0;
+	else
+		data->entry_offset += (grub_size_t) data->p->size + 2;
+
+	if (data->entry_offset >= data->list_size)
+	{
+		grub_error(GRUB_ERR_BAD_FS, "fbfs: missing list terminator");
+		goto fail;
+	}
+	data->p = (struct fbm_file*) (data->fb_list + data->entry_offset);
 	if (!data->p->size)
 	{
 		*mode = GRUB_ARCHELP_ATTR_END;
 		return GRUB_ERR_NONE;
 	}
 
-	*mtime = grub_le_to_cpu32(data->p->data_time);
+	entry_size = (grub_size_t) data->p->size + 2;
+	name_offset = offsetof(struct fbm_file, name) + data->name_offset;
+	if (entry_size > data->list_size - data->entry_offset
+		|| entry_size <= name_offset)
+	{
+		grub_error(GRUB_ERR_BAD_FS, "fbfs: invalid file list entry");
+		goto fail;
+	}
+	filename = data->p->name + data->name_offset;
+	name_len = entry_size - name_offset;
+	for (i = 0; i < name_len && filename[i] != '\0'; i++)
+		;
+	if (i == name_len)
+	{
+		grub_error(GRUB_ERR_BAD_FS, "fbfs: unterminated file name");
+		goto fail;
+	}
 
-	*name = grub_strdup(data->p->name + data->name_offset);
+	*mode = GRUB_ARCHELP_ATTR_FILE;
+	*mtime = grub_le_to_cpu32(data->p->data_time);
+	*name = grub_strdup(filename);
 	if (*name == NULL)
-		return grub_errno;
+		goto fail;
 	return GRUB_ERR_NONE;
+
+fail:
+	return grub_errno;
 }
 
 static char*
@@ -78,6 +111,7 @@ static void
 grub_fbfs_rewind(struct grub_archelp_data* data)
 {
 	data->p = NULL;
+	data->entry_offset = 0;
 }
 
 static struct grub_archelp_ops arcops =
@@ -130,11 +164,14 @@ grub_fbfs_mount(grub_disk_t disk)
 		goto fail;
 
 	list_used = d->list_used;
+	if (!list_used)
+		goto fail;
 	data = grub_zalloc(sizeof(*data) + (list_used << 9));
 	if (!data)
 		goto fail;
 
 	data->disk = disk;
+	data->list_size = (grub_size_t) list_used * 510;
 	if (d->ver_minor == 6)
 		data->name_offset = 0;
 	else

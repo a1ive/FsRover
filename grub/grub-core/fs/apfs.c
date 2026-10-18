@@ -1486,7 +1486,7 @@ grub_apfs_cmp_decompress(struct grub_apfs_cmp *cmp, const grub_uint8_t *cdata,
 
 	case GRUB_APFS_COMPRESS_LZFSE_ATTR:
 	case GRUB_APFS_COMPRESS_LZFSE_RSRC:
-		if (cdata[0] != 0x62)	/* not "bvx?" -- stored with escape byte */
+		if (cdata[0] == 0xFF)
 			goto stored;
 		{
 			grub_size_t n;
@@ -1518,14 +1518,18 @@ grub_apfs_cmp_decompress(struct grub_apfs_cmp *cmp, const grub_uint8_t *cdata,
 			cmp->cbuf_len = (grub_uint32_t) out;
 			break;
 		}
-		if ((cdata[0] & 0x0F) == 0x0F)
+		if (cdata[0] == 0xFF)
 			goto stored;
 		return grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
 			"bad lzbitmap escape byte");
 
 	case GRUB_APFS_COMPRESS_PLAIN_ATTR:
 	case GRUB_APFS_COMPRESS_PLAIN_RSRC:
-		goto stored;
+		if (cdata[0] == 0xCC)
+			goto stored;
+		grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
+			"bad uncompressed decmpfs marker");
+		goto fail;
 
 	default:
 		return grub_error(GRUB_ERR_NOT_IMPLEMENTED_YET,
@@ -1534,15 +1538,18 @@ grub_apfs_cmp_decompress(struct grub_apfs_cmp *cmp, const grub_uint8_t *cdata,
 	return GRUB_ERR_NONE;
 
 stored:
+	if (csize - 1 != bsize)
 	{
-		grub_uint32_t n = csize - 1;
-
-		if (n > bsize)
-			n = bsize;
-		grub_memcpy(cmp->cbuf, cdata + 1, n);
-		cmp->cbuf_len = n;
+		grub_error(GRUB_ERR_BAD_COMPRESSED_DATA,
+			"invalid uncompressed decmpfs block size");
+		goto fail;
 	}
+	grub_memcpy(cmp->cbuf, cdata + 1, bsize);
+	cmp->cbuf_len = bsize;
 	return GRUB_ERR_NONE;
+
+fail:
+	return grub_errno;
 }
 
 static grub_err_t
@@ -1577,8 +1584,7 @@ grub_apfs_cmp_load_block(struct grub_apfs_file *f, grub_uint64_t blk)
 		grub_uint32_t coffs, csize;
 		grub_uint8_t *cdata;
 
-		if (cmp->algo == GRUB_APFS_COMPRESS_ZLIB_RSRC
-			|| cmp->algo == GRUB_APFS_COMPRESS_PLAIN_RSRC)
+		if (cmp->algo == GRUB_APFS_COMPRESS_ZLIB_RSRC)
 		{
 			/* HFS-style resource layout */
 			struct grub_apfs_rsrc_hdr hdr;
