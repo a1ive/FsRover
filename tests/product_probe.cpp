@@ -12,6 +12,7 @@ extern "C" int product_strtol_probe (void);
 extern "C" int product_printf_probe (const char *mode);
 extern "C" int product_filemap_probe (int argc, const char **argv);
 extern "C" int product_image_read_probe (int argc, const char **argv);
+extern "C" int product_file_hook_probe (int argc, const char **argv);
 int product_fusefs_probe (const std::filesystem::path &fixtures);
 int product_readlink_probe (const std::filesystem::path &fixtures);
 
@@ -137,6 +138,7 @@ int main (int argc, char **argv)
 		return product_printf_probe (mode.c_str ());
 	}
 	if (argc >= 2 && (std::filesystem::path (argv[1]) == "--filemap"
+		|| std::filesystem::path (argv[1]) == "--file-hooks"
 		|| std::filesystem::path (argv[1]) == "--image-read"))
 	{
 		std::vector<std::string> values;
@@ -150,6 +152,8 @@ int main (int argc, char **argv)
 			arguments.push_back (value.c_str ());
 		if (std::filesystem::path (argv[1]) == "--image-read")
 			return product_image_read_probe ((int) arguments.size (), arguments.data ());
+		if (std::filesystem::path (argv[1]) == "--file-hooks")
+			return product_file_hook_probe ((int) arguments.size (), arguments.data ());
 		return product_filemap_probe ((int) arguments.size (), arguments.data ());
 	}
 	if (argc != 3)

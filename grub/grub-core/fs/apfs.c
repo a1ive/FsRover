@@ -478,7 +478,8 @@ typedef int (*grub_apfs_rec_hook_t)(const grub_uint8_t *key, grub_uint32_t klen,
 
 static grub_err_t grub_apfs_dstream_read(struct grub_apfs_volume *vol,
 	grub_uint64_t ext_id, grub_uint64_t pos, grub_uint64_t len,
-	grub_uint8_t *buf, grub_file_t file);
+	grub_uint8_t *buf, grub_disk_read_hook_t read_hook,
+	void *read_hook_data);
 
 /* Fletcher-64 as used by APFS: sums the block starting after the
    8-byte checksum field */
@@ -1070,12 +1071,17 @@ grub_apfs_have_extents(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
  * without a single extent record is what a lookup against the wrong
  * extent tree looks like, so it is reported as a bad file system --
  * except on volumes that may hold evicted (dataless) file data, where
- * it is a legitimate empty read.  FILE, when non-NULL, receives read
- * progress.
+ * it is a legitimate empty read.
+ *
+ * READ_HOOK is installed on the disk only around reads of the stream's
+ * own data blocks (never around B-tree lookups), the same way fshelp
+ * does it.  Holes feed only the progress hook, since they have no
+ * physical data sectors.  Block maps use the separate fs_map_range API.
  */
 static grub_err_t
 grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
-	grub_uint64_t pos, grub_uint64_t len, grub_uint8_t *buf, grub_file_t file)
+	grub_uint64_t pos, grub_uint64_t len, grub_uint8_t *buf,
+	grub_disk_read_hook_t read_hook, void *read_hook_data)
 {
 	struct grub_apfs_data *data = vol->data;
 	grub_err_t err = GRUB_ERR_NONE;
@@ -1122,10 +1128,14 @@ grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
 				if (phys >= data->blocks)
 					return grub_error(GRUB_ERR_BAD_FS,
 						"APFS extent out of range");
+				data->disk->read_hook = read_hook;
+				data->disk->read_hook_data = read_hook_data;
 				err = grub_disk_read(data->disk,
 					(grub_disk_addr_t) (phys << (data->blklog
 						- GRUB_DISK_SECTOR_BITS)),
 					pos - estart, (grub_size_t) chunk, buf);
+				data->disk->read_hook = 0;
+				data->disk->read_hook_data = 0;
 				if (err)
 					return err;
 			}
@@ -1165,8 +1175,13 @@ grub_apfs_dstream_read(struct grub_apfs_volume *vol, grub_uint64_t ext_id,
 			grub_memset(buf, 0, (grub_size_t) chunk);
 		}
 
-		if (file && grub_file_progress_hook)
-			grub_file_progress_hook(0, 0, (unsigned) chunk, NULL, file);
+		if ((!have || !phys) && read_hook
+			&& read_hook == grub_file_progress_hook)
+		{
+			err = read_hook(0, 0, (unsigned) chunk, (char *) buf, read_hook_data);
+			if (err)
+				return err;
+		}
 		pos += chunk;
 		buf += chunk;
 		len -= chunk;
@@ -1387,7 +1402,8 @@ grub_apfs_xattr_read_all(struct grub_apfs_volume *vol,
 	*buf = grub_malloc(*len ? *len : 1);
 	if (!*buf)
 		return grub_errno;
-	err = grub_apfs_dstream_read(vol, res->stream_id, 0, *len, *buf, NULL);
+	err = grub_apfs_dstream_read(vol, res->stream_id, 0, *len, *buf,
+		NULL, NULL);
 	if (err)
 	{
 		grub_free(*buf);
@@ -1434,7 +1450,7 @@ grub_apfs_rsrc_read(struct grub_apfs_file *f, grub_uint64_t off,
 			|| len > cmp->rsrc.stream_size - off)
 			return grub_error(GRUB_ERR_BAD_FS, "APFS resource fork overrun");
 		return grub_apfs_dstream_read(f->vol, cmp->rsrc.stream_id, off, len,
-			buf, NULL);
+			buf, NULL, NULL);
 	}
 	if (off > cmp->rsrc.len || len > cmp->rsrc.len - off)
 		return grub_error(GRUB_ERR_BAD_FS, "APFS resource fork overrun");
@@ -1561,6 +1577,10 @@ grub_apfs_cmp_load_block(struct grub_apfs_file *f, grub_uint64_t blk)
 
 	if (cmp->cbuf_block == blk)
 		return GRUB_ERR_NONE;
+	/* cbuf is about to be overwritten: until this block is fully
+	   decoded it holds no valid block, so a failure below must not
+	   leave the previous block number pointing at clobbered data */
+	cmp->cbuf_block = ~0ULL;
 
 	bsize = GRUB_APFS_CMP_BLOCK;
 	if (cmp->size - (blk << 16) < bsize)
@@ -1645,11 +1665,18 @@ grub_apfs_cmp_load_block(struct grub_apfs_file *f, grub_uint64_t blk)
 	return GRUB_ERR_NONE;
 }
 
+/*
+ * Decompressed data has no sector mapping, so READ_HOOK is never put on
+ * the disk here (as with ntfscomp).  Only the progress hook is fed, with
+ * the decompressed length.  Block maps use the separate fs_map_range API.
+ */
 static grub_err_t
 grub_apfs_cmp_read(grub_file_t file, struct grub_apfs_file *f,
 	grub_uint8_t *buf, grub_uint64_t pos, grub_uint64_t len)
 {
 	struct grub_apfs_cmp *cmp = f->cmp;
+	int progress = file->read_hook
+		&& file->read_hook == grub_file_progress_hook;
 	grub_err_t err;
 
 	while (len)
@@ -1664,8 +1691,13 @@ grub_apfs_cmp_read(grub_file_t file, struct grub_apfs_file *f,
 		if (err)
 			return err;
 		grub_memcpy(buf, cmp->cbuf + boff, (grub_size_t) chunk);
-		if (grub_file_progress_hook)
-			grub_file_progress_hook(0, 0, (unsigned) chunk, NULL, file);
+		if (progress)
+		{
+			err = file->read_hook(0, 0, (unsigned) chunk, (char *) buf,
+				file->read_hook_data);
+			if (err)
+				return err;
+		}
 		pos += chunk;
 		buf += chunk;
 		len -= chunk;
@@ -1938,7 +1970,7 @@ grub_apfs_read_symlink(grub_fshelp_node_t node)
 	if (!target)
 		return NULL;
 	if (grub_apfs_dstream_read(node->vol, res.stream_id, 0, res.stream_size,
-		(grub_uint8_t *) target, NULL))
+		(grub_uint8_t *) target, NULL, NULL))
 	{
 		grub_free(target);
 		return NULL;
@@ -1983,6 +2015,17 @@ grub_apfs_read_omap(struct grub_apfs_data *data, grub_uint64_t paddr,
 	if (*tree_root >= data->blocks)
 		return grub_error(GRUB_ERR_BAD_FS, "APFS object map root out of range");
 	return GRUB_ERR_NONE;
+}
+
+static int
+grub_apfs_volname_taken(const struct grub_apfs_data *data, const char *name)
+{
+	grub_uint32_t i;
+
+	for (i = 0; i < data->nvols; i++)
+		if (grub_strcmp(data->vols[i].name, name) == 0)
+			return 1;
+	return 0;
 }
 
 static grub_err_t
@@ -2045,21 +2088,32 @@ grub_apfs_add_volume(struct grub_apfs_data *data, grub_uint64_t fs_oid,
 		return grub_errno;
 	grub_memcpy(name, vsb->volname, sizeof(vsb->volname));
 	name[sizeof(vsb->volname) - 1] = '\0';
-	if (!name[0])
+	/* "." and ".." are taken by fshelp's own path handling */
+	if (!name[0] || grub_strcmp(name, ".") == 0
+		|| grub_strcmp(name, "..") == 0)
 		grub_snprintf(name, sizeof(vsb->volname), "Volume%u",
 			grub_le_to_cpu32(vsb->fs_index));
 	for (i = 0; name[i]; i++)
 		if (name[i] == '/')
 			name[i] = '_';
-	for (i = 0; i < data->nvols; i++)
-		if (grub_strcmp(data->vols[i].name, name) == 0)
-		{
-			grub_size_t l = grub_strlen(name);
+	if (grub_apfs_volname_taken(data, name))
+	{
+		/*
+		 * Try " (fs_index)" first, then " (1)", " (2)", ...  At most
+		 * nvols names are taken, so one of the nvols + 2 candidates
+		 * is free; every candidate is checked against all volumes.
+		 */
+		grub_size_t l = grub_strlen(name);
+		grub_uint32_t n = grub_le_to_cpu32(vsb->fs_index);
+		grub_uint32_t k;
 
-			grub_snprintf(name + l, 16, " (%u)",
-				grub_le_to_cpu32(vsb->fs_index));
-			break;
+		for (k = 0; k <= data->nvols + 1; k++)
+		{
+			grub_snprintf(name + l, 16, " (%u)", k ? k : n);
+			if (!grub_apfs_volname_taken(data, name))
+				break;
 		}
+	}
 	vol->name = name;
 
 	/* volume object map, then the fs tree root through it (blkbuf is
@@ -2392,7 +2446,8 @@ grub_apfs_read(struct grub_file *file, char *buf, grub_size_t len)
 			file->offset, len);
 	else
 		err = grub_apfs_dstream_read(f->vol, f->private_id, file->offset,
-			len, (grub_uint8_t *) buf, file);
+			len, (grub_uint8_t *) buf, file->read_hook,
+			file->read_hook_data);
 	return err ? -1 : (grub_ssize_t) len;
 }
 

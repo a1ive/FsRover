@@ -384,6 +384,11 @@ grub_refs_load_compression_unit(struct grub_refs_data *data,
 	grub_uint32_t plain_size;
 	size_t got;
 
+	/* plain_buf/compressed_buf get overwritten below: drop the cached
+	   unit first so a failed load cannot be served from a clobbered
+	   buffer later */
+	data->cache_valid = 0;
+
 	if (range->plain_size - plain_done < data->compression_unit_size)
 		plain_size = (grub_uint32_t) (range->plain_size - plain_done);
 	else
@@ -428,9 +433,16 @@ grub_refs_load_compression_unit(struct grub_refs_data *data,
 	return GRUB_ERR_NONE;
 }
 
+/*
+ * Read file data starting at virtual cluster BLOCK + OFFSET bytes.
+ * READ_HOOK is installed on the disk only around raw data reads; data
+ * served from a compressed container has no sector mapping, so it
+ * feeds only the progress hook.  Block maps use grub_refs_file_map().
+ */
 static grub_err_t
 grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
-	grub_uint64_t offset, grub_size_t len, char *buf)
+	grub_uint64_t offset, grub_size_t len, char *buf,
+	grub_disk_read_hook_t read_hook, void *read_hook_data)
 {
 	while (len)
 	{
@@ -487,9 +499,18 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 			if (step > len)
 				step = len;
 			grub_memcpy(buf, data->plain_buf + in_unit, step);
+			if (read_hook && read_hook == grub_file_progress_hook)
+			{
+				grub_err_t err = read_hook(0, 0, (unsigned) step, buf, read_hook_data);
+
+				if (err)
+					return err;
+			}
 		}
 		else
 		{
+			grub_err_t err;
+
 			if (entry && grub_refs_container_is_compressed(data, entry->id))
 				return grub_error(GRUB_ERR_BAD_FS, "refs: missing compressed range");
 			container_left = ((data->bpc_mask + 1
@@ -498,9 +519,14 @@ grub_refs_read_data(struct grub_refs_data *data, grub_uint64_t block,
 			step = len;
 			if (container_left < step)
 				step = (grub_size_t) container_left;
-			if (grub_disk_read(data->disk, 0,
-				(physical << data->cluster_shift) + offset, step, buf))
-				return grub_errno;
+			data->disk->read_hook = read_hook;
+			data->disk->read_hook_data = read_hook_data;
+			err = grub_disk_read(data->disk, 0,
+				(physical << data->cluster_shift) + offset, step, buf);
+			data->disk->read_hook = 0;
+			data->disk->read_hook_data = 0;
+			if (err)
+				return err;
 		}
 		buf += step;
 		len -= step;
@@ -996,8 +1022,9 @@ corrupt:
 	return -1;
 }
 
+/* drop everything loaded from a checkpoint, so another one can be tried */
 static void
-grub_refs_unmount(struct grub_refs_data *data)
+grub_refs_reset_checkpoint(struct grub_refs_data *data)
 {
 	grub_uint32_t i;
 
@@ -1015,8 +1042,27 @@ grub_refs_unmount(struct grub_refs_data *data)
 	grub_free(data->compressed_buf);
 	grub_free(data->compression);
 	grub_free(data->map);
+	data->plain_buf = NULL;
+	data->compressed_buf = NULL;
+	data->compression = NULL;
+	data->compression_len = 0;
+	data->map = NULL;
+	data->map_len = 0;
+	data->compression_format = 0;
+	data->compression_unit_size = 0;
+	data->cache_valid = 0;
+	grub_memset(data->obj_table, 0, sizeof(data->obj_table));
+}
+
+static void
+grub_refs_unmount(struct grub_refs_data *data)
+{
+	grub_refs_reset_checkpoint(data);
 	grub_free(data);
 }
+
+static grub_err_t grub_refs_load_checkpoint(struct grub_refs_data *data,
+	const grub_uint8_t *node, int v312);
 
 static struct grub_refs_data *
 grub_refs_mount(grub_disk_t disk)
@@ -1024,19 +1070,17 @@ grub_refs_mount(grub_disk_t disk)
 	grub_uint8_t bs[512];
 	struct grub_refs_data *data = NULL;
 	grub_uint8_t *node = NULL;
-	grub_uint8_t *tmp = NULL;
 	grub_uint32_t bps, spc;
 	grub_uint64_t cs64;
 	grub_uint32_t cs;
 	grub_uint64_t sb_blocks[4];
 	grub_uint64_t l1[2];
-	grub_uint64_t containers[4];
-	grub_uint64_t container_index[4];
+	grub_uint64_t chkp_seq[2];
+	int chkp_ok[2];
+	grub_uint32_t order[2];
 	grub_uint32_t l1_off, l1_count;
-	grub_uint32_t ref_count, ref_base;
 	int have_chkp = 0;
 	int v312;
-	int pass;
 	grub_uint32_t i;
 
 	if (grub_disk_read(disk, 0, 0, sizeof(bs), bs))
@@ -1121,21 +1165,69 @@ grub_refs_mount(grub_disk_t disk)
 	l1[0] = refs_get64(node + l1_off);
 	l1[1] = (l1_count >= 2) ? refs_get64(node + l1_off + 8) : 0;
 
-	/* checkpoint: try the primary copy, then the secondary */
+	/*
+	 * The superblock names two checkpoints that are rewritten in turn,
+	 * so the primary copy is not necessarily the current one.  Order
+	 * them by checkpoint number (first field after the checkpoint
+	 * header: +0x60 in v3, +0x40 in v1) and use the newest one that
+	 * yields a usable set of trees, falling back to the older copy.
+	 */
 	for (i = 0; i < 2; i++)
 	{
 		grub_uint64_t cb[4];
 		grub_uint32_t j;
 
+		chkp_ok[i] = 0;
+		chkp_seq[i] = 0;
 		if (!l1[i])
 			continue;
 		for (j = 0; j < 4; j++)
 			cb[j] = l1[i] + j;
-		if (grub_refs_read_node(data, cb, 1, "CHKP", node) == GRUB_ERR_NONE)
+		if (grub_refs_read_node(data, cb, 1, "CHKP", node) != GRUB_ERR_NONE)
 		{
+			if (grub_errno == GRUB_ERR_OUT_OF_MEMORY)
+				goto fail;
+			grub_dprintf("refs", "checkpoint %u at %" PRIuGRUB_UINT64_T
+				" unreadable: %s\n", i, l1[i], grub_errmsg);
+			grub_errno = GRUB_ERR_NONE;
+			continue;
+		}
+		chkp_seq[i] = refs_get64(node + data->header_size + 0x10);
+		chkp_ok[i] = 1;
+	}
+	order[0] = 0;
+	order[1] = 1;
+	if (chkp_ok[1] && (!chkp_ok[0] || chkp_seq[1] > chkp_seq[0]))
+	{
+		order[0] = 1;
+		order[1] = 0;
+	}
+
+	for (i = 0; i < 2 && !have_chkp; i++)
+	{
+		grub_uint32_t c = order[i];
+		grub_uint64_t cb[4];
+		grub_uint32_t j;
+
+		if (!chkp_ok[c])
+			continue;
+		for (j = 0; j < 4; j++)
+			cb[j] = l1[c] + j;
+		if (grub_refs_read_node(data, cb, 1, "CHKP", node) == GRUB_ERR_NONE
+			&& grub_refs_load_checkpoint(data, node, v312) == GRUB_ERR_NONE)
+		{
+			grub_dprintf("refs", "using checkpoint %u (number %"
+				PRIuGRUB_UINT64_T ")\n", c, chkp_seq[c]);
 			have_chkp = 1;
 			break;
 		}
+		/* running out of memory says nothing about the checkpoint:
+		   do not silently fall back to an older one */
+		if (grub_errno == GRUB_ERR_OUT_OF_MEMORY)
+			goto fail;
+		grub_dprintf("refs", "checkpoint %u (number %" PRIuGRUB_UINT64_T
+			") rejected: %s\n", c, chkp_seq[c], grub_errmsg);
+		grub_refs_reset_checkpoint(data);
 		grub_errno = GRUB_ERR_NONE;
 	}
 	if (!have_chkp)
@@ -1143,6 +1235,35 @@ grub_refs_mount(grub_disk_t disk)
 		grub_error(GRUB_ERR_BAD_FS, "refs: no valid checkpoint");
 		goto fail;
 	}
+
+	grub_free(node);
+	grub_errno = GRUB_ERR_NONE;
+	return data;
+
+fail:
+	grub_free(node);
+	if (data)
+		grub_refs_unmount(data);
+	if (grub_errno == GRUB_ERR_NONE)
+		grub_error(GRUB_ERR_BAD_FS, "not a ReFS filesystem");
+	return NULL;
+}
+
+/*
+ * Load the trees referenced by the checkpoint in NODE: container table,
+ * object table and container index (compression).  On failure the
+ * caller resets DATA with grub_refs_reset_checkpoint().
+ */
+static grub_err_t
+grub_refs_load_checkpoint(struct grub_refs_data *data, const grub_uint8_t *node,
+	int v312)
+{
+	grub_uint8_t *tmp = NULL;
+	grub_uint64_t containers[4];
+	grub_uint64_t container_index[4];
+	grub_uint32_t ref_count, ref_base;
+	int pass;
+	grub_uint32_t i;
 
 	/* level 2 tree root references */
 	ref_count = refs_get32(node + (data->v1 ? 0x58 : 0x90));
@@ -1189,6 +1310,8 @@ grub_refs_mount(grub_disk_t disk)
 				continue;
 			if (grub_refs_read_node(data, b, 0, "MSB+", tmp))
 			{
+				if (grub_errno == GRUB_ERR_OUT_OF_MEMORY)
+					goto fail;
 				grub_errno = GRUB_ERR_NONE;
 				continue;
 			}
@@ -1275,30 +1398,23 @@ grub_refs_mount(grub_disk_t disk)
 		if (!data->compressed_buf || !data->plain_buf)
 			goto fail;
 	}
-	grub_free(tmp);
-	tmp = NULL;
-
 	if (!data->obj_table[0])
 	{
 		grub_error(GRUB_ERR_BAD_FS, "refs: object table not found");
 		goto fail;
 	}
 
-	grub_free(node);
-	grub_errno = GRUB_ERR_NONE;
-	return data;
+	grub_free(tmp);
+	return GRUB_ERR_NONE;
 
 bad_compression_map:
 	grub_error(GRUB_ERR_BAD_FS, "refs: corrupt compacted cluster map");
 
 fail:
 	grub_free(tmp);
-	grub_free(node);
-	if (data)
-		grub_refs_unmount(data);
 	if (grub_errno == GRUB_ERR_NONE)
-		grub_error(GRUB_ERR_BAD_FS, "not a ReFS filesystem");
-	return NULL;
+		grub_error(GRUB_ERR_BAD_FS, "refs: unusable checkpoint");
+	return grub_errno;
 }
 
 /*
@@ -1951,6 +2067,9 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 			return -1;
 		}
 		grub_memset(p, 0, remaining);
+		if (file->read_hook && file->read_hook == grub_file_progress_hook
+			&& file->read_hook(0, 0, (unsigned) len, buf, file->read_hook_data))
+			return -1;
 		return (grub_ssize_t) len;
 	}
 
@@ -2004,7 +2123,8 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 			if (chunk > remaining)
 				chunk = remaining;
 			step = (grub_size_t) chunk;
-			if (grub_refs_read_data(data, hit->block, pos - start, step, p))
+			if (grub_refs_read_data(data, hit->block, pos - start, step, p,
+				file->read_hook, file->read_hook_data))
 				return -1;
 		}
 		else
@@ -2021,6 +2141,9 @@ grub_refs_read(grub_file_t file, char *buf, grub_size_t len)
 				chunk = next_start - pos;
 			step = (grub_size_t) chunk;
 			grub_memset(p, 0, step);
+			if (file->read_hook && file->read_hook == grub_file_progress_hook
+				&& file->read_hook(0, 0, (unsigned) step, p, file->read_hook_data))
+				return -1;
 		}
 
 		p += step;

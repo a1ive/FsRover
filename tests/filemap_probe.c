@@ -9,6 +9,99 @@
 #include <grub/hostfile.h>
 #include "rover.h"
 
+struct file_hook_state
+{
+	grub_uint64_t bytes;
+	unsigned calls;
+};
+
+static grub_uint64_t progress_done;
+static unsigned progress_calls;
+
+static void
+file_progress(unsigned long long done, unsigned long long total, void *data)
+{
+	(void) total;
+	(void) data;
+	progress_done = done;
+	progress_calls++;
+}
+
+static grub_err_t
+file_read_hook(grub_disk_addr_t sector, unsigned offset, unsigned length,
+	char *buf, void *data)
+{
+	struct file_hook_state *state = data;
+	(void) sector;
+	(void) offset;
+	(void) buf;
+	state->bytes += length;
+	state->calls++;
+	return GRUB_ERR_NONE;
+}
+
+int
+product_file_hook_probe(int argc, const char **argv)
+{
+	grub_file_t file = NULL;
+	unsigned char baseline[65536], actual[65536];
+	struct file_hook_state state = {0};
+	grub_uint64_t off, expected;
+	int status = 1;
+
+	if (argc != 3)
+		return 2;
+	expected = strtoull(argv[2], NULL, 0);
+	rover_init(ROVER_INIT_NO_HOSTDISK);
+#ifdef _WIN32
+	if (rover_winfile_add("img0", argv[0], 1))
+#else
+	if (rover_posixfile_add("img0", argv[0], 1))
+#endif
+		goto done;
+	file = grub_file_open(argv[1], GRUB_FILE_TYPE_NONE);
+	if (!file)
+		goto done;
+	for (off = 0; off < file->size;)
+	{
+		grub_size_t len = sizeof(actual);
+		if (len > file->size - off)
+			len = (grub_size_t) (file->size - off);
+		rover_set_progress(NULL, NULL);
+		file->read_hook = NULL;
+		if (grub_file_seek(file, off) == (grub_off_t) -1
+			|| grub_file_read(file, baseline, len) != (grub_ssize_t) len)
+			goto done;
+		rover_set_progress(file_progress, NULL);
+		progress_done = ~(grub_uint64_t) 0;
+		if (grub_file_seek(file, off) == (grub_off_t) -1
+			|| grub_file_read(file, actual, len) != (grub_ssize_t) len
+			|| grub_memcmp(actual, baseline, len) || progress_done != off + len)
+			goto done;
+		progress_calls = 0;
+		file->read_hook = file_read_hook;
+		file->read_hook_data = &state;
+		if (grub_file_seek(file, off) == (grub_off_t) -1
+			|| grub_file_read(file, actual, len) != (grub_ssize_t) len
+			|| grub_memcmp(actual, baseline, len) || progress_calls
+			|| file->device->disk->read_hook || file->device->disk->read_hook_data)
+			goto done;
+		off += len;
+	}
+	printf("hook bytes=%llu expected=%llu calls=%u size=%llu\n",
+		(unsigned long long) state.bytes, (unsigned long long) expected,
+		state.calls, (unsigned long long) file->size);
+	status = state.bytes == expected ? 0 : 1;
+done:
+	if (status)
+		fprintf(stderr, "file hook failure: %s\n", grub_errmsg);
+	rover_set_progress(NULL, NULL);
+	if (file)
+		grub_file_close(file);
+	rover_fini();
+	return status;
+}
+
 /* Compare an opened virtual image against independently reconstructed bytes.
    Optional bad offset exercises A -> failed decode B -> A on the same cache. */
 int

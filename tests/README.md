@@ -31,10 +31,13 @@ decmpfs compression type.
 
 Two C probes include the actual driver sources. `fbfs_list_probe.c` checks 50
 exact-size list buffers, record types and rewind behavior. `apfs_compression_probe.c`
-checks 100 cases covering stored-block markers and lengths, all 16 accepted zlib
+checks 101 cases covering stored-block markers and lengths, all 16 accepted zlib
 escape bytes, LZFSE `bvx-`/`bvxn` streams, malformed headers, and multi-block PLAIN
-and zlib resource forks with a partial last block and truncated input. Resource
-forks are synthetic embedded buffers; the probe does not mount APFS or exercise
+and zlib resource forks with a partial last block and truncated input. The last
+case reads A, partially overwrites its cache while decoding a short B,
+then reads A again. It also checks progress/custom-hook separation for decoded
+data. Resource forks are synthetic embedded buffers; the probe does not mount
+APFS or exercise
 stream-backed xattr lookup.
 
 After building the Linux library, run from the repository root (tested with GCC 13):
@@ -60,6 +63,53 @@ build/linux/apfs_compression_probe
 
 The included driver sources and the listed compression decoders use sanitizers;
 the remaining linked library keeps its normal Release flags.
+
+## APFS and ReFS review regressions
+
+`fs_review.py` builds synthetic APFS containers with colliding suffixes, empty
+and dot names, 255-byte names, and 100 volumes. The CLI lists their volume names
+and opens generated paths. The optional image collection has `extra/` and `vhd/`
+subdirectories containing the existing APFS and ReFS samples named in the script.
+
+```powershell
+python tests/fs_review.py --cli build/x64/CliRover.exe --probe build/x64/product_probe.exe --output build/fs-review-x64 --media F:/image --apfs-oracle build/fs-boundaries-20261018/apfs-oracle
+```
+
+Use a fresh output directory. Omit `--media`, `--probe`, and `--apfs-oracle` to
+run the synthetic volume-name cases alone. Substitute the Win32 or Linux
+executables to test those builds. Build `product_probe` with the commands below.
+
+Media checks compare APFS extraction with the supplied independent extraction
+(except the sparse file, checked against its recorded manifest hash), compare
+32 files between the LZ4/Zstd ReFS images, and verify 12 ReFS 1.2 files against
+the image's SHA-256 manifest. Source image hashes are checked before and after.
+The LZ4/Zstd filenames describe the sample collection: the selected checkpoint
+can map the tested files as ordinary extents, so those results alone do not
+establish compressed-container read coverage.
+
+`product_probe --file-hooks IMAGE PATH RAW_BYTES` compares normal, progress-hook,
+and custom-hook reads of the same file. It checks byte equality, complete logical
+progress, custom-hook byte counts, and disk-hook cleanup. `RAW_BYTES` excludes
+holes, resident data, and decoded compressed data. The optional script checks
+seven existing APFS/ReFS files with known raw-byte counts.
+
+`refs_review_probe.c` includes the driver and substitutes in-memory disk reads
+and selected allocation failures. Its 41 cases cover checkpoint ordering and
+fallback for synthetic 1.2/3.11/3.12/3.14 layouts, OOM during checkpoint probing,
+reload, root reading and root-buffer allocation, failed LZ4 cache reloads,
+compressed progress/custom hooks, and raw-read hook cleanup on I/O failure.
+It does not validate a complete ReFS filesystem or all allocation-failure paths.
+
+```sh
+gcc-13 -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover -Igrub/grub-core/lib/lz4 \
+  -Igrub/grub-core/lib/zstd tests/refs_review_probe.c \
+  build/linux/librover-grub.a -Wl,--gc-sections -o build/linux/refs_review_probe
+build/linux/refs_review_probe
+```
+
+The included driver uses sanitizers; the linked library keeps its build flags.
 
 ## GRUB synchronization regressions
 

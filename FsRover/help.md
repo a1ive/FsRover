@@ -265,6 +265,11 @@ as-is, without replaying its log.
 
 > Origin: linux-apfs-rw · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved
 
+Each readable volume appears as a directory at the container root. Duplicate
+names receive a numeric suffix, checked against all preceding volumes. Empty
+names and `.` or `..` become `VolumeN`, where `N` is the volume index; these
+generated names also receive a suffix if needed.
+
 **Compression** (`decmpfs`), in both the attribute-inline and resource-fork
 layouts: uncompressed, zlib, LZVN, LZFSE, LZBITMAP.
 

@@ -5,6 +5,22 @@
 
 static unsigned checks;
 
+static grub_err_t
+count_progress(grub_disk_addr_t sector, unsigned offset, unsigned length,
+	char *buf, void *data)
+{
+	(void) sector; (void) offset; (void) buf;
+	*(unsigned *) data += length;
+	return GRUB_ERR_NONE;
+}
+
+static grub_err_t
+count_custom(grub_disk_addr_t sector, unsigned offset, unsigned length,
+	char *buf, void *data)
+{
+	return count_progress(sector, offset, length, buf, data);
+}
+
 static int
 check_block(unsigned algo, const grub_uint8_t *src, unsigned size,
 	unsigned expected_size, const char *expected, int valid)
@@ -114,6 +130,65 @@ fail:
 	return ok;
 }
 
+static int
+check_failed_reload(void)
+{
+	struct grub_apfs_cmp cmp = {0};
+	struct grub_apfs_file file = {0};
+	struct grub_file public_file = {0};
+	unsigned count = 0;
+	grub_uint8_t output[4];
+	const grub_uint8_t short_block[] = {'b','v','x','-',3,0,0,0,
+		'B','A','D','b','v','x','$'};
+	const unsigned second = 12 + 65537;
+	grub_uint8_t *resource = grub_zalloc(second + sizeof(short_block));
+	int ok = 0;
+
+	cmp.cbuf = grub_malloc(GRUB_APFS_CMP_BLOCK);
+	if (!resource || !cmp.cbuf)
+		goto fail;
+	put32(resource, 12);
+	put32(resource + 4, second);
+	put32(resource + 8, second + sizeof(short_block));
+	resource[12] = 0xFF;
+	memset(resource + 13, 'A', 65536);
+	memcpy(resource + second, short_block, sizeof(short_block));
+	cmp.algo = GRUB_APFS_COMPRESS_LZFSE_RSRC;
+	cmp.size = 65540;
+	cmp.cbuf_block = ~(grub_uint64_t) 0;
+	cmp.rsrc.data = resource;
+	cmp.rsrc.len = second + sizeof(short_block);
+	file.cmp = &cmp;
+	grub_errno = GRUB_ERR_NONE;
+	if (grub_apfs_cmp_load_block(&file, 0) || cmp.cbuf[0] != 'A')
+		goto fail;
+	if (grub_apfs_cmp_load_block(&file, 1) != GRUB_ERR_BAD_COMPRESSED_DATA
+		|| cmp.cbuf_block != ~(grub_uint64_t) 0 || memcmp(cmp.cbuf, "BAD", 3))
+		goto fail;
+	grub_errno = GRUB_ERR_NONE;
+	if (grub_apfs_cmp_load_block(&file, 0) || memcmp(cmp.cbuf, "AAAA", 4))
+		goto fail;
+	grub_file_progress_hook = public_file.read_hook = count_progress;
+	public_file.read_hook_data = &count;
+	if (grub_apfs_cmp_read(&public_file, &file, output, 0, sizeof(output))
+		|| count != sizeof(output) || memcmp(output, "AAAA", 4))
+		goto fail;
+	count = 0;
+	public_file.read_hook = count_custom;
+	if (grub_apfs_cmp_read(&public_file, &file, output, 0, sizeof(output)) || count)
+		goto fail;
+	ok = 1;
+fail:
+	grub_file_progress_hook = NULL;
+	checks++;
+	if (!ok)
+		fprintf(stderr, "FAIL failed reload: %s\n", grub_errmsg);
+	grub_free(cmp.scratch);
+	grub_free(cmp.cbuf);
+	grub_free(resource);
+	return ok;
+}
+
 int
 main(void)
 {
@@ -161,6 +236,7 @@ main(void)
 	}
 	ok &= check_resource(GRUB_APFS_COMPRESS_PLAIN_RSRC);
 	ok &= check_resource(GRUB_APFS_COMPRESS_ZLIB_RSRC);
+	ok &= check_failed_reload();
 	if (!ok)
 		return 1;
 	printf("PASS %u APFS compression checks\n", checks);
