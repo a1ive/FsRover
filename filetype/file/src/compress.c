@@ -47,7 +47,7 @@ extern pid_t fork(void);
 #endif
 
 #ifndef lint
-FILE_RCSID("@(#)$File: compress.c,v 1.168 2026/10/13 15:54:30 christos Exp $")
+FILE_RCSID("@(#)$File: compress.c,v 1.173 2026/10/30 14:28:30 christos Exp $")
 #endif
 
 #include "magic.h"
@@ -544,7 +544,7 @@ file_pipe2file(struct magic_set *ms, int fd, const void *startbuf,
 #else
 	{
 		int te;
-		mode_t ou = umask(0);
+		mode_t ou = umask(0177);
 		tfd = mkstemp(buf);
 		(void)umask(ou);
 		te = errno;
@@ -904,18 +904,16 @@ uncompresslrzip(const unsigned char *old, unsigned char **newch,
 	}
 	out = fmemopen(*newch, *n, "w");
 	if (out == NULL) {
-		free(*newch);
 		res = makeerror(newch, n, "unable to allocate output file");
 		goto out2;
 	}
 	lrzip_outfile_set(lr, out);
-	if (lrzip_run(lr)) {
-		free(*newch);
+	if (!lrzip_run(lr)) {
+		fclose(out);
 		res = makeerror(newch, n, "unable to decompress file");
-		goto out3;
+		goto out2;
 	}
 	*n = (size_t)ftell(out);
-out3:
 	fclose(out);
 out2:
 	fclose(in);
