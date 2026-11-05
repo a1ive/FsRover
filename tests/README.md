@@ -111,6 +111,46 @@ build/linux/refs_review_probe
 
 The included driver uses sanitizers; the linked library keeps its build flags.
 
+`refs_perf_probe.c` also runs the 41 review checks, then exercises indexed
+object/name lookup, empty terminal keys, alternate separator order, Unicode
+and case-insensitive lookup, missing files, I/O/OOM propagation and tree loops.
+It compares sequential and random sparse reads with an independent byte array,
+checks cached-hole boundaries, container-table growth/reset, and sorted
+compression ranges with gaps, overlap and missing bitmaps. The combined probe
+currently runs 172,677 checks, including sorting lengths 0 through 130 with
+ordered, reversed, duplicate and 64-bit extreme keys. An insertion-sort oracle
+checks the order, and record tags check that sorting preserves every payload.
+
+```sh
+gcc-13 -std=gnu2x -g -O1 -Wall -Wextra -Werror \
+  -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover -Igrub/grub-core/lib/lz4 \
+  -Igrub/grub-core/lib/zstd tests/refs_perf_probe.c \
+  build/linux/librover-grub.a -Wl,--gc-sections -o build/linux/refs_perf_probe
+build/linux/refs_perf_probe
+```
+
+To inspect direct dependencies separately from the hosted test executable:
+
+```sh
+gcc-13 -std=gnu2x -O2 -ffreestanding -fno-builtin -Wall -Wextra -Werror \
+  -include grub/rover/config.h -Igrub/include -Igrub/rover \
+  -Igrub/grub-core/lib/lz4 -Igrub/grub-core/lib/zstd \
+  -c grub/grub-core/fs/refs.c -o build/linux/refs-freestanding.o
+nm -u build/linux/refs-freestanding.o
+```
+
+The object should reference only GRUB APIs and the LZ4/ZSTD decompressors.
+Check the symbol list as well as the compile result; `-ffreestanding` alone
+does not prohibit calls to hosted library functions.
+
+These in-memory cases cover lookup and range handling. Use `fs_review.py` with
+real ReFS media for listing, extraction and hash checks. Filename lookup can
+fall back to enumeration when a key cannot be compared or indexed lookup
+misses; include non-ASCII names and different letter case in media tests.
+
+
 ## GRUB synchronization regressions
 
 `upstream_sync.py` exercises TAR (USTAR, GNU, PAX, v7 and base-256), CPIO,
