@@ -48,7 +48,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define XDVDFS_FILETIME_EPOCH		116444736000000000ULL
 #define XDVDFS_FILETIME_TICKS		10000000ULL
 
-static const grub_uint8_t xdvdfs_magic[XDVDFS_MAGIC_SIZE] = "MICROSOFT*XBOX*MEDIA";
+static const grub_uint8_t xdvdfs_magic[] = "MICROSOFT*XBOX*MEDIA";
 
 static const grub_uint64_t xdvdfs_candidates[] =
 {
