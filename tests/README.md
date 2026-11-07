@@ -1,5 +1,26 @@
 # Product regression tests
 
+## Brotli decoder regressions
+
+`brotli_probe.c` includes the product decoder and checks invalid block switches
+for all three tree types, both safe and fast paths, plus single-call and
+streaming decoding with 1/17-byte input and 31-byte output chunks. Run against
+an upstream compressed/plain pair or a generated stream:
+
+```sh
+gcc-13 -std=gnu2x -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -ffunction-sections -fdata-sections -include grub/rover/config.h \
+  -Igrub/include -Igrub/rover -Igrub/grub-core/lib/brotli/include \
+  tests/brotli_probe.c build/linux/librover-grub.a -Wl,--gc-sections \
+  -o build/linux/brotli_probe
+build/linux/brotli_probe ref/brotli-1.2.1/tests/testdata/empty.compressed ref/brotli-1.2.1/tests/testdata/empty
+build/linux/brotli_probe ref/brotli-1.2.1/tests/testdata/ukkonooa.compressed ref/brotli-1.2.1/tests/testdata/ukkonooa
+```
+
+The version check expects 1.2.1. The included decoder is instrumented; other
+Brotli components and the linked GRUB library retain their build flags. These
+API checks supplement CLI `.br` listing/extraction and damaged-stream tests.
+
 ## GRUB decompressor synchronization regressions
 
 `upstream_decompress.py` checks gzip, LZOP, XZ (SHA-256) and Zstandard TAR
