@@ -410,7 +410,7 @@ grub_fshelp_read_file (grub_disk_t disk, grub_fshelp_node_t node,
     len = filesize - pos;
 
   blockcnt = ((len + pos) + blocksize - 1) >> (log2blocksize + GRUB_DISK_SECTOR_BITS);
-  max_read = disk->max_agglomerate
+  max_read = (grub_size_t) disk->max_agglomerate
     << (GRUB_DISK_CACHE_BITS + GRUB_DISK_SECTOR_BITS);
 
   for (i = pos >> (log2blocksize + GRUB_DISK_SECTOR_BITS); i < blockcnt;)

@@ -29,7 +29,7 @@
 #include <grub/safemath.h>
 
 #define XXH_STATIC_LINKING_ONLY
-#include <xxhash.h>
+#include <common/xxhash.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");
 

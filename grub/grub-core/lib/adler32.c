@@ -77,7 +77,7 @@ adler32_read (void *context)
     ctx->a -= MOD;
   if (ctx->b > MOD)
     ctx->b -= MOD;
-  ctx->c = grub_cpu_to_be32 (ctx->a | (ctx->b << 16));
+  ctx->c = grub_cpu_to_be32 ((grub_uint32_t) ctx->a | ((grub_uint32_t) ctx->b << 16));
   return (grub_uint8_t *) &ctx->c;
 }
 

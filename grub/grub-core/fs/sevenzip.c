@@ -53,7 +53,7 @@
 #include <miniz.h>
 #include <bzlib.h>
 #include <zstd.h>
-#include <xxhash.h>
+#include <common/xxhash.h>
 #include <lz4.h>
 
 GRUB_MOD_LICENSE ("GPLv3+");

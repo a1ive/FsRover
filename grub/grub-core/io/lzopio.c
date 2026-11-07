@@ -189,7 +189,7 @@ uncompress_block (struct grub_lzopio *lzopio)
   lzo_uint usize = lzopio->block.usize;
 
   if (read_block_data (lzopio) < 0)
-    return -1;
+    goto fail;
 
   /* Incompressible data. */
   if (lzopio->block.csize == lzopio->block.usize)
@@ -201,19 +201,22 @@ uncompress_block (struct grub_lzopio *lzopio)
     {
       lzopio->block.udata = grub_malloc (lzopio->block.usize);
       if (!lzopio->block.udata)
-	return -1;
+	goto fail;
 
       if (lzo1x_decompress_safe (lzopio->block.cdata, lzopio->block.csize,
 				 lzopio->block.udata, &usize, NULL)
 	  != LZO_E_OK)
-	return -1;
+	goto fail;
+
+      if (usize != lzopio->block.usize)
+	goto fail;
 
       if (lzopio->ucheck_fun)
 	{
 	  grub_uint8_t computed_hash[GRUB_CRYPTO_MAX_MDLEN];
 
 	  if (lzopio->ucheck_fun->mdlen > GRUB_CRYPTO_MAX_MDLEN)
-	    return -1;
+	    goto fail;
 
 	  grub_crypto_hash (lzopio->ucheck_fun, computed_hash,
 			    lzopio->block.udata,
@@ -222,7 +225,7 @@ uncompress_block (struct grub_lzopio *lzopio)
 	  if (grub_memcmp
 	      (computed_hash, &lzopio->block.ucheck,
 	       sizeof (lzopio->block.ucheck)) != 0)
-	    return -1;
+	    goto fail;
 	}
 
       /* Compressed data can be free now.  */
@@ -231,6 +234,18 @@ uncompress_block (struct grub_lzopio *lzopio)
     }
 
   return 0;
+
+ fail:
+  /*
+   * grub_lzopio_read() only decompresses a block whose udata is NULL, so a
+   * buffer left behind here would be handed to the next read of the same
+   * offset without being checked again.
+   */
+  grub_free (lzopio->block.udata);
+  grub_free (lzopio->block.cdata);
+  lzopio->block.udata = NULL;
+  lzopio->block.cdata = NULL;
+  return -1;
 }
 
 /* Jump to next block and read its header.  */
@@ -398,9 +413,11 @@ test_header (grub_file_t file)
     goto CORRUPTED;
 
   lzopio->saved_off = 0;
+  grub_free (context);
   return 1;
 
 CORRUPTED:
+  grub_free (context);
   return 0;
 }
 

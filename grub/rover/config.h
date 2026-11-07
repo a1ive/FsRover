@@ -25,14 +25,15 @@
 #ifndef ROVER_GRUB_CONFIG_H
 #define ROVER_GRUB_CONFIG_H	1
 
-#if !defined(_WIN32)
 #include <stddef.h>
-#endif
 
 #if defined(_MSC_VER)
 /* GNU extensions used throughout grub that MSVC does not know.  */
 #define __attribute__(x)
 #define __attribute(x)
+
+/* MSVC provides offsetof in C through the standard header. */
+#define __builtin_offsetof(type, member) offsetof(type, member)
 
 /* "unary minus operator applied to unsigned type" */
 #pragma warning(disable: 4146)

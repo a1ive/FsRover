@@ -295,7 +295,7 @@ lostdisk_open (const char *name, grub_disk_t disk)
 
 	disk->log_sector_size = dev->parent->log_sector_size;
 	disk->total_sectors = dev->sectors >> (disk->log_sector_size - GRUB_DISK_SECTOR_BITS);
-	disk->max_agglomerate = dev->parent->max_agglomerate;
+	grub_disk_set_max_agglomerate (disk, dev->parent->max_agglomerate);
 	disk->id = dev->id;
 	disk->data = dev;
 	return GRUB_ERR_NONE;

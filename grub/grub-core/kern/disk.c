@@ -313,8 +313,7 @@ grub_disk_open (const char *name)
     return 0;
   disk->log_sector_size = GRUB_DISK_SECTOR_BITS;
   /* Default 1MiB of maximum agglomerate.  */
-  disk->max_agglomerate = 1048576 >> (GRUB_DISK_SECTOR_BITS
-				      + GRUB_DISK_CACHE_BITS);
+  grub_disk_set_max_agglomerate (disk, 1048576 >> (GRUB_DISK_SECTOR_BITS + GRUB_DISK_CACHE_BITS));
 
   p = find_part_sep (name);
   if (p)

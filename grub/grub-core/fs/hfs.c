@@ -208,6 +208,7 @@ grub_hfs_block (struct grub_hfs_data *data, grub_hfs_datarecord_t dat,
   for (;;)
     {
       int i;
+      int old_pos = pos;
 
       /* Try all 3 extents.  */
       for (i = 0; i < 3; i++)
@@ -234,13 +235,31 @@ grub_hfs_block (struct grub_hfs_data *data, grub_hfs_datarecord_t dat,
 	  pos += grub_be_to_cpu16 (dr[i].count);
 	}
 
+      /* Prevent recursive extent lookup for the Extents Overflow file. */
+      if (file == GRUB_HFS_CNID_EXT)
+        {
+          grub_error (GRUB_ERR_BAD_FS, "recursive extent overflow lookup");
+          return 0;
+        }
+
+      /* Ensure the extent list makes forward progress. */
+      if (pos <= old_pos)
+        {
+          grub_error (GRUB_ERR_BAD_FS, "invalid HFS extent count");
+          return 0;
+        }
+
       /* Lookup the block in the extent overflow file.  */
       key.first_block = grub_cpu_to_be16 (pos);
       tree = 1;
-      grub_hfs_find_node (data, (char *) &key, data->ext_root,
-			  1, (char *) &dr, sizeof (dr));
-      if (grub_errno)
-	return 0;
+      if (!grub_hfs_find_node (data, (char *) &key, data->ext_root,
+                               1, (char *) &dr, sizeof (dr)))
+        {
+          if (!grub_errno)
+            grub_error (GRUB_ERR_BAD_FS, "extent not found");
+
+          return 0;
+	}
     }
 }
 

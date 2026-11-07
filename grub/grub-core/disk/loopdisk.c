@@ -165,7 +165,7 @@ loopdisk_open (const char *name, grub_disk_t disk)
 	else
 		disk->total_sectors = GRUB_DISK_SIZE_UNKNOWN;
 	/* Avoid reading more than 512MiB at once.  */
-	disk->max_agglomerate = 1 << (29 - GRUB_DISK_SECTOR_BITS - GRUB_DISK_CACHE_BITS);
+	grub_disk_set_max_agglomerate (disk, 1 << (29 - GRUB_DISK_SECTOR_BITS - GRUB_DISK_CACHE_BITS));
 	disk->id = dev->id;
 	disk->data = dev;
 	return GRUB_ERR_NONE;

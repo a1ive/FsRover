@@ -487,6 +487,28 @@ static enum xz_ret dec_stream_header(struct xz_dec *s)
 
 	s->hash_id = s->temp.buf[HEADER_MAGIC_SIZE + 1];
 
+	/*
+	 * dec_stream_header() runs again each time the decoder is reused for a
+	 * new stream (e.g. SquashFS decompresses every block with xz_dec_reset()
+	 * followed by xz_dec_run()).  Free the CRC/hash contexts left over from
+	 * the previous stream before reallocating them below; otherwise they
+	 * leak, as xz_dec_reset() keeps their pointers but this code overwrites
+	 * them.
+	 *
+	 * s->hash is cleared with them: xz_dec_reset() initialises the contexts
+	 * whenever s->hash is set, so it must never be left pointing at a hash
+	 * whose contexts are gone.
+	 */
+	kfree (s->crc32_context);
+	s->crc32_context = NULL;
+	kfree (s->hash_context);
+	s->hash_context = NULL;
+	kfree (s->index.hash.hash_context);
+	s->index.hash.hash_context = NULL;
+	kfree (s->block.hash.hash_context);
+	s->block.hash.hash_context = NULL;
+	s->hash = NULL;
+
 	if (s->crc32)
 	{
 		s->crc32_context = kmalloc(s->crc32->contextsize, GFP_KERNEL);
@@ -504,31 +526,22 @@ static enum xz_ret dec_stream_header(struct xz_dec *s)
 		if (s->hash)
 		{
 			if (s->hash->mdlen != s->hash_size)
+			{
+				s->hash = NULL;
 				return XZ_OPTIONS_ERROR;
+			}
 			s->hash_context = kmalloc(s->hash->contextsize, GFP_KERNEL);
 			if (s->hash_context == NULL)
-			{
-				kfree(s->crc32_context);
-				return XZ_MEMLIMIT_ERROR;
-			}
+				goto fail_hash;
 
 			s->index.hash.hash_context = kmalloc(s->hash->contextsize,
 							     GFP_KERNEL);
 			if (s->index.hash.hash_context == NULL)
-			{
-				kfree(s->hash_context);
-				kfree(s->crc32_context);
-				return XZ_MEMLIMIT_ERROR;
-			}
+				goto fail_hash;
 
 			s->block.hash.hash_context = kmalloc(s->hash->contextsize, GFP_KERNEL);
 			if (s->block.hash.hash_context == NULL)
-			{
-				kfree(s->index.hash.hash_context);
-				kfree(s->hash_context);
-				kfree(s->crc32_context);
-				return XZ_MEMLIMIT_ERROR;
-			}
+				goto fail_hash;
 
 			s->hash->init(s->hash_context, 0);
 			s->hash->init(s->index.hash.hash_context, 0);
@@ -548,6 +561,24 @@ static enum xz_ret dec_stream_header(struct xz_dec *s)
 
 
 	return XZ_OK;
+
+#ifndef GRUB_EMBED_DECOMPRESSOR
+fail_hash:
+	/*
+	 * NULL every pointer as it is freed: xz_dec_end(), and the code above
+	 * on the next reuse of the decoder, free them again.
+	 */
+	kfree(s->block.hash.hash_context);
+	s->block.hash.hash_context = NULL;
+	kfree(s->index.hash.hash_context);
+	s->index.hash.hash_context = NULL;
+	kfree(s->hash_context);
+	s->hash_context = NULL;
+	kfree(s->crc32_context);
+	s->crc32_context = NULL;
+	s->hash = NULL;
+	return XZ_MEMLIMIT_ERROR;
+#endif
 }
 
 /* Decode the Stream Footer field (the last 12 bytes of the .xz Stream) */

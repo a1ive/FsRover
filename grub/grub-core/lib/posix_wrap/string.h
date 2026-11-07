@@ -22,6 +22,15 @@
 #include <grub/misc.h>
 #include <sys/types.h>
 
+#if defined(_MSC_VER)
+/* MSVC reserves these names even when intrinsic expansion is disabled. */
+#define strlen grub_posix_strlen
+#define strcmp grub_posix_strcmp
+#define strcpy grub_posix_strcpy
+#define strncpy grub_posix_strncpy
+#define memchr grub_posix_memchr
+#endif
+
 #define HAVE_STRCASECMP 1
 
 static inline grub_size_t

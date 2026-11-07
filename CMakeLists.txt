@@ -51,6 +51,18 @@ set_property(SOURCE
 	"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/libgcrypt/const-time.c"
 	APPEND PROPERTY COMPILE_OPTIONS -include stdint.h)
 
+# Zstd retains the upstream layout and uses GRUB allocation.
+foreach(SOURCE IN LISTS GRUB_SOURCES)
+	if(SOURCE MATCHES "/grub-core/lib/zstd/.*\\.c$")
+		set_property(SOURCE "${SOURCE}" APPEND PROPERTY COMPILE_DEFINITIONS
+			ZSTD_DISABLE_ASM=1 ZSTD_TRACE=0 _GNU_SOURCE=1)
+		set_property(SOURCE "${SOURCE}" APPEND PROPERTY INCLUDE_DIRECTORIES
+			"${CMAKE_CURRENT_SOURCE_DIR}/grub/grub-core/lib/posix_wrap")
+		set_property(SOURCE "${SOURCE}" APPEND PROPERTY COMPILE_OPTIONS
+			-ffreestanding -fno-builtin)
+	endif()
+endforeach()
+
 add_library(rover-grub STATIC ${GRUB_SOURCES})
 target_include_directories(rover-grub
 	PUBLIC

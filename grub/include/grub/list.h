@@ -53,8 +53,16 @@ grub_bad_type_cast_real (int line, const char *file)
 
 #define grub_bad_type_cast() grub_bad_type_cast_real(__LINE__, GRUB_FILE)
 
+/*
+ * Compare field offsets at compile time rather than via pointer arithmetic
+ * so that UBSan does not flag the address-of-member operation when ptr is
+ * null (e.g. when the list head has not yet been populated).  The result is
+ * identical: both forms test that field sits at the same offset in ptr's
+ * type as it does in type.
+ */
 #define GRUB_FIELD_MATCH(ptr, type, field) \
-  ((char *) &(ptr)->field == (char *) &((type) (ptr))->field)
+  (__builtin_offsetof (typeof (*(ptr)), field) == \
+   __builtin_offsetof (typeof (*((type) (ptr))), field))
 
 #define GRUB_AS_LIST(ptr) \
   (GRUB_FIELD_MATCH (ptr, grub_list_t, next) && GRUB_FIELD_MATCH (ptr, grub_list_t, prev) ? \

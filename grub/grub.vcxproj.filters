@@ -690,31 +690,37 @@
     <ClCompile Include="grub-core\lib\xzembed\xz_dec_stream.c">
       <Filter>grub-core\lib\xzembed</Filter>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\debug.c">
+    <ClCompile Include="grub-core\lib\zstd\common\debug.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\entropy_common.c">
+    <ClCompile Include="grub-core\lib\zstd\common\entropy_common.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\error_private.c">
+    <ClCompile Include="grub-core\lib\zstd\common\error_private.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\fse_decompress.c">
+    <ClCompile Include="grub-core\lib\zstd\common\fse_decompress.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\huf_decompress.c">
+    <ClCompile Include="grub-core\lib\zstd\common\xxhash.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\zstd_common.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\huf_decompress.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_ddict.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_decompress.c">
+      <Filter>grub-core\lib\zstd</Filter>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_decompress_block.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\lib\zstd\module.c">
-      <Filter>grub-core\lib\zstd</Filter>
-    </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\xxhash.c">
-      <Filter>grub-core\lib\zstd</Filter>
-    </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\zstd_common.c">
-      <Filter>grub-core\lib\zstd</Filter>
-    </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\zstd_decompress.c">
       <Filter>grub-core\lib\zstd</Filter>
     </ClCompile>
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_crc.c">

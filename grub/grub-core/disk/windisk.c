@@ -205,7 +205,7 @@ windisk_open (const char *name, grub_disk_t disk)
 	for (disk->log_sector_size = 0; (1U << disk->log_sector_size) < sector_size; disk->log_sector_size++)
 		;
 	disk->total_sectors = size >> disk->log_sector_size;
-	disk->max_agglomerate = 1048576 >> (GRUB_DISK_SECTOR_BITS + GRUB_DISK_CACHE_BITS);
+	grub_disk_set_max_agglomerate (disk, 1048576 >> (GRUB_DISK_SECTOR_BITS + GRUB_DISK_CACHE_BITS));
 	disk->data = data;
 
 	return GRUB_ERR_NONE;

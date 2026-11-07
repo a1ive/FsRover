@@ -622,15 +622,50 @@
       <AdditionalIncludeDirectories>$(ProjectDir)rover\posix;$(ProjectDir)grub-core\lib\xzembed;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_CRT_DECLARE_NONSTDC_NAMES=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ClCompile Include="grub-core\lib\zstd\debug.c" />
-    <ClCompile Include="grub-core\lib\zstd\entropy_common.c" />
-    <ClCompile Include="grub-core\lib\zstd\error_private.c" />
-    <ClCompile Include="grub-core\lib\zstd\fse_decompress.c" />
-    <ClCompile Include="grub-core\lib\zstd\huf_decompress.c" />
-    <ClCompile Include="grub-core\lib\zstd\module.c" />
-    <ClCompile Include="grub-core\lib\zstd\xxhash.c" />
-    <ClCompile Include="grub-core\lib\zstd\zstd_common.c" />
-    <ClCompile Include="grub-core\lib\zstd\zstd_decompress.c" />
+    <ClCompile Include="grub-core\lib\zstd\common\debug.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\entropy_common.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\error_private.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\fse_decompress.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\xxhash.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\common\zstd_common.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\huf_decompress.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_ddict.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_decompress.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\decompress\zstd_decompress_block.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="grub-core\lib\zstd\module.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\posix_wrap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>ZSTD_DISABLE_ASM=1;ZSTD_TRACE=0;_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_crc.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_md5.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_sha1.c" />

@@ -692,7 +692,13 @@ grub_lvm_detect (grub_disk_t disk,
 		    goto lvs_segment_fail;
 		  p += sizeof("type = \"") - 1;
 
-		  lv->size += seg->extent_count * vg->extent_size;
+		  {
+		    grub_uint64_t seg_size;
+
+		    if (grub_mul (seg->extent_count, vg->extent_size, &seg_size)
+			|| grub_add (lv->size, seg_size, &lv->size))
+		      goto lvs_segment_fail;
+		  }
 
 		  if (grub_memcmp (p, "striped\"",
 				   sizeof ("striped\"") - 1) == 0)
@@ -859,6 +865,15 @@ grub_lvm_detect (grub_disk_t disk,
 			  goto lvs_segment_fail;
 			}
 
+		      if (seg->node_count == 0
+			  || (seg->type == GRUB_DISKFILTER_RAID4 && seg->node_count < 2))
+			{
+#ifdef GRUB_UTIL
+			  grub_util_info ("invalid device_count");
+#endif
+			  goto lvs_segment_fail;
+			}
+
 		      if (seg->type != GRUB_DISKFILTER_MIRROR)
 			{
 			  seg->stripe_size = grub_lvm_getvalue (&p, "stripe_size = ");
@@ -898,7 +913,7 @@ grub_lvm_detect (grub_disk_t disk,
 			  while (q < mda_end && *q != '"')
 			    q++;
 
-			  if (q == mda_end)
+			  if (q >= mda_end)
 			    goto lvs_segment_fail2;
 
 			  s = q - p;

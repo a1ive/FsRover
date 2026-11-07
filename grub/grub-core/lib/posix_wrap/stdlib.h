@@ -52,6 +52,10 @@ realloc (void *ptr, grub_size_t size)
   return grub_realloc (ptr, size);
 }
 
+#if defined(_MSC_VER)
+#define abs grub_posix_abs
+#endif
+
 static inline int
 abs (int c)
 {

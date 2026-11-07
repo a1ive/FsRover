@@ -453,6 +453,7 @@ huft_build (unsigned *b,	/* code lengths in bits (all assumed <= BMAX) */
 	    struct huft **t,	/* result: starting table */
 	    int *m)		/* maximum lookup bits, returns actual */
 {
+  struct huft **t_orig = t;	/* saved to null caller's pointer on cleanup */
   unsigned a;			/* counter for codes of length k */
   unsigned c[BMAX + 1];		/* bit length count table */
   unsigned f;			/* i repeats in table every f entries */
@@ -575,8 +576,8 @@ huft_build (unsigned *b,	/* code lengths in bits (all assumed <= BMAX) */
 	      q = (struct huft *) grub_calloc (z + 1, sizeof (struct huft));
 	      if (! q)
 		{
-		  if (h)
-		    huft_free (u[0]);
+		  huft_free (u[0]);
+		  *t_orig = NULL;
 		  return 3;
 		}
 
@@ -614,8 +615,8 @@ huft_build (unsigned *b,	/* code lengths in bits (all assumed <= BMAX) */
 	  else
 	    {
 	      /* Detected an uninitialised value, abort. */
-	      if (h)
-		huft_free (u[0]);
+	      huft_free (u[0]);
+	      *t_orig = NULL;
 	      return 2;
 	    }
 
@@ -1027,6 +1028,7 @@ init_dynamic_block (grub_gzio_t gzio)
   gzio->bl = lbits;
   if (huft_build (ll, nl, 257, cplens, cplext, &gzio->tl, &gzio->bl) != 0)
     {
+      huft_free (gzio->tl);
       gzio->tl = 0;
       grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
 		  "failed in building a Huffman code table");
@@ -1037,6 +1039,7 @@ init_dynamic_block (grub_gzio_t gzio)
     {
       huft_free (gzio->tl);
       gzio->tl = 0;
+      huft_free (gzio->td);
       gzio->td = 0;
       grub_error (GRUB_ERR_BAD_COMPRESSED_DATA,
 		  "failed in building a Huffman code table");
@@ -1463,6 +1466,10 @@ grub_zlib_decompress (char *inbuf, grub_size_t insize, grub_off_t off,
     }
 
   ret = grub_gzio_read_real (gzio, off, outbuf, outsize);
+  /* Free the Huffman tables of the last block, as grub_gzio_close() does. */
+  huft_free (gzio->tl);
+  huft_free (gzio->td);
+  grub_free (gzio->hcontext);
   grub_free (gzio);
 
   /* FIXME: Check Adler.  */
@@ -1486,6 +1493,10 @@ grub_deflate_decompress (char *inbuf, grub_size_t insize, grub_off_t off,
   initialize_tables (gzio);
 
   ret = grub_gzio_read_real (gzio, off, outbuf, outsize);
+  /* Free the Huffman tables of the last block, as grub_gzio_close() does. */
+  huft_free (gzio->tl);
+  huft_free (gzio->td);
+  grub_free (gzio->hcontext);
   grub_free (gzio);
 
   return ret;

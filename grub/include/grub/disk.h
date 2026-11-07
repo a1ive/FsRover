@@ -191,6 +191,12 @@ typedef struct grub_disk_memberlist *grub_disk_memberlist_t;
 
 #define GRUB_DISK_MAX_MAX_AGGLOMERATE ((1 << (30 - GRUB_DISK_CACHE_BITS - GRUB_DISK_SECTOR_BITS)) - 1)
 
+static inline void
+grub_disk_set_max_agglomerate (grub_disk_t disk, unsigned int max_agglomerate)
+{
+  disk->max_agglomerate = grub_min (max_agglomerate, GRUB_DISK_MAX_MAX_AGGLOMERATE);
+}
+
 /* Maximum number of sectors to read in LBA mode at once. */
 #define GRUB_DISK_MAX_LBA_SECTORS 63
 
