@@ -239,6 +239,11 @@ twp__STORAGE unsigned char *twp_read(const char *file_path, int *width, int *hei
 twp__STORAGE unsigned char *twp_read_from_memory(void *data, int data_len, int *width,
                                     int *height, twp_format format, twp_flags flags);
 
+/* Limit the decoded pixel count. On failure, fallback_size receives the
+ * validated RIFF extent if a platform decoder may be tried, or zero. */
+twp__STORAGE unsigned char *twp_read_from_memory_limited(void *data, int data_len,
+	int *width, int *height, twp_format format, twp_flags flags, int max_pixels, int *fallback_size);
+
 twp__STORAGE void twp_unpack_yuv(unsigned char *ptr, int width, int height,
                     unsigned char **y, unsigned char **u, unsigned char **v, unsigned char **a,
                     int *luma_stride, int *chroma_stride, int *alpha_stride);
@@ -322,11 +327,10 @@ typedef struct {
 } twp__chunk;
 
 typedef struct {
-    twp__chunk VP8X;
     twp__chunk VP8L;
     twp__chunk VP8;
     twp__chunk ALPH;
-} twp__chunk_table;
+} twp__image_chunks;
 
 typedef struct {
     unsigned char *data;
@@ -338,6 +342,7 @@ typedef struct {
     uint32_t bits;
 #endif
     int num_bits;
+	int *allocation_failed;
 } twp__bit_reader;
 
 typedef struct twp__huffman_table {
@@ -529,15 +534,25 @@ twp__INLINE static int twp__read_bits(twp__bit_reader *reader, int n)
     return result;
 }
 
-static uint16_t *twp__allocate_huffman_entries(int count)
+static void *twp__record_allocation(void *ptr, int *allocation_failed)
 {
-    uint16_t *entries = (uint16_t *)malloc(count * sizeof(*entries));
+	if (!ptr)
+		*allocation_failed = 1;
+	return ptr;
+}
+
+static uint16_t *twp__allocate_huffman_entries(int count, int *allocation_failed)
+{
+	uint16_t *entries = (uint16_t *)twp__record_allocation(
+		malloc(count * sizeof(*entries)), allocation_failed);
+	if (!entries) return NULL;
     for (int i = 0; i < count; ++i)
         entries[i] = twp__INVALID_HUFFMAN_SYMBOL_MASK;
     return entries;
 }
 
-static void twp__construct_simple_huffman_table(int a, int b, twp__huffman_table *table)
+static int twp__construct_simple_huffman_table(int a, int b, twp__huffman_table *table,
+	int *allocation_failed)
 {
     // this is needed for simple huffman codes because in that case the symbols not implicit
     // in the order of the code length array, as is assumed in construct_huffman_table().
@@ -557,14 +572,17 @@ static void twp__construct_simple_huffman_table(int a, int b, twp__huffman_table
 
     if (b == -1) {
         table->max_code_length = 0;
-        table->entries = twp__allocate_huffman_entries(1);
+		table->entries = twp__allocate_huffman_entries(1, allocation_failed);
+		if (!table->entries) return 0;
         table->entries[0] = (uint16_t)(a << 4);
     } else {
         table->max_code_length = 1;
-        table->entries = twp__allocate_huffman_entries(2);
+		table->entries = twp__allocate_huffman_entries(2, allocation_failed);
+		if (!table->entries) return 0;
         table->entries[0] = (uint16_t)(1 | (a << 4));
         table->entries[1] = (uint16_t)(1 | (b << 4));
     }
+	return 1;
 }
 
 static void twp__free_huffman_table(twp__huffman_table *table)
@@ -577,7 +595,7 @@ static void twp__free_huffman_table(twp__huffman_table *table)
 }
 
 static int twp__insert_huffman_table_entry(twp__huffman_table *table, int code, int code_length,
-                                           int symbol, int max_subtable_code_length)
+	int symbol, int max_subtable_code_length, int *allocation_failed)
 {
     if (code_length <= table->max_code_length) {
         int num_trash_bits = table->max_code_length - code_length;
@@ -609,23 +627,30 @@ static int twp__insert_huffman_table_entry(twp__huffman_table *table, int code, 
 
             twp__assert(table->num_subtables < (1 << twp__HUFFMAN_SPLIT));
             if (table->num_subtables >= table->max_subtables) {
-                table->max_subtables = table->max_subtables ? table->max_subtables*2 : 4;
-                table->subtables = (twp__huffman_table *)realloc(table->subtables, table->max_subtables * sizeof(twp__huffman_table));
+				int capacity = table->max_subtables ? table->max_subtables * 2 : 4;
+				twp__huffman_table *subtables = (twp__huffman_table *)twp__record_allocation(
+					realloc(table->subtables, capacity * sizeof(*subtables)), allocation_failed);
+				if (!subtables) return 0;
+				table->subtables = subtables;
+				table->max_subtables = capacity;
             }
 
             int subtable_idx = table->num_subtables++;
             sub = table->subtables + subtable_idx;
             memset(sub, 0, sizeof(*sub));
             sub->max_code_length = max_subtable_code_length;
-            sub->entries = twp__allocate_huffman_entries(1 << max_subtable_code_length);
+			sub->entries = twp__allocate_huffman_entries(1 << max_subtable_code_length, allocation_failed);
+			if (!sub->entries) return 0;
             table->entries[code_first_part] = (uint16_t)((subtable_idx << 4) | 0xF);
         }
 
-        return twp__insert_huffman_table_entry(sub, code >> twp__HUFFMAN_SPLIT, code_length - twp__HUFFMAN_SPLIT, symbol, 0);
+		return twp__insert_huffman_table_entry(sub, code >> twp__HUFFMAN_SPLIT,
+			code_length - twp__HUFFMAN_SPLIT, symbol, 0, allocation_failed);
     }
 }
 
-static int twp__construct_huffman_table(int *code_lengths, int num_code_lengths, twp__huffman_table *table)
+static int twp__construct_huffman_table(int *code_lengths, int num_code_lengths, twp__huffman_table *table,
+	int *allocation_failed)
 {
     if (num_code_lengths <= 0)
         return 0;
@@ -645,8 +670,7 @@ static int twp__construct_huffman_table(int *code_lengths, int num_code_lengths,
     if ((max_code_length == 1) && (code_length_histogram[1] == 1)) {
         // special case when we have only one entry in the huffman table
         twp__assert(nz_sym != -1);
-        twp__construct_simple_huffman_table(nz_sym, -1, table);
-        return 1;
+		return twp__construct_simple_huffman_table(nz_sym, -1, table, allocation_failed);
     }
 
     if (max_code_length > twp__MAX_VP8L_HUFFMAN_CODE_LENGTH)
@@ -663,7 +687,8 @@ static int twp__construct_huffman_table(int *code_lengths, int num_code_lengths,
     }
 
     table->max_code_length = max_main_table_code_length;
-    table->entries = twp__allocate_huffman_entries(1 << max_main_table_code_length);
+	table->entries = twp__allocate_huffman_entries(1 << max_main_table_code_length, allocation_failed);
+	if (!table->entries) return 0;
     table->num_subtables = 0;
     table->max_subtables = 0;
     table->subtables = NULL;
@@ -688,7 +713,8 @@ static int twp__construct_huffman_table(int *code_lengths, int num_code_lengths,
             reversed_code |= bit << (code_length - j - 1);
         }
 
-        if (!twp__insert_huffman_table_entry(table, reversed_code, code_length, symbol, max_subtable_code_length)) {
+		if (!twp__insert_huffman_table_entry(table, reversed_code, code_length, symbol,
+			max_subtable_code_length, allocation_failed)) {
             twp__free_huffman_table(table);
             return 0;
         }
@@ -784,8 +810,7 @@ static int twp__read_prefix_code(twp__bit_reader *reader, int color_cache_size, 
             if (sym1 == -1) return 0;
         }
 
-        twp__construct_simple_huffman_table(sym0, sym1, result);
-        return 1;
+		return twp__construct_simple_huffman_table(sym0, sym1, result, reader->allocation_failed);
     } else {
         // the huffman code lengths themselves are huffman coded
 
@@ -850,12 +875,15 @@ static int twp__read_prefix_code(twp__bit_reader *reader, int color_cache_size, 
         }
 
         twp__huffman_table code_lengths_ht;
-        if (!twp__construct_huffman_table(code_length_code_lengths, NUM_CODE_LENGTH_CODE_LENGTHS, &code_lengths_ht))
-            return 0;
+		if (!twp__construct_huffman_table(code_length_code_lengths, NUM_CODE_LENGTH_CODE_LENGTHS,
+			&code_lengths_ht, reader->allocation_failed))
+			return 0;
 
         int ok = 0;
-        int *code_lengths = (int *)calloc(num_code_length_symbols, sizeof(*code_lengths));
+		int *code_lengths = (int *)twp__record_allocation(
+			calloc(num_code_length_symbols, sizeof(*code_lengths)), reader->allocation_failed);
         int count = 0;
+		if (!code_lengths) goto end;
         for (;;) {
             if (count >= num_code_length_symbols) break;
             if (num_code_length_symbols_to_decode == 0) break;
@@ -900,8 +928,9 @@ static int twp__read_prefix_code(twp__bit_reader *reader, int color_cache_size, 
         if (num_code_length_symbols_to_decode != 0 && num_code_length_symbols_to_decode != -1)
             goto end;
 
-        if (!twp__construct_huffman_table(code_lengths, num_code_length_symbols, result))
-            goto end;
+		if (!twp__construct_huffman_table(code_lengths, num_code_length_symbols, result,
+			reader->allocation_failed))
+			goto end;
 
         ok = 1;
 
@@ -931,6 +960,7 @@ static twp__rgba8 *twp__read_coded_image(twp__bit_reader *reader, int width, int
     twp__meta_prefix_img meta_prefix;
     twp__prefix_code_group *prefix_code_groups = NULL;
     int num_prefix_code_groups = 0;
+	int initialized_groups = 0;
     int num_pix = width * height;
 
     memset(&color_cache, 0, sizeof(color_cache));
@@ -944,7 +974,9 @@ static twp__rgba8 *twp__read_coded_image(twp__bit_reader *reader, int width, int
         if (color_cache.pow2 < 1 || color_cache.pow2 > 11) goto err;
 
         color_cache.size = 1 << color_cache.pow2;
-        color_cache.cache = (twp__rgba8 *)calloc(color_cache.size, sizeof(twp__rgba8));
+		color_cache.cache = (twp__rgba8 *)twp__record_allocation(
+			calloc(color_cache.size, sizeof(twp__rgba8)), reader->allocation_failed);
+		if (!color_cache.cache) goto err;
     }
 
     if (main) { // only the main image has meta prefix codes, sub images do not
@@ -972,13 +1004,17 @@ static twp__rgba8 *twp__read_coded_image(twp__bit_reader *reader, int width, int
     }
     ++num_prefix_code_groups;
 
-    prefix_code_groups = (twp__prefix_code_group *)malloc(num_prefix_code_groups * sizeof(twp__prefix_code_group));
-    for (int i = 0; i < num_prefix_code_groups; ++i) {
-        if (!twp__read_prefix_code_group(reader, color_cache.size, prefix_code_groups + i))
-            goto err;
-    }
+	prefix_code_groups = (twp__prefix_code_group *)twp__record_allocation(
+		malloc(num_prefix_code_groups * sizeof(*prefix_code_groups)), reader->allocation_failed);
+	if (!prefix_code_groups) goto err;
+	for (; initialized_groups < num_prefix_code_groups; ++initialized_groups) {
+		if (!twp__read_prefix_code_group(reader, color_cache.size, prefix_code_groups + initialized_groups))
+			goto err;
+	}
 
-    result = (twp__rgba8 *)malloc(num_pix * 4);
+	result = (twp__rgba8 *)twp__record_allocation(
+		malloc((size_t)num_pix * sizeof(*result)), reader->allocation_failed);
+	if (!result) goto err;
     for (int i = 0; i < num_pix;) {
         int x = i % width;
         int y = i / width;
@@ -1070,7 +1106,7 @@ err:
 end:
     free(color_cache.cache);
     free(meta_prefix.img);
-    for (int i = 0; i < num_prefix_code_groups; ++i) {
+	for (int i = 0; i < initialized_groups; ++i) {
         for (int j = 0; j < 5; ++j) {
             twp__free_huffman_table(&prefix_code_groups[i].arr[j]);
         }
@@ -1207,7 +1243,8 @@ twp__INLINE static int twp__color_transform_delta(int t, int c)
     return (int8_t)((t * c) >> 5);
 }
 
-static twp__rgba8 *twp__reverse_transform(twp__rgba8 *img, int width, int height, twp__transform *tf)
+static twp__rgba8 *twp__reverse_transform(twp__rgba8 *img, int width, int height, twp__transform *tf,
+	int *allocation_failed)
 {
     switch (tf->type) {
         case twp__TRANSFORM_PREDICTOR: {
@@ -1362,7 +1399,13 @@ static twp__rgba8 *twp__reverse_transform(twp__rgba8 *img, int width, int height
 
                 int bits_per_idx = 8 / tf->color_idxing.width_divider;
                 int idx_bit_mask = (1 << bits_per_idx) - 1;
-                twp__rgba8 *new_img = (twp__rgba8 *)malloc(tf->color_idxing.orig_width * height * 4);
+				twp__rgba8 *new_img = (twp__rgba8 *)twp__record_allocation(
+					malloc((size_t)tf->color_idxing.orig_width * height * sizeof(*new_img)),
+					allocation_failed);
+				if (!new_img) {
+					free(img);
+					return NULL;
+				}
 
                 for (int y = 0; y < height; ++y) {
                     for (int x = 0; x < tf->color_idxing.orig_width; ++x) {
@@ -1405,7 +1448,22 @@ static int twp__read_vp8l_header(twp__bit_reader *reader, int *width, int *heigh
     return 1;
 }
 
-static unsigned char *twp__read_vp8l(void *data, int data_len, int *width, int *height, twp_format format, int is_vp8_alpha)
+typedef struct {
+	int width;
+	int height;
+	int max_pixels;
+} twp__canvas_limits;
+
+static int twp__allowed_size(int width, int height, const twp__canvas_limits *limits)
+{
+	return width > 0 && height > 0 && width <= limits->max_pixels / height
+		&& (!limits->width || (width == limits->width && height == limits->height));
+}
+
+/* A compressed alpha plane has no VP8L header. Its size comes from the
+ * successfully decoded, already checked VP8 frame. */
+static unsigned char *twp__read_vp8l(void *data, int data_len, int *width, int *height,
+	twp_format format, int is_alpha, int *allocation_failed)
 {
     if (format == twp_FORMAT_YUV || format == twp_FORMAT_YUVA)
         return NULL;
@@ -1414,9 +1472,10 @@ static unsigned char *twp__read_vp8l(void *data, int data_len, int *width, int *
     memset(&reader, 0, sizeof(reader));
     reader.data = (unsigned char *)data;
     reader.num_bytes = data_len;
+	reader.allocation_failed = allocation_failed;
 
-    if (!is_vp8_alpha && !twp__read_vp8l_header(&reader, width, height))
-        return NULL;
+	if (!is_alpha && !twp__read_vp8l_header(&reader, width, height))
+		return NULL;
 
     twp__transform transforms[twp__TRANSFORM_COUNT];
     int num_transforms = twp__read_transforms(&reader, transforms, *width, *height);
@@ -1442,7 +1501,7 @@ static unsigned char *twp__read_vp8l(void *data, int data_len, int *width, int *
         twp__transform *tf = transforms + i;
 
         int width_to_use = got_citf ? *width : divided_width;
-        img = twp__reverse_transform(img, width_to_use, *height, tf);
+		img = twp__reverse_transform(img, width_to_use, *height, tf, allocation_failed);
         if (!img) break;
 
         if (tf->type == twp__TRANSFORM_COLOR_INDEXING) {
@@ -1453,7 +1512,12 @@ static unsigned char *twp__read_vp8l(void *data, int data_len, int *width, int *
     twp__free_transforms(transforms, num_transforms);
 
     if (img && format == twp_FORMAT_RGB) {
-        unsigned char *rgb = (unsigned char *)malloc(*width * *height * 3);
+		unsigned char *rgb = (unsigned char *)twp__record_allocation(
+			malloc((size_t)*width * *height * 3), allocation_failed);
+		if (!rgb) {
+			free(img);
+			return NULL;
+		}
         unsigned char *ptr = rgb;
         for (int i = 0; i < *width * *height; ++i) {
             *ptr++ = img[i].r;
@@ -2243,20 +2307,20 @@ typedef struct {
     uint8_t *plane_y;
     uint8_t *plane_u;
     uint8_t *plane_v;
+	int *allocation_failed;
 } twp__vp8_data;
 
 #define twp__UNCOMPRESSED_VP8_HEADER_SIZE 10
 
 static void twp__init_arith_decoder(twp__arith_dec *dec, uint8_t *data, int data_len)
 {
-    twp__assert(data_len >= 1);
-
     dec->data = data;
     dec->data_len = data_len;
-    dec->data_at = 1;
-    dec->value = (twp__arith_dec_type)data[0] << twp__ARITH_DEC_SHIFT;
+	dec->data_at = data_len != 0;
+	dec->value = data_len ? (twp__arith_dec_type)data[0] << twp__ARITH_DEC_SHIFT : 0;
     dec->range = 255;
-    dec->num_bits = 0;
+	/* An unused token partition can be empty. Flag it only if read. */
+	dec->num_bits = data_len ? 0 : -1;
     dec->err = 0;
 }
 
@@ -2279,6 +2343,8 @@ twp__INLINE static int twp__read_arith_bit(twp__arith_dec *dec, int prob)
             dec->num_bits += bytes_left * 8;
         } else {
             dec->err = 1;
+			dec->num_bits = -1;
+			return 0;
         }
     }
 
@@ -2910,27 +2976,39 @@ static void twp__predict_macroblock(uint8_t *buf, twp__mb_info *mb_info, int chr
     }
 }
 
+typedef struct {
+	int width;
+	int height;
+	int first_partition_size;
+} twp__vp8_frame_header;
+
+static int twp__read_vp8_frame_header(const uint8_t *bytes, int size, twp__vp8_frame_header *header)
+{
+	if (size < twp__UNCOMPRESSED_VP8_HEADER_SIZE || (bytes[0] & 1)) return 0;
+	if (bytes[3] != 0x9d || bytes[4] != 0x01 || bytes[5] != 0x2a) return 0;
+	header->first_partition_size = (bytes[0] >> 5) | (bytes[1] << 3) | (bytes[2] << 11);
+	if (header->first_partition_size < 1
+		|| header->first_partition_size > size - twp__UNCOMPRESSED_VP8_HEADER_SIZE)
+		return 0;
+	header->width = bytes[6] | ((bytes[7] & 0x3f) << 8);
+	header->height = bytes[8] | ((bytes[9] & 0x3f) << 8);
+	return header->width > 0 && header->height > 0;
+}
+
 static int twp__read_vp8_header(twp__vp8_data *data, uint8_t *raw_bytes, int num_bytes)
 {
-    if (num_bytes < twp__UNCOMPRESSED_VP8_HEADER_SIZE) return 0;
-
-    int frame_type = raw_bytes[0] & 0x1;
-    if (frame_type != 0) return 0; // 0 == keyframe, 1 == interframes, since we are decoding webp we only accept keyframes
+	twp__vp8_frame_header header;
+	if (!twp__read_vp8_frame_header(raw_bytes, num_bytes, &header)) return 0;
 
     int show_frame = (raw_bytes[0] >> 4) & 0x1;
     if (show_frame != 1) return 0; // i assume this should always be 1 for keyframes?
 
-    data->first_partition_size = (((int)raw_bytes[0] >> 5) & 0x7) | ((int)raw_bytes[1] << 3) | ((int)raw_bytes[2] << 11);
-    if (data->first_partition_size > num_bytes - twp__UNCOMPRESSED_VP8_HEADER_SIZE) return 0;
-
-    int magic = (int)raw_bytes[3] | ((int)raw_bytes[4] << 8) | ((int)raw_bytes[5] << 16);
-    if (magic != 0x2a019d) return 0;
-
     // todo: currently, the upscaling options have no effect, consistent with libwebp's behavior. in the future,
     //       it might be worth adding an option to actually upscale the image, rather than just ignoring this setting
-    data->width = (int)raw_bytes[6] | (((int)raw_bytes[7] & 0x3f) << 8);
+	data->first_partition_size = header.first_partition_size;
+	data->width = header.width;
     data->upscaling_x = (twp__upscaling)(raw_bytes[7] >> 6);
-    data->height = (int)raw_bytes[8] | (((int)raw_bytes[9] & 0x3f) << 8);
+	data->height = header.height;
     data->upscaling_y = (twp__upscaling)(raw_bytes[9] >> 6);
 
     data->luma_width = twp__div_round_up(data->width, 16) * 16;
@@ -3064,7 +3142,9 @@ static int twp__read_vp8_header(twp__vp8_data *data, uint8_t *raw_bytes, int num
 
     // frame header finished, continue with macroblock prediction records
 
-    data->mb_infos = (twp__mb_info *)calloc(data->num_mbs, sizeof(*data->mb_infos));
+	data->mb_infos = (twp__mb_info *)twp__record_allocation(
+		calloc(data->num_mbs, sizeof(*data->mb_infos)), data->allocation_failed);
+	if (!data->mb_infos) return 0;
 
     for (int mb_idx = 0; mb_idx < data->num_mbs; ++mb_idx) {
         twp__mb_info *mb_info = data->mb_infos + mb_idx;
@@ -3209,7 +3289,9 @@ static int twp__read_yuv_data(twp__vp8_data *data, twp_format format)
     int y_bufsize = data->luma_stride * (data->luma_height+1);
     int uv_bufsize = data->chroma_stride * (data->chroma_height+1);
     int a_bufsize = (format == twp_FORMAT_YUVA) ? (data->width * data->height) : 0;
-    data->plane_y = (uint8_t *)malloc(y_bufsize + uv_bufsize*2 + a_bufsize);
+	data->plane_y = (uint8_t *)twp__record_allocation(
+		malloc(y_bufsize + uv_bufsize * 2 + a_bufsize), data->allocation_failed);
+	if (!data->plane_y) return 0;
     data->plane_u = data->plane_y + y_bufsize;
     data->plane_v = data->plane_u + uv_bufsize;
 
@@ -3233,7 +3315,9 @@ static int twp__read_yuv_data(twp__vp8_data *data, twp_format format)
     uint8_t nz_left[twp__NUM_DCT_PLANES][4];
     uint8_t *nz_above[twp__NUM_DCT_PLANES];
     int nz_above_alloc_size = data->mbs_per_row*4 + data->mbs_per_row + data->mbs_per_row*2 + data->mbs_per_row*2; // y + y2 + u + v
-    uint8_t *nz_above_alloc = (uint8_t *)calloc(nz_above_alloc_size, sizeof(**nz_above));
+	uint8_t *nz_above_alloc = (uint8_t *)twp__record_allocation(
+		calloc(nz_above_alloc_size, sizeof(**nz_above)), data->allocation_failed);
+	if (!nz_above_alloc) return 0;
     nz_above[twp__DCT_PLANE_Y] = nz_above_alloc;
     nz_above[twp__DCT_PLANE_Y2] = nz_above[twp__DCT_PLANE_Y] + data->mbs_per_row*4;
     nz_above[twp__DCT_PLANE_U] = nz_above[twp__DCT_PLANE_Y2] + data->mbs_per_row;
@@ -4280,7 +4364,8 @@ static void twp__do_loop_filtering(twp__vp8_data *data)
 }
 
 static uint8_t *twp_yuv_to_rgb(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plane_v,
-            int img_width, int img_height, int luma_stride, int chroma_stride, int rgba)
+	int img_width, int img_height, int luma_stride, int chroma_stride, int rgba,
+	int *allocation_failed)
 {
     // https://en.wikipedia.org/wiki/YCbCr#ITU-R_BT.601_conversion
 
@@ -4290,7 +4375,9 @@ static uint8_t *twp_yuv_to_rgb(uint8_t *plane_y, uint8_t *plane_u, uint8_t *plan
     // floating point implementation
 
     int comp = rgba ? 4 : 3;
-    uint8_t *mem = (uint8_t *)malloc(img_width * img_height * comp);
+	uint8_t *mem = (uint8_t *)twp__record_allocation(
+		malloc((size_t)img_width * img_height * comp), allocation_failed);
+	if (!mem) return NULL;
 
     uint8_t *src_y = plane_y + luma_stride + 1;
     uint8_t *src_u = plane_u + chroma_stride + 1;
@@ -4390,14 +4477,16 @@ static void twp__vp8_init(twp__vp8_data *data)
         data->segment_id_tree_probs[i] = 255;
 }
 
-static uint8_t *twp__read_vp8(void *raw_bytes, int num_bytes, int *width, int *height, twp_format format, twp_flags flags)
+static uint8_t *twp__read_vp8(void *raw_bytes, int num_bytes, int *width, int *height,
+	twp_format format, twp_flags flags, int *allocation_failed)
 {
     uint8_t *result = NULL;
 
     twp__vp8_data data;
     twp__vp8_init(&data);
+	data.allocation_failed = allocation_failed;
 
-    if (!twp__read_vp8_header(&data, (uint8_t *)raw_bytes, num_bytes)) goto end;
+	if (!twp__read_vp8_header(&data, (uint8_t *)raw_bytes, num_bytes)) goto end;
     if (!twp__read_yuv_data(&data, format)) goto end;
 
     if (!(flags & twp_FLAG_SKIP_LOOP_FILTER))
@@ -4413,19 +4502,21 @@ static uint8_t *twp__read_vp8(void *raw_bytes, int num_bytes, int *width, int *h
 
     result = twp_yuv_to_rgb(data.plane_y, data.plane_u, data.plane_v, data.width,
                             data.height, data.luma_stride, data.chroma_stride,
-                            format == twp_FORMAT_RGBA);
+		format == twp_FORMAT_RGBA, allocation_failed);
 
 end:;
 
-    if (format != twp_FORMAT_YUV && format != twp_FORMAT_YUVA)
-        free(data.plane_y);
+	if (result != data.plane_y)
+		free(data.plane_y);
     free(data.mb_infos);
 
     return result;
 }
 
-static int twp__read_alpha(void *data, int data_len, int width, int height, unsigned char *pix, int yuva)
+static int twp__read_alpha(void *data, int data_len, int width, int height, unsigned char *pix,
+	int yuva, int *allocation_failed)
 {
+	if (data_len < 1) return 0;
     unsigned char *u8data = (unsigned char *)data;
 
     int hdr = *u8data;
@@ -4446,7 +4537,8 @@ static int twp__read_alpha(void *data, int data_len, int width, int height, unsi
         src_pixsize = 1;
         src = u8data + 1;
     } else {
-        buf = twp__read_vp8l(u8data + 1, data_len-1, &width, &height, twp_FORMAT_RGBA, 1);
+		buf = twp__read_vp8l(u8data + 1, data_len - 1, &width, &height, twp_FORMAT_RGBA, 1,
+			allocation_failed);
         if (!buf)
             return 0;
         src_pixsize = 4;
@@ -4509,101 +4601,189 @@ static int twp__read_alpha(void *data, int data_len, int width, int height, unsi
     return 1;
 }
 
-static int twp__read_chunks(unsigned char *u8data, int data_len, twp__chunk_table *table)
+/* Read one RIFF chunk without crossing the enclosing extent. */
+static int twp__chunk_extent(const unsigned char *chunk, int remaining, int *size)
 {
-    // the spec says chunks should be in a specific order, but we don't really care,
-    // so we don't bother checking
-
-    memset(table, 0, sizeof(*table));
-
-    // this needs 2 variables because first can be NULL
-    int first_iter = 1;
-    twp__chunk *first = NULL;
-
-    unsigned char *chunk = u8data + 12;
-    while (chunk+8 <= u8data+data_len) {
-        uint32_t size = (uint32_t)chunk[4] | ((uint32_t)chunk[5] << 8) | ((uint32_t)chunk[6] << 16) | ((uint32_t)chunk[7] << 24);
-        if (size > INT32_MAX) return 0;
-
-        unsigned char *chunk_data = chunk + 8;
-        if (chunk_data+size > u8data+data_len) return 0;
-
-        twp__chunk *c = NULL;
-        if (twp__check_fourcc(chunk, "ANIM")) return 0; // not supported
-        else if (twp__check_fourcc(chunk, "VP8X")) c = &table->VP8X;
-        else if (twp__check_fourcc(chunk, "VP8L")) c = &table->VP8L;
-        else if (twp__check_fourcc(chunk, "VP8 ")) c = &table->VP8;
-        else if (twp__check_fourcc(chunk, "ALPH")) c = &table->ALPH;
-
-        if (c) {
-            if (c->data) return 0; // found same chunk twice
-            c->data = chunk_data;
-            c->size = (int)size;
-        }
-
-        if (first_iter) {
-            first = c;
-            first_iter = 0;
-        }
-
-        chunk += 8 + size;
-        if (size & 1) ++chunk; // if chunk size is odd, a single padding byte is added
-    }
-
-    // validate
-
-    // while we genrally do not care about chunk order, twp_get_info() requires that the first chunk
-    // is correct, since it only reads that one. so to be consistent, we enforce this here as well
-    if (first != &table->VP8X && first != &table->VP8L && first != &table->VP8)
-        return 0;
-
-    if (table->ALPH.data && !table->VP8X.data) return 0; // alpha chunk is only allowed in the extended format
-    if (!table->VP8L.data && !table->VP8.data) return 0; // must have either lossless or lossy chunk
-    if (table->VP8L.data && table->ALPH.data)  return 0; // can't have an alpha chunk with a lossless chunk
-    if (table->VP8L.data && table->VP8.data)   return 0; // can't have both lossless and lossy chunks
-
-    return 1;
+	if (remaining < 8) return 0;
+	uint32_t length = (uint32_t)chunk[4] | ((uint32_t)chunk[5] << 8)
+		| ((uint32_t)chunk[6] << 16) | ((uint32_t)chunk[7] << 24);
+	uint32_t available = (uint32_t)(remaining - 8);
+	if (length > available || (length & 1) > available - length) return 0;
+	*size = (int)length;
+	return 8 + *size + (*size & 1);
 }
 
-twp__STORAGE unsigned char *twp_read_from_memory(void *data, int data_len, int *width, int *height, twp_format format, twp_flags flags)
+static int twp__read_le24(const unsigned char *p)
 {
-    unsigned char *u8data = (unsigned char *)data;
+	return p[0] | (p[1] << 8) | (p[2] << 16);
+}
 
-    if (data_len < twp__MIN_FILE_SIZE) return NULL;
-    if (!twp__check_fourcc(u8data, "RIFF")) return NULL;
-    if (!twp__check_fourcc(u8data + 8, "WEBP")) return NULL;
+static int twp__collect_image_chunk(unsigned char *chunk, int size, twp__image_chunks *image)
+{
+	twp__chunk *slot;
+	if (twp__check_fourcc(chunk, "VP8L")) {
+		if (image->VP8.data || image->ALPH.data) return 0;
+		slot = &image->VP8L;
+	} else if (twp__check_fourcc(chunk, "VP8 ")) {
+		if (image->VP8L.data) return 0;
+		slot = &image->VP8;
+	} else if (twp__check_fourcc(chunk, "ALPH")) {
+		if (image->VP8.data || image->VP8L.data) return 0;
+		slot = &image->ALPH;
+	} else {
+		return 1;
+	}
+	if (slot->data) return 0;
+	slot->data = chunk + 8;
+	slot->size = size;
+	return 1;
+}
 
-    uint32_t hdr_file_size = (uint32_t)u8data[4] | ((uint32_t)u8data[5] << 8) | ((uint32_t)u8data[6] << 16) | ((uint32_t)u8data[7] << 24);
-    if ((uint64_t)hdr_file_size+8 > INT32_MAX) return NULL; // not supported, we use ints everywhere
-    if ((int)hdr_file_size+8 > data_len) return NULL; // the spec says we "may" parse files that have useless trailing bytes, so we do > insted of !=
+/* Use the same coded headers for preflight and for the built-in decoder. */
+static int twp__validate_image_chunks(const twp__image_chunks *image, const twp__canvas_limits *limits)
+{
+	int width, height;
+	if (image->VP8L.data) {
+		twp__bit_reader reader = {0};
+		reader.data = (unsigned char *)image->VP8L.data;
+		reader.num_bytes = image->VP8L.size;
+		if (!twp__read_vp8l_header(&reader, &width, &height)) return 0;
+	} else if (image->VP8.data) {
+		twp__vp8_frame_header header;
+		if (!twp__read_vp8_frame_header((const uint8_t *)image->VP8.data, image->VP8.size, &header))
+			return 0;
+		width = header.width;
+		height = header.height;
+	} else {
+		return 0;
+	}
+	if (!twp__allowed_size(width, height, limits)) return 0;
+	if (image->ALPH.data) {
+		if (image->ALPH.size < 2) return 0;
+		int compression = *(const uint8_t *)image->ALPH.data & 3;
+		if (compression == 0)
+			return image->ALPH.size - 1 == width * height;
+		return compression == 1;
+	}
+	return 1;
+}
 
-    twp__chunk_table chunks;
-    if (!twp__read_chunks(u8data, data_len, &chunks))
-        return 0;
+static int twp__validate_animation_frame(unsigned char *frame, int size, const twp__canvas_limits *canvas)
+{
+	if (size < 16) return 0;
+	int x = 2 * twp__read_le24(frame);
+	int y = 2 * twp__read_le24(frame + 3);
+	twp__canvas_limits bounds = {
+		1 + twp__read_le24(frame + 6), 1 + twp__read_le24(frame + 9), canvas->max_pixels
+	};
+	if (bounds.width > canvas->width - x || bounds.height > canvas->height - y)
+		return 0;
 
-    unsigned char *result = NULL;
-    if (chunks.VP8L.data)
-        result = twp__read_vp8l(chunks.VP8L.data, chunks.VP8L.size, width, height, format, 0);
-    else if (chunks.VP8.data)
-        result = twp__read_vp8(chunks.VP8.data, chunks.VP8.size, width, height, format, flags);
-    else
-        twp__assert(0);
+	twp__image_chunks image = {0};
+	for (int offset = 16; offset < size;) {
+		unsigned char *chunk = frame + offset;
+		int chunk_size;
+		int extent = twp__chunk_extent(chunk, size - offset, &chunk_size);
+		if (!extent) return 0;
+		if (twp__check_fourcc(chunk, "VP8X") || twp__check_fourcc(chunk, "ANIM")
+			|| twp__check_fourcc(chunk, "ANMF") || !twp__collect_image_chunk(chunk, chunk_size, &image))
+			return 0;
+		offset += extent;
+	}
+	return twp__validate_image_chunks(&image, &bounds);
+}
 
-    if (chunks.ALPH.data && (format == twp_FORMAT_RGBA || format == twp_FORMAT_YUVA)) {
-        if (!twp__read_alpha(chunks.ALPH.data, chunks.ALPH.size, *width, *height, result, format == twp_FORMAT_YUVA)) {
-            free(result);
-            return NULL;
-        }
-    }
+static int twp__read_chunks(unsigned char *data, int size, int max_pixels,
+	twp__image_chunks *image, int *animated)
+{
+	twp__canvas_limits canvas = {0, 0, max_pixels};
+	int have_anim = 0;
+	int have_frame = 0;
+	for (int offset = 12; offset < size;) {
+		unsigned char *chunk = data + offset;
+		int chunk_size;
+		int extent = twp__chunk_extent(chunk, size - offset, &chunk_size);
+		if (!extent) return 0;
 
-    if (format == twp_FORMAT_YUVA && chunks.VP8.data && !chunks.ALPH.data) {
-        // fill with 255 in case we want yuva but didn't have an alpha channel
-        unsigned char *a;
-        twp_unpack_yuv(result, *width, *height, NULL, NULL, NULL, &a, NULL, NULL, NULL);
-        memset(a, 255, (size_t)*width * (size_t)*height);
-    }
+		if (twp__check_fourcc(chunk, "VP8X")) {
+			if (offset != 12 || chunk_size != 10) return 0;
+			const unsigned char *payload = chunk + 8;
+			canvas.width = 1 + twp__read_le24(payload + 4);
+			canvas.height = 1 + twp__read_le24(payload + 7);
+			if (!twp__allowed_size(canvas.width, canvas.height, &canvas)) return 0;
+			*animated = (payload[0] & 2) != 0;
+		} else if (offset == 12 && !twp__check_fourcc(chunk, "VP8 ") && !twp__check_fourcc(chunk, "VP8L")) {
+			return 0;
+		} else if (twp__check_fourcc(chunk, "ANIM")) {
+			if (!*animated || have_anim || chunk_size != 6) return 0;
+			have_anim = 1;
+		} else if (twp__check_fourcc(chunk, "ANMF")) {
+			if (!have_anim || !twp__validate_animation_frame(chunk + 8, chunk_size, &canvas)) return 0;
+			have_frame = 1;
+		} else if (!twp__collect_image_chunk(chunk, chunk_size, image)) {
+			return 0;
+		}
+		offset += extent;
+	}
 
-    return result;
+	if (*animated)
+		return have_frame && !image->VP8.data && !image->VP8L.data && !image->ALPH.data;
+	return (!image->ALPH.data || canvas.width) && twp__validate_image_chunks(image, &canvas);
+}
+
+twp__STORAGE unsigned char *twp_read_from_memory_limited(void *data, int data_len,
+	int *width, int *height, twp_format format, twp_flags flags, int max_pixels, int *fallback_size)
+{
+	unsigned char *u8data = (unsigned char *)data;
+	if (fallback_size) *fallback_size = 0;
+
+	if (data_len < twp__MIN_FILE_SIZE) return NULL;
+	if (!twp__check_fourcc(u8data, "RIFF") || !twp__check_fourcc(u8data + 8, "WEBP")) return NULL;
+	uint32_t riff_size = (uint32_t)u8data[4] | ((uint32_t)u8data[5] << 8)
+		| ((uint32_t)u8data[6] << 16) | ((uint32_t)u8data[7] << 24);
+	if (riff_size < twp__MIN_FILE_SIZE - 8 || riff_size > (uint32_t)(data_len - 8))
+		return NULL;
+
+	int validated_size = (int)riff_size + 8;
+	int animated = 0;
+	twp__image_chunks image = {0};
+	if (!twp__read_chunks(u8data, validated_size, max_pixels, &image, &animated))
+		return NULL;
+	if (animated) {
+		if (fallback_size) *fallback_size = validated_size;
+		return NULL;
+	}
+
+	int allocation_failed = 0;
+	unsigned char *result;
+	if (image.VP8L.data)
+		result = twp__read_vp8l(image.VP8L.data, image.VP8L.size, width, height, format, 0, &allocation_failed);
+	else
+		result = twp__read_vp8(image.VP8.data, image.VP8.size, width, height, format, flags, &allocation_failed);
+	if (!result) goto fail;
+
+	if (image.ALPH.data && (format == twp_FORMAT_RGBA || format == twp_FORMAT_YUVA)) {
+		if (!twp__read_alpha(image.ALPH.data, image.ALPH.size, *width, *height, result,
+			format == twp_FORMAT_YUVA, &allocation_failed))
+			goto fail;
+	}
+	if (format == twp_FORMAT_YUVA && !image.ALPH.data) {
+		unsigned char *a;
+		twp_unpack_yuv(result, *width, *height, NULL, NULL, NULL, &a, NULL, NULL, NULL);
+		memset(a, 255, (size_t)*width * (size_t)*height);
+	}
+	return result;
+
+fail:
+	free(result);
+	if (fallback_size && !allocation_failed) *fallback_size = validated_size;
+	return NULL;
+}
+
+twp__STORAGE unsigned char *twp_read_from_memory(void *data, int data_len, int *width,
+	int *height, twp_format format, twp_flags flags)
+{
+	return twp_read_from_memory_limited(data, data_len, width, height, format, flags, INT32_MAX, NULL);
 }
 
 twp__STORAGE void twp_unpack_yuv(unsigned char *ptr, int width, int height,
@@ -4658,11 +4838,18 @@ static unsigned char *twp__read_entire_file(const char *file_path, int *size)
     FILE *f = twp__fopen(file_path);
     if (!f) return NULL;
 
-    fseek(f, 0, SEEK_END);
-    *size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    void *mem = malloc(*size);
-    fread(mem, 1, *size, f);
+	void *mem = NULL;
+	if (!fseek(f, 0, SEEK_END)) {
+		long length = ftell(f);
+		if (length > 0 && length <= INT32_MAX && !fseek(f, 0, SEEK_SET)) {
+			*size = (int)length;
+			mem = malloc(*size);
+			if (mem && fread(mem, 1, *size, f) != (size_t)*size) {
+				free(mem);
+				mem = NULL;
+			}
+		}
+	}
     fclose(f);
 
     return (unsigned char *)mem;

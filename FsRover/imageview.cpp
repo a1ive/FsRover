@@ -61,6 +61,7 @@ HWND g_img;	/* image viewer, null when closed */
 constexpr UINT IMG_PROBE = 4096;	/* first-stage sniff read */
 constexpr UINT64 IMG_WARN = 32u << 20;	/* ask before loading above this */
 constexpr UINT64 IMG_MAX = 256u << 20;	/* refuse above this */
+constexpr int IMG_WEBP_MAX_PIXELS = 64 << 20;	/* 256 MiB of decoded RGBA */
 constexpr UINT IMG_TIMER_ID = 1;	/* GIF frame advance */
 
 std::string g_img_path;	/* file being viewed, UTF-8 */
@@ -354,7 +355,7 @@ img_next_frame (HWND dlg)
    on every supported Windows.  32bppPBGRA output is already what D2D
    wants, no conversion pass needed.  */
 bool
-img_decode_wic (const stbi_uc *data, size_t len)
+img_decode_wic (const stbi_uc *data, size_t len, UINT64 max_pixels = 0xffffffffu / 4)
 {
 	IWICImagingFactory *factory = nullptr;
 	IWICStream *stream = nullptr;
@@ -400,8 +401,8 @@ img_decode_wic (const stbi_uc *data, size_t len)
 		|| FAILED (conv->Initialize (frame, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom))
 		|| FAILED (conv->GetSize (&w, &h)))
 		goto fail;
-	if (!w || !h || (UINT64) w * h * 4 > 0xffffffffu)
-		goto fail;	/* CopyPixels takes a 32-bit byte count */
+	if (!w || !h || (UINT64) w * h > max_pixels)
+		goto fail;
 	/* Freed by img_free_image via stbi_image_free (plain free).  */
 	pixels = (stbi_uc *) malloc ((size_t) w * h * 4);
 	if (!pixels
@@ -516,26 +517,20 @@ img_is_webp (const stbi_uc *data, size_t len)
 		&& memcmp (data + 8, "WEBP", 4) == 0;
 }
 
-/* tiny-webp covers lossy, lossless and alpha WebP without depending on
-   an installed WIC codec.  Animated WebP is unsupported there and is
-   deliberately allowed to fall through to WIC.  */
+/* tiny-webp checks the coded dimensions before decoding a still image
+   or allowing WIC to try the validated RIFF extent. */
 bool
 img_decode_webp (const stbi_uc *data, size_t len)
 {
-	if (!img_is_webp (data, len) || len > INT_MAX)
+	if (len > INT_MAX)
 		return false;
 	int w = 0;
 	int h = 0;
-	if (!twp_get_info_from_memory ((void *) data, (int) len, &w, &h,
-		nullptr, nullptr) || w < 1 || h < 1 || w > INT_MAX / 4 / h)
-		return false;
-	stbi_uc *pixels = twp_read_from_memory ((void *) data, (int) len,
-		&w, &h, twp_FORMAT_RGBA, 0);
-	if (!pixels || w < 1 || h < 1)
-	{
-		free (pixels);
-		return false;
-	}
+	int fallback_size = 0;
+	stbi_uc *pixels = twp_read_from_memory_limited ((void *) data, (int) len,
+		&w, &h, twp_FORMAT_RGBA, 0, IMG_WEBP_MAX_PIXELS, &fallback_size);
+	if (!pixels)
+		return fallback_size > 0 && img_decode_wic (data, (size_t) fallback_size, IMG_WEBP_MAX_PIXELS);
 	g_img_pixels = pixels;
 	g_img_w = w;
 	g_img_h = h;
@@ -551,9 +546,9 @@ img_decode_still (const stbi_uc *data, size_t len)
 {
 	int comp = 0;
 
+	if (img_is_webp (data, len))
+		return img_decode_webp (data, len);
 	if (img_decode_svg (data, len))
-		return true;
-	if (img_decode_webp (data, len))
 		return true;
 	if (len <= INT_MAX)
 		g_img_pixels = stbi_load_from_memory (data, (int) len, &g_img_w, &g_img_h, &comp, 4);
