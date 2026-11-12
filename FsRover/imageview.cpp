@@ -827,8 +827,11 @@ img_decode (const std::vector<char> &raw)
 		g_img_pixels = stbi_load_gif_from_memory (buf, len, &g_img_delays, &g_img_w, &g_img_h, &g_img_frames, &comp, 4);
 	else
 		return img_decode_still (buf, raw.size ());
-	if (!g_img_pixels)
+	if (!g_img_pixels || g_img_w <= 0 || g_img_h <= 0 || g_img_frames <= 0)
+	{
+		img_free_image ();
 		return img_decode_wic (buf, raw.size ());
+	}
 
 	/* stb emits straight RGBA; D2D wants premultiplied BGRA.  */
 	size_t n = (size_t) g_img_w * (size_t) g_img_h * (size_t) g_img_frames;
@@ -968,7 +971,7 @@ is_image_name (const std::string &name)
 	static const char *exts[] =
 	{
 		"jpg", "jpeg", "png", "bmp", "gif", "tga", "psd",
-		"hdr", "pic", "pnm", "pgm", "ppm", "tif", "tiff",
+		"hdr", "pnm", "pgm", "ppm", "tif", "tiff",
 		"ico", "icns", "svg", "webp",
 	};
 	size_t dot = name.find_last_of ('.');
