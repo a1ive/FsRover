@@ -178,6 +178,8 @@
     <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="..\common\optparse.c" />
     <ClCompile Include="backend.cpp" />
+    <ClCompile Include="blake3\blake3.c" />
+    <ClCompile Include="blake3_glue.c" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="cryptodlg.cpp" />
     <ClCompile Include="diskprops.cpp" />
@@ -217,6 +219,8 @@
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="blake3\blake3.h" />
+    <ClInclude Include="blake3_glue.h" />
     <ClInclude Include="build_config.h" />
     <ClInclude Include="dokan\dokan.h" />
     <ClInclude Include="dokan\fileinfo.h" />

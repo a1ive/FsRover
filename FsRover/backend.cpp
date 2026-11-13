@@ -42,6 +42,7 @@
 
 #include "../common/extract_core.h"
 #include "../common/natural_sort.h"
+#include "blake3_glue.h"
 #include "dokanfs.h"
 #include "strconv.h"
 
@@ -610,20 +611,28 @@ crc64_fill (UINT64 table[256])
 	}
 }
 
+struct blake3_deleter
+{
+	void operator() (rover_blake3 *b) const { rover_blake3_free (b); }
+};
+
 void
 run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 {
-	/* Indexed by BACKEND_HASH_* bit number; CRCs have no CNG id.  */
+	/* Indexed by BACKEND_HASH_* bit number; CRCs and BLAKE3 have no
+	   CNG id.  */
 	static const wchar_t *alg_ids[BACKEND_HASH_COUNT] =
 	{
 		BCRYPT_MD5_ALGORITHM, BCRYPT_SHA1_ALGORITHM, nullptr,
 		nullptr, BCRYPT_SHA256_ALGORITHM, BCRYPT_SHA512_ALGORITHM,
+		nullptr,
 	};
 	cng_hash cng[BACKEND_HASH_COUNT];
 	DWORD crc32_table[256];
 	UINT64 crc64_table[256];
 	DWORD crc32 = 0xffffffffUL;
 	UINT64 crc64 = ~0ULL;
+	std::unique_ptr<rover_blake3, blake3_deleter> blake3;
 	UINT mask = task.hash_mask;
 
 	if (!mask)
@@ -641,6 +650,15 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		crc32_fill (crc32_table);
 	if (mask & BACKEND_HASH_CRC64)
 		crc64_fill (crc64_table);
+	if (mask & BACKEND_HASH_BLAKE3)
+	{
+		blake3.reset (rover_blake3_new ());
+		if (!blake3)
+		{
+			res->error = "out of memory";
+			return;
+		}
+	}
 
 	rover_file *f = rover_file_open (task.path.c_str ());
 	if (!f)
@@ -683,6 +701,8 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		if (mask & BACKEND_HASH_CRC64)
 			for (long long i = 0; i < r; i++)
 				crc64 = crc64_table[(crc64 ^ (UCHAR) buf[(size_t) i]) & 0xff] ^ (crc64 >> 8);
+		if (blake3)
+			rover_blake3_update (blake3.get (), buf.data (), (size_t) r);
 
 		done += (UINT64) r;
 		ULONGLONG now = GetTickCount64 ();
@@ -717,6 +737,12 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		char text[24];
 		snprintf (text, sizeof (text), "%016llx", (unsigned long long) (crc64 ^ ~0ULL));
 		res->hash[3] = text;
+	}
+	if (blake3)
+	{
+		UCHAR digest[ROVER_BLAKE3_LEN];
+		rover_blake3_final (blake3.get (), digest);
+		res->hash[6] = hex_bytes (digest, ROVER_BLAKE3_LEN);
 	}
 	post_item_progress (seq, task.path, 100);
 }

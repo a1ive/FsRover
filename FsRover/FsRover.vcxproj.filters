@@ -17,6 +17,9 @@
     <Filter Include="SRC\md4c">
       <UniqueIdentifier>{6f2a8a1c-6b1e-4d4f-9a5b-0d7f2a1c8e34}</UniqueIdentifier>
     </Filter>
+    <Filter Include="SRC\blake3">
+      <UniqueIdentifier>{3b8e1f52-9c4d-4a7e-b6f1-2d5c8a9e0b17}</UniqueIdentifier>
+    </Filter>
     <Filter Include="SRC\libcdi">
       <UniqueIdentifier>{0f5b6a02-3c47-4a58-9f1d-2b6c8e4a71d9}</UniqueIdentifier>
     </Filter>
@@ -92,6 +95,12 @@
       <Filter>SRC</Filter>
     </ClCompile>
     <ClCompile Include="mdview.cpp">
+      <Filter>SRC</Filter>
+    </ClCompile>
+    <ClCompile Include="blake3\blake3.c">
+      <Filter>SRC\blake3</Filter>
+    </ClCompile>
+    <ClCompile Include="blake3_glue.c">
       <Filter>SRC</Filter>
     </ClCompile>
     <ClCompile Include="md4c\entity.c">
@@ -173,6 +182,12 @@
     </ClInclude>
     <ClInclude Include="nanosvg\nanosvgrast.h">
       <Filter>SRC\nanosvg</Filter>
+    </ClInclude>
+    <ClInclude Include="blake3\blake3.h">
+      <Filter>SRC\blake3</Filter>
+    </ClInclude>
+    <ClInclude Include="blake3_glue.h">
+      <Filter>SRC</Filter>
     </ClInclude>
     <ClInclude Include="md4c\entity.h">
       <Filter>SRC\md4c</Filter>

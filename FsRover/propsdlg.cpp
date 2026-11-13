@@ -47,7 +47,7 @@ props_enable_hash_controls (HWND dlg, BOOL enabled)
 	{
 		IDC_PROPS_MD5, IDC_PROPS_SHA1, IDC_PROPS_CRC32,
 		IDC_PROPS_CRC64, IDC_PROPS_SHA256, IDC_PROPS_SHA512,
-		IDC_PROPS_CALC,
+		IDC_PROPS_BLAKE3, IDC_PROPS_CALC,
 	};
 
 	for (int id : ids)
@@ -62,6 +62,7 @@ props_start_hash (HWND dlg)
 	{
 		IDC_PROPS_MD5, IDC_PROPS_SHA1, IDC_PROPS_CRC32,
 		IDC_PROPS_CRC64, IDC_PROPS_SHA256, IDC_PROPS_SHA512,
+		IDC_PROPS_BLAKE3,
 	};
 	UINT mask = 0;
 
@@ -180,6 +181,7 @@ props_on_hash (backend_result *res)
 	static const wchar_t *names[BACKEND_HASH_COUNT] =
 	{
 		L"MD5", L"SHA1", L"CRC32", L"CRC64", L"SHA256", L"SHA512",
+		L"BLAKE3",
 	};
 
 	if (!g_props || res->seq != g_seq_hash)

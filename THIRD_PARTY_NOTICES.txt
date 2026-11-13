@@ -33,6 +33,7 @@ MD4C                     MIT                      FsRover/md4c/
 NanoSVG                  zlib                     FsRover/nanosvg/
 tiny-webp                BSD-3-Clause             FsRover/tiny-webp/
 stb_image                Public domain / MIT      FsRover/stb_image.h
+BLAKE3                   CC0-1.0 or Apache-2.0    FsRover/blake3/
 Optparse                 Public domain            common/optparse.*
 7-Zip LZMA SDK           Public domain            grub/grub-core/lib/7z/
 Brotli                   MIT                      grub/grub-core/lib/brotli/
@@ -258,6 +259,11 @@ equivalent unencumbered dedication.  No copyright is asserted:
 * Optparse
 * 7-Zip LZMA SDK
 * XZ Embedded
+* BLAKE3 (portable C implementation, as carried in 7-Zip-zstd C/hashes)
+  Copyright (c) 2019-2020 Samuel Neves and Jack O'Connor
+  Copyright (c) 2021 Tino Reichardt
+  Released into the public domain with CC0 1.0; alternatively licensed
+  under the Apache License 2.0.  Rover uses it under CC0 1.0.
 
 
 3. COPYLEFT COMPONENTS
