@@ -178,6 +178,11 @@
     <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="..\common\optparse.c" />
     <ClCompile Include="backend.cpp" />
+    <ClCompile Include="blake2\blake2s-ref.c" />
+    <ClCompile Include="blake2\blake2sp-ref.c">
+      <!-- Upstream store32 (&P->node_offset, uint64_t offset); kept as is.  -->
+      <DisableSpecificWarnings>4244;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
     <ClCompile Include="blake3\blake3.c" />
     <ClCompile Include="blake3_glue.c" />
     <ClCompile Include="cmdline.cpp" />
@@ -219,6 +224,8 @@
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
     <ClInclude Include="backend.h" />
+    <ClInclude Include="blake2\blake2-impl.h" />
+    <ClInclude Include="blake2\blake2.h" />
     <ClInclude Include="blake3\blake3.h" />
     <ClInclude Include="blake3_glue.h" />
     <ClInclude Include="build_config.h" />
@@ -265,6 +272,7 @@
     <None Include="help.md" />
     <None Include="packages.config" />
     <None Include="FsRover.manifest" />
+    <None Include="blake2\COPYING" />
     <None Include="md4c\LICENSE.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

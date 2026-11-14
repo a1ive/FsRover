@@ -102,8 +102,9 @@ constexpr UINT BACKEND_HASH_CRC32 = 1u << 2;
 constexpr UINT BACKEND_HASH_CRC64 = 1u << 3;
 constexpr UINT BACKEND_HASH_SHA256 = 1u << 4;
 constexpr UINT BACKEND_HASH_SHA512 = 1u << 5;
-constexpr UINT BACKEND_HASH_BLAKE3 = 1u << 6;
-constexpr int BACKEND_HASH_COUNT = 7;
+constexpr UINT BACKEND_HASH_BLAKE2SP = 1u << 6;
+constexpr UINT BACKEND_HASH_BLAKE3 = 1u << 7;
+constexpr int BACKEND_HASH_COUNT = 8;
 
 constexpr UINT64 BACKEND_SIZE_UNKNOWN = ~0ULL;
 

@@ -42,6 +42,7 @@
 
 #include "../common/extract_core.h"
 #include "../common/natural_sort.h"
+#include "blake2/blake2.h"
 #include "blake3_glue.h"
 #include "dokanfs.h"
 #include "strconv.h"
@@ -619,19 +620,20 @@ struct blake3_deleter
 void
 run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 {
-	/* Indexed by BACKEND_HASH_* bit number; CRCs and BLAKE3 have no
-	   CNG id.  */
+	/* Indexed by BACKEND_HASH_* bit number; CRCs and BLAKE2sp/BLAKE3
+	   have no CNG id.  */
 	static const wchar_t *alg_ids[BACKEND_HASH_COUNT] =
 	{
 		BCRYPT_MD5_ALGORITHM, BCRYPT_SHA1_ALGORITHM, nullptr,
 		nullptr, BCRYPT_SHA256_ALGORITHM, BCRYPT_SHA512_ALGORITHM,
-		nullptr,
+		nullptr, nullptr,
 	};
 	cng_hash cng[BACKEND_HASH_COUNT];
 	DWORD crc32_table[256];
 	UINT64 crc64_table[256];
 	DWORD crc32 = 0xffffffffUL;
 	UINT64 crc64 = ~0ULL;
+	blake2sp_state blake2sp {};
 	std::unique_ptr<rover_blake3, blake3_deleter> blake3;
 	UINT mask = task.hash_mask;
 
@@ -650,6 +652,11 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		crc32_fill (crc32_table);
 	if (mask & BACKEND_HASH_CRC64)
 		crc64_fill (crc64_table);
+	if ((mask & BACKEND_HASH_BLAKE2SP) && blake2sp_init (&blake2sp, BLAKE2S_OUTBYTES) < 0)
+	{
+		res->error = "hash provider error";
+		return;
+	}
 	if (mask & BACKEND_HASH_BLAKE3)
 	{
 		blake3.reset (rover_blake3_new ());
@@ -701,6 +708,8 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		if (mask & BACKEND_HASH_CRC64)
 			for (long long i = 0; i < r; i++)
 				crc64 = crc64_table[(crc64 ^ (UCHAR) buf[(size_t) i]) & 0xff] ^ (crc64 >> 8);
+		if (mask & BACKEND_HASH_BLAKE2SP)
+			blake2sp_update (&blake2sp, buf.data (), (size_t) r);
 		if (blake3)
 			rover_blake3_update (blake3.get (), buf.data (), (size_t) r);
 
@@ -738,11 +747,17 @@ run_hash_file (const hash_file_task &task, UINT seq, backend_result *res)
 		snprintf (text, sizeof (text), "%016llx", (unsigned long long) (crc64 ^ ~0ULL));
 		res->hash[3] = text;
 	}
+	if (mask & BACKEND_HASH_BLAKE2SP)
+	{
+		UCHAR digest[BLAKE2S_OUTBYTES];
+		blake2sp_final (&blake2sp, digest, sizeof (digest));
+		res->hash[6] = hex_bytes (digest, sizeof (digest));
+	}
 	if (blake3)
 	{
 		UCHAR digest[ROVER_BLAKE3_LEN];
 		rover_blake3_final (blake3.get (), digest);
-		res->hash[6] = hex_bytes (digest, ROVER_BLAKE3_LEN);
+		res->hash[7] = hex_bytes (digest, ROVER_BLAKE3_LEN);
 	}
 	post_item_progress (seq, task.path, 100);
 }
