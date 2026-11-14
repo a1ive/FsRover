@@ -143,6 +143,93 @@ target_link_libraries(LinuxRover PRIVATE rover-grub PkgConfig::FUSE3 pthread)
 
 install(TARGETS LinuxRover RUNTIME DESTINATION bin)
 
+# GTK 4 GUI; skipped quietly where the development package is absent.
+option(ROVER_GTK "Build the GTK 4 GUI (GtkRover) when gtk4 is available" ON)
+if(ROVER_GTK)
+	pkg_check_modules(GTK4 IMPORTED_TARGET gtk4>=4.12)
+	if(GTK4_FOUND)
+		include(GNUInstallDirs)
+		pkg_check_modules(LIBMAGIC IMPORTED_TARGET libmagic)
+		find_program(GLIB_COMPILE_RESOURCES glib-compile-resources REQUIRED)
+		find_program(MSGFMT msgfmt)
+
+		# md4c is third-party C; build it without the project's -Werror.
+		add_library(rover-md4c STATIC FsRover/md4c/md4c.c FsRover/md4c/entity.c)
+
+		set(GTKROVER_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/gtkrover-resources.c")
+		add_custom_command(OUTPUT "${GTKROVER_RESOURCES}"
+			COMMAND "${GLIB_COMPILE_RESOURCES}" --generate-source
+				--sourcedir "${CMAKE_CURRENT_SOURCE_DIR}"
+				--target "${GTKROVER_RESOURCES}"
+				"${CMAKE_CURRENT_SOURCE_DIR}/GtkRover/gtkrover.gresource.xml"
+			DEPENDS GtkRover/gtkrover.gresource.xml FsRover/help.md
+			VERBATIM)
+
+		add_executable(GtkRover
+			GtkRover/main.cpp
+			GtkRover/window.cpp
+			GtkRover/row.cpp
+			GtkRover/backend.cpp
+			GtkRover/cryptodlg.cpp
+			GtkRover/propsdlg.cpp
+			GtkRover/hexview.cpp
+			GtkRover/textview.cpp
+			GtkRover/imageview.cpp
+			GtkRover/mdview.cpp
+			GtkRover/mapview.cpp
+			GtkRover/lostdlg.cpp
+			GtkRover/mount.cpp
+			GtkRover/hostdisk.cpp
+			common/extract_core.cpp
+			common/fusefs.cpp
+			common/natural_sort.cpp
+			"${GTKROVER_RESOURCES}")
+		target_include_directories(GtkRover PRIVATE
+			"${CMAKE_CURRENT_SOURCE_DIR}/common"
+			"${CMAKE_CURRENT_SOURCE_DIR}/grub/rover")
+		target_compile_definitions(GtkRover PRIVATE
+			GETTEXT_PACKAGE="fsrover"
+			ROVER_LOCALEDIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+			GDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_12
+			GDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_12)
+		set_source_files_properties("${GTKROVER_RESOURCES}" PROPERTIES COMPILE_OPTIONS -w)
+		target_compile_options(GtkRover PRIVATE -Wall -Wextra -Werror)
+		target_link_libraries(GtkRover PRIVATE rover-grub rover-md4c PkgConfig::GTK4
+			PkgConfig::FUSE3 pthread)
+		if(LIBMAGIC_FOUND)
+			target_compile_definitions(GtkRover PRIVATE HAVE_LIBMAGIC=1)
+			target_link_libraries(GtkRover PRIVATE PkgConfig::LIBMAGIC)
+		else()
+			message(STATUS "libmagic not found; GtkRover shows no content descriptions")
+		endif()
+		install(TARGETS GtkRover RUNTIME DESTINATION bin)
+		install(FILES GtkRover/io.github.a1ive.FsRover.desktop
+			DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+
+		# Translations: po/<lang>.po -> locale/<lang>/LC_MESSAGES/fsrover.mo next
+		# to the binary (found there when run uninstalled) and installed.
+		if(MSGFMT)
+			file(GLOB GTKROVER_PO "${CMAKE_CURRENT_SOURCE_DIR}/GtkRover/po/*.po")
+			set(GTKROVER_MO)
+			foreach(PO IN LISTS GTKROVER_PO)
+				get_filename_component(LANG "${PO}" NAME_WE)
+				set(MO "${CMAKE_CURRENT_BINARY_DIR}/locale/${LANG}/LC_MESSAGES/fsrover.mo")
+				add_custom_command(OUTPUT "${MO}"
+					COMMAND "${CMAKE_COMMAND}" -E make_directory
+						"${CMAKE_CURRENT_BINARY_DIR}/locale/${LANG}/LC_MESSAGES"
+					COMMAND "${MSGFMT}" --check -o "${MO}" "${PO}"
+					DEPENDS "${PO}"
+					VERBATIM)
+				list(APPEND GTKROVER_MO "${MO}")
+				install(FILES "${MO}" DESTINATION "${CMAKE_INSTALL_LOCALEDIR}/${LANG}/LC_MESSAGES")
+			endforeach()
+			add_custom_target(gtkrover-translations ALL DEPENDS ${GTKROVER_MO})
+		endif()
+	else()
+		message(STATUS "gtk4 >= 4.12 not found; GtkRover is not built")
+	endif()
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
 	find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
