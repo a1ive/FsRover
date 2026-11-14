@@ -259,6 +259,7 @@ struct grub_zfs_data
   struct grub_zfs_device_desc *device_original;
 
   uberblock_t current_uberblock;
+  grub_uint64_t pool_version;
 
   grub_uint64_t guid;
 };
@@ -298,6 +299,9 @@ static const char *spa_feature_names[] = {
   "org.freebsd:zstd_compress",
   "com.datto:bookmark_v2",
   "com.delphix:bookmark_written",
+  /* Not used by the MOS, checked per dataset.  */
+  "com.datto:encryption",
+  "org.zfsonlinux:large_dnode",
   NULL
 };
 
@@ -1923,6 +1927,18 @@ zio_read (blkptr_t *bp, grub_zfs_endian_t endian, void **buf,
   checksum = (grub_zfs_to_cpu64((bp)->blk_prop, endian) >> 40) & 0xff;
   comp = (grub_zfs_to_cpu64((bp)->blk_prop, endian)>>32) & 0x7f;
   encrypted = ((grub_zfs_to_cpu64((bp)->blk_prop, endian) >> 60) & 3);
+  if (data->pool_version >= SPA_VERSION_FEATURES)
+    {
+      grub_uint64_t prop = grub_zfs_to_cpu64 ((bp)->blk_prop, endian);
+
+      /* OpenZFS crypt bit: only level 0 objset blocks are plaintext.  */
+      if (((prop >> 61) & 1)
+	  && (((prop >> 56) & 0x1f) != 0
+	      || ((prop >> 48) & 0xff) != DMU_OT_OBJSET))
+	return grub_error (GRUB_ERR_ACCESS_DENIED,
+			   N_("encrypted datasets are not supported"));
+      encrypted = 0;
+    }
   if (BP_IS_EMBEDDED(bp))
     {
       if (BPE_GET_ETYPE(bp) != BP_EMBEDDED_TYPE_DATA)
@@ -2781,6 +2797,10 @@ dnode_get (dnode_end_t * mdn, grub_uint64_t objnum, grub_uint8_t type,
       buf->endian = data->dnode_endian;
       if (type && buf->dn.dn_type != type)
 	return grub_error(GRUB_ERR_BAD_FS, "incorrect dnode type");
+      if (data->pool_version >= SPA_VERSION_FEATURES
+	  && buf->dn.dn_extra_slots != 0)
+	return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+			   N_("large dnodes are not supported"));
       return GRUB_ERR_NONE;
     }
 
@@ -2815,6 +2835,11 @@ dnode_get (dnode_end_t * mdn, grub_uint64_t objnum, grub_uint8_t type,
   buf->endian = endian;
   if (type && buf->dn.dn_type != type)
     return grub_error(GRUB_ERR_BAD_FS, "incorrect dnode type");
+  /* Padding before large_dnode.  */
+  if (data->pool_version >= SPA_VERSION_FEATURES
+      && buf->dn.dn_extra_slots != 0)
+    return grub_error (GRUB_ERR_NOT_IMPLEMENTED_YET,
+		       N_("large dnodes are not supported"));
 
   return GRUB_ERR_NONE;
 }
@@ -3830,6 +3855,7 @@ zfs_mount (grub_device_t dev)
   ub_endian = (grub_zfs_to_cpu64 (ub->ub_magic,
 				  GRUB_ZFS_LITTLE_ENDIAN) == UBERBLOCK_MAGIC
 	       ? GRUB_ZFS_LITTLE_ENDIAN : GRUB_ZFS_BIG_ENDIAN);
+  data->pool_version = grub_zfs_to_cpu64 (ub->ub_version, ub_endian);
 
   err = zio_read (&ub->ub_rootbp, ub_endian,
 		  (void **) &osp, &ospsize, data);
@@ -4138,6 +4164,37 @@ grub_zfs_getmdnobj (grub_device_t dev, const char *fsfilename,
   return err;
 }
 
+/* Encrypted datasets and large dnodes are not supported.  */
+static grub_err_t
+check_dataset_readable (dnode_end_t *ds, int *readable,
+			struct grub_zfs_data *data)
+{
+  dsl_dataset_phys_t *dsp = (dsl_dataset_phys_t *) DN_BONUS (&ds->dn);
+  grub_uint64_t val;
+  grub_err_t err;
+
+  *readable = 0;
+
+  /* OpenZFS encryption: crypt bit set in the objset block pointer.  */
+  if (data->pool_version >= SPA_VERSION_FEATURES
+      && ((grub_zfs_to_cpu64 (dsp->ds_bp.blk_prop, ds->endian) >> 61) & 1))
+    return GRUB_ERR_NONE;
+
+  /* Active per-dataset features are keys in the dataset's ZAP.  */
+  if (ds->dn.dn_type == DMU_OTN_ZAP_METADATA)
+    {
+      err = zap_lookup (ds, "org.zfsonlinux:large_dnode", &val, data, 0);
+      if (err == GRUB_ERR_NONE)
+	return GRUB_ERR_NONE;
+      if (err != GRUB_ERR_FILE_NOT_FOUND)
+	return err;
+      grub_errno = GRUB_ERR_NONE;
+    }
+
+  *readable = 1;
+  return GRUB_ERR_NONE;
+}
+
 /*
  * Note: fill_fs_info() uses functions such as make_mdn() that modify
  * the input dnode_end_t parameter. However, we should not allow it.
@@ -4153,6 +4210,7 @@ fill_fs_info (struct grub_dirhook_info *info,
   grub_uint64_t objnum;
   grub_uint64_t headobj;
   dnode_end_t mdn;
+  int readable;
 
   grub_memcpy (&mdn, mdn_in, sizeof (*mdn_in));
 
@@ -4171,6 +4229,14 @@ fill_fs_info (struct grub_dirhook_info *info,
 	  return err;
 	}
     }
+
+  /* Unreadable contents only mean no mtime.  */
+  err = check_dataset_readable (&mdn, &readable, data);
+  if (err)
+    return err;
+  if (!readable)
+    return GRUB_ERR_NONE;
+
   err = make_mdn (&mdn, data);
   if (err)
     return err;

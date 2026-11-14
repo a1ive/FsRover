@@ -58,7 +58,8 @@ typedef struct dnode_phys {
 	grub_uint8_t dn_flags;		/* DNODE_FLAG_* */
 	grub_uint16_t dn_datablkszsec;	/* data block size in 512b sectors */
 	grub_uint16_t dn_bonuslen;		/* length of dn_bonus */
-	grub_uint8_t dn_pad2[4];
+	grub_uint8_t dn_extra_slots;		/* # of subsequent slots consumed */
+	grub_uint8_t dn_pad2[3];
 
 	/* accounting is protected by dn_dirty_mtx */
 	grub_uint64_t dn_maxblkid;		/* largest allocated block ID */
