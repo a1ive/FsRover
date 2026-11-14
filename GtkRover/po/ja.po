@@ -1,0 +1,1202 @@
+# Japanese translation of FsRover (GTK).
+# Copyright (C) 2026 A1ive
+# This file is distributed under the same license as FsRover.
+msgid ""
+msgstr ""
+"Project-Id-Version: fsrover\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-14 21:00+0900\n"
+"Last-Translator: A1ive\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: cryptodlg.cpp:95
+#, c-format
+msgid "Unlocking (%s)…"
+msgstr "(%s) のロックを解除しています…"
+
+#: cryptodlg.cpp:97
+msgid "Another operation is still running."
+msgstr "別の操作を実行中です。"
+
+#: cryptodlg.cpp:114
+#, c-format
+msgid "Unlock (%s) failed"
+msgstr "(%s) のロック解除に失敗しました"
+
+#: cryptodlg.cpp:118
+#, c-format
+msgid "Unlocked (%s) as (%s)"
+msgstr "(%s) のロックを解除し、(%s) として追加しました"
+
+#: cryptodlg.cpp:152 mount.cpp:430
+msgid "_Cancel"
+msgstr "キャンセル(_C)"
+
+#: cryptodlg.cpp:164
+msgid "_Unlock"
+msgstr "ロック解除(_U)"
+
+#: cryptodlg.cpp:186
+msgid "Passphrase"
+msgstr "パスフレーズ"
+
+#: cryptodlg.cpp:265
+msgid "Choose Key File"
+msgstr "キーファイルを選択"
+
+#: cryptodlg.cpp:275 mount.cpp:429
+msgid "Browse…"
+msgstr "参照…"
+
+#: cryptodlg.cpp:323
+#, c-format
+msgid "Unlock (%s)"
+msgstr "(%s) のロック解除"
+
+#: cryptodlg.cpp:324
+msgid "Encrypted volume."
+msgstr "暗号化ボリュームです。"
+
+#: cryptodlg.cpp:325
+#, c-format
+msgid "%s volume%s. Enter its passphrase or choose a key file."
+msgstr "%s ボリューム%s。パスフレーズを入力するか、キーファイルを選択してください。"
+
+#: cryptodlg.cpp:333
+msgid "Use a _key file"
+msgstr "キーファイルを使用(_K)"
+
+#: cryptodlg.cpp:339
+msgid "Unlock Volume"
+msgstr "ボリュームのロック解除"
+
+#: cryptodlg.cpp:365
+msgid "Enter a passphrase or choose a non-empty key file."
+msgstr "パスフレーズを入力するか、空でないキーファイルを選択してください。"
+
+#: cryptodlg.cpp:447
+msgid "No key files"
+msgstr "キーファイルなし"
+
+#: cryptodlg.cpp:477
+msgid "Add Key Files"
+msgstr "キーファイルの追加"
+
+#: cryptodlg.cpp:498
+msgid "Autodetect (slow)"
+msgstr "自動検出 (低速)"
+
+#: cryptodlg.cpp:506
+#, c-format
+msgid "Unlock VeraCrypt volume (%s)"
+msgstr "VeraCrypt ボリューム (%s) のロック解除"
+
+#: cryptodlg.cpp:510
+msgid "Personal Iterations Multiplier; 0 uses the volume's default"
+msgstr "Personal Iterations Multiplier (PIM)。0 の場合はボリュームの既定値を使用します"
+
+#: cryptodlg.cpp:512
+msgid "_Password:"
+msgstr "パスワード(_P)："
+
+#: cryptodlg.cpp:513
+msgid "P_IM:"
+msgstr "P_IM："
+
+#: cryptodlg.cpp:514 cryptodlg.cpp:701
+msgid "_Hash:"
+msgstr "ハッシュ(_H)："
+
+#: cryptodlg.cpp:516
+msgid "_TrueCrypt volume"
+msgstr "TrueCrypt ボリューム(_T)"
+
+#: cryptodlg.cpp:517
+msgid "Open the hi_dden volume"
+msgstr "隠しボリュームを開く(_D)"
+
+#: cryptodlg.cpp:518
+msgid "Use the _backup headers"
+msgstr "バックアップヘッダーを使用(_B)"
+
+#: cryptodlg.cpp:524
+msgid "Add _Key Files…"
+msgstr "キーファイルを追加(_K)…"
+
+#: cryptodlg.cpp:525
+msgid "Clear"
+msgstr "クリア"
+
+#: cryptodlg.cpp:537
+msgid "Unlock VeraCrypt / TrueCrypt"
+msgstr "VeraCrypt / TrueCrypt のロック解除"
+
+#: cryptodlg.cpp:559
+#, c-format
+msgid "Cannot use key file %s"
+msgstr "キーファイル %s を使用できません"
+
+#: cryptodlg.cpp:571
+msgid "Enter a password or add key files."
+msgstr "パスワードを入力するか、キーファイルを追加してください。"
+
+#: cryptodlg.cpp:581
+msgid "Trying every hash; this can take a while…"
+msgstr "すべてのハッシュを試しています。しばらく時間がかかることがあります…"
+
+#: cryptodlg.cpp:609
+msgid "None (use as is)"
+msgstr "なし (そのまま使用)"
+
+#: cryptodlg.cpp:678
+#, c-format
+msgid "Open plain dm-crypt volume (%s)"
+msgstr "plain dm-crypt ボリューム (%s) を開く"
+
+#: cryptodlg.cpp:680
+msgid "A plain volume has no header: wrong parameters are not detected and simply show garbage."
+msgstr "plain ボリュームにはヘッダーがありません。パラメーターが間違っていても検出されず、意味のないデータが表示されるだけです。"
+
+#: cryptodlg.cpp:699
+msgid "_Cipher:"
+msgstr "暗号化方式(_C)："
+
+#: cryptodlg.cpp:700
+msgid "P_resets:"
+msgstr "プリセット(_R)："
+
+#: cryptodlg.cpp:702
+msgid "_Key size (bits):"
+msgstr "鍵長 (ビット)(_K)："
+
+#: cryptodlg.cpp:703
+msgid "_Sector size:"
+msgstr "セクターサイズ(_S)："
+
+#: cryptodlg.cpp:704
+msgid "_Offset (512-byte sectors):"
+msgstr "オフセット (512 バイトセクター)(_O)："
+
+#: cryptodlg.cpp:705
+msgid "S_kip (IV sectors):"
+msgstr "スキップ (IV セクター)(_K)："
+
+#: cryptodlg.cpp:706
+msgid "_Passphrase:"
+msgstr "パスフレーズ(_P)："
+
+#: cryptodlg.cpp:708
+msgid "Use a key _file as the volume key"
+msgstr "キーファイルをボリュームキーとして使用(_F)"
+
+#: cryptodlg.cpp:713
+msgid "Key _file:"
+msgstr "キーファイル(_F)："
+
+#: cryptodlg.cpp:714
+msgid "Key file o_ffset (bytes):"
+msgstr "キーファイルのオフセット (バイト)(_F)："
+
+#: cryptodlg.cpp:719
+msgid "Open Plain dm-crypt"
+msgstr "plain dm-crypt を開く"
+
+#: cryptodlg.cpp:739
+msgid "The cipher must name a mode, e.g. aes-xts-plain64."
+msgstr "暗号化方式にはモードを含めてください (例: aes-xts-plain64)。"
+
+#: cryptodlg.cpp:754
+msgid "The key file is too short for this key size."
+msgstr "キーファイルがこの鍵長に対して短すぎます。"
+
+#: cryptodlg.cpp:769
+msgid "Enter a passphrase or choose a key file."
+msgstr "パスフレーズを入力するか、キーファイルを選択してください。"
+
+#: hexview.cpp:80
+#, c-format
+msgid "Offset 0x%llX of %s"
+msgstr "オフセット 0x%llX / %s"
+
+#: hexview.cpp:289
+#, c-format
+msgid "%s — Hex"
+msgstr "%s — 16進数"
+
+#: hexview.cpp:301 imageview.cpp:194 mdview.cpp:559 textview.cpp:289
+msgid "Reading…"
+msgstr "読み込み中…"
+
+#: hexview.cpp:303
+msgid "Go to offset (0x… or decimal)"
+msgstr "オフセットへ移動 (0x… または 10 進数)"
+
+#: hostdisk.cpp:295
+#, c-format
+msgid "The helper failed (pkexec exit status %d)."
+msgstr "ヘルパーが失敗しました (pkexec の終了ステータス %d)。"
+
+#: hostdisk.cpp:328
+#, c-format
+msgid "Access granted to %zu disk"
+msgid_plural "Access granted to %zu disks"
+msgstr[0] "%zu 台のディスクへのアクセスが許可されました"
+
+#: hostdisk.cpp:331
+msgid "No access to the physical disks"
+msgstr "物理ディスクにアクセスできません"
+
+#: hostdisk.cpp:333
+msgid "No physical disk could be opened"
+msgstr "開ける物理ディスクがありませんでした"
+
+#: hostdisk.cpp:375
+msgid "All physical disks are already readable"
+msgstr "すべての物理ディスクはすでに読み取り可能です"
+
+#: hostdisk.cpp:381
+msgid "Waiting for authorization…"
+msgstr "認証を待っています…"
+
+#: imageview.cpp:90 imageview.cpp:95
+msgid "Unrecognized image format"
+msgstr "認識できない画像形式です"
+
+#: imageview.cpp:184
+#, c-format
+msgid "%s — Image"
+msgstr "%s — 画像"
+
+#: imageview.cpp:197
+msgid "_Fit"
+msgstr "ウィンドウに合わせる(_F)"
+
+#: imageview.cpp:206
+msgid "Zoom out"
+msgstr "縮小"
+
+#: imageview.cpp:208
+msgid "Actual size"
+msgstr "実際のサイズ"
+
+#: imageview.cpp:210
+msgid "Zoom in"
+msgstr "拡大"
+
+#: imageview.cpp:231
+#, c-format
+msgid "The image is larger than %s"
+msgstr "画像が %s を超えています"
+
+#: lostdlg.cpp:160
+#, c-format
+msgid "%s of %s"
+msgstr "%s / %s"
+
+#: lostdlg.cpp:166
+#, c-format
+msgid "Searching… %zu found"
+msgid_plural "Searching… %zu found"
+msgstr[0] "検索中… %zu 件検出"
+
+#: lostdlg.cpp:173
+msgid "Stopped."
+msgstr "停止しました。"
+
+#: lostdlg.cpp:174
+msgid "Search complete."
+msgstr "検索が完了しました。"
+
+#: lostdlg.cpp:175
+#, c-format
+msgid "%zu partition found."
+msgid_plural "%zu partitions found."
+msgstr[0] "%zu 個のパーティションが見つかりました。"
+
+#: lostdlg.cpp:178 lostdlg.cpp:344
+msgid "_Search"
+msgstr "検索(_S)"
+
+#: lostdlg.cpp:202
+msgid "Stopping…"
+msgstr "停止しています…"
+
+#: lostdlg.cpp:211
+msgid "_Stop"
+msgstr "停止(_S)"
+
+#: lostdlg.cpp:215
+msgid "Searching…"
+msgstr "検索しています…"
+
+#: lostdlg.cpp:261
+msgid "Cannot open the lost partition"
+msgstr "失われたパーティションを開けません"
+
+#: lostdlg.cpp:328
+msgid "Offset"
+msgstr "オフセット（バイト）"
+
+#: lostdlg.cpp:328 window.cpp:2116
+msgid "Size"
+msgstr "サイズ"
+
+#: lostdlg.cpp:328 mapview.cpp:40 window.cpp:2118
+msgid "Type"
+msgstr "種類"
+
+#: lostdlg.cpp:328
+msgid "Filesystem"
+msgstr "ファイルシステム"
+
+#: lostdlg.cpp:328
+msgid "Label"
+msgstr "ラベル"
+
+#: lostdlg.cpp:328
+msgid "Flags"
+msgstr "状態"
+
+#: lostdlg.cpp:330
+#, c-format
+msgid "Lost Partitions on (%s)"
+msgstr "(%s) 上の失われたパーティション"
+
+#: lostdlg.cpp:334 mapview.cpp:222 propsdlg.cpp:114
+msgid "_Close"
+msgstr "閉じる(_C)"
+
+#: lostdlg.cpp:342
+msgid "Also look for _ext backup superblocks"
+msgstr "ext のバックアップスーパーブロックも検索(_E)"
+
+#: lostdlg.cpp:343
+msgid "_Deep search (every sector, much slower)"
+msgstr "詳細検索：すべてのセクターを調べる (かなり低速)(_D)"
+
+#: lostdlg.cpp:346
+msgid "_Open"
+msgstr "開く(_O)"
+
+#: lostdlg.cpp:351
+msgid "Searches the device for filesystems that no partition table entry points at."
+msgstr "どのパーティションテーブル項目からも参照されていないファイルシステムを、デバイス上で検索します。"
+
+#: mapview.cpp:40
+msgid "Extent"
+msgstr "グループ"
+
+#: mapview.cpp:40
+msgid "Logical offset"
+msgstr "ファイル位置"
+
+#: mapview.cpp:40
+msgid "Length"
+msgstr "ファイル長"
+
+#: mapview.cpp:40 propsdlg.cpp:498
+msgid "Device"
+msgstr "デバイス"
+
+#: mapview.cpp:41
+msgid "Address space"
+msgstr "アドレス空間"
+
+#: mapview.cpp:41
+msgid "Storage offset"
+msgstr "格納位置"
+
+#: mapview.cpp:41
+msgid "Storage length"
+msgstr "格納長"
+
+#: mapview.cpp:41
+msgid "Encoding"
+msgstr "エンコード"
+
+#: mapview.cpp:42
+msgid "Decoded offset"
+msgstr "デコード後の位置"
+
+#: mapview.cpp:42
+msgid "Decoded length"
+msgstr "デコード後の長さ"
+
+#: mapview.cpp:165 propsdlg.cpp:92
+msgid "Copied to the clipboard"
+msgstr "クリップボードにコピーしました"
+
+#: mapview.cpp:180
+msgid "Cannot save the file map"
+msgstr "ファイルの格納マップを保存できません"
+
+#: mapview.cpp:191
+msgid "Save File Map"
+msgstr "ファイルの格納マップを保存"
+
+#: mapview.cpp:216
+#, c-format
+msgid "%s — File Map"
+msgstr "%s — ファイルの格納マップ"
+
+#: mapview.cpp:220
+msgid "_Copy as TSV"
+msgstr "TSV としてコピー(_C)"
+
+#: mapview.cpp:221
+msgid "_Save as TSV…"
+msgstr "TSV として保存(_S)…"
+
+#: mapview.cpp:226
+msgid "Mapping…"
+msgstr "メタデータを読み込み中…"
+
+#: mapview.cpp:282
+#, c-format
+msgid "%u extent"
+msgid_plural "%u extents"
+msgstr[0] "%u エクステント"
+
+#: mapview.cpp:285
+#, c-format
+msgid "stopped after %zu rows"
+msgstr "%zu 行で停止しました"
+
+#: mdview.cpp:579
+#, c-format
+msgid "%s — Markdown"
+msgstr "%s — Markdown"
+
+#: mdview.cpp:593
+#, c-format
+msgid "%s, showing the first %s"
+msgstr "%s、先頭 %s のみ表示"
+
+#: mdview.cpp:607
+msgid "FsRover Help"
+msgstr "FsRover ヘルプ"
+
+#: mdview.cpp:612
+msgid "The help text is missing."
+msgstr "ヘルプテキストが見つかりません。"
+
+#: mount.cpp:260
+#, c-format
+msgid "(%s) was unmounted"
+msgstr "(%s) のマウントが解除されました"
+
+#: mount.cpp:307 window.cpp:1093
+#, c-format
+msgid "Cannot create %s: %s"
+msgstr "%s を作成できません：%s"
+
+#: mount.cpp:314
+#, c-format
+msgid "%s is not a folder"
+msgstr "%s はフォルダーではありません"
+
+#: mount.cpp:319
+#, c-format
+msgid "%s is not empty"
+msgstr "%s は空ではありません"
+
+#: mount.cpp:329
+#, c-format
+msgid "FUSE could not mount %s. Is fusermount3 installed and /dev/fuse usable?"
+msgstr "FUSE で %s をマウントできませんでした。fusermount3 がインストールされ、/dev/fuse が使用可能か確認してください。"
+
+#: mount.cpp:386
+msgid "Choose an Empty Folder"
+msgstr "空のフォルダーを選択"
+
+#: mount.cpp:401
+msgid "Enter an absolute folder path."
+msgstr "フォルダーの絶対パスを入力してください。"
+
+#: mount.cpp:410
+#, c-format
+msgid "Mounted (%s) at %s"
+msgstr "(%s) を %s にマウントしました"
+
+#: mount.cpp:426
+#, c-format
+msgid "Mount (%s)"
+msgstr "(%s) のマウント"
+
+#: mount.cpp:431
+msgid "_Mount"
+msgstr "マウント(_M)"
+
+#: mount.cpp:437
+#, c-format
+msgid "Mount (%s) read-only"
+msgstr "(%s) を読み取り専用でマウント"
+
+#: mount.cpp:438
+msgid "The volume appears as a folder that every program can read. It stays mounted until you unmount it or quit FsRover."
+msgstr "ボリュームは、すべてのプログラムから読み取れるフォルダーとして表示されます。マウントを解除するか FsRover を終了するまで、マウントされたままになります。"
+
+#: mount.cpp:451
+msgid "_Open the folder after mounting"
+msgstr "マウント後にフォルダーを開く(_O)"
+
+#: mount.cpp:503
+#, c-format
+msgid "Unmounted (%s)"
+msgstr "(%s) のマウントを解除しました"
+
+#: propsdlg.cpp:98
+msgid "C_opy"
+msgstr "コピー(_O)"
+
+#: propsdlg.cpp:273 window.cpp:945 window.cpp:1130 window.cpp:1169
+msgid "Cancelled"
+msgstr "キャンセルしました"
+
+#: propsdlg.cpp:338
+msgid "Calculating…"
+msgstr "計算中…"
+
+#: propsdlg.cpp:376
+msgid "Name:"
+msgstr "名前："
+
+#: propsdlg.cpp:377
+msgid "Location:"
+msgstr "場所："
+
+#: propsdlg.cpp:379
+msgid "Error:"
+msgstr "エラー："
+
+#: propsdlg.cpp:392 propsdlg.cpp:501
+msgid "Type:"
+msgstr "種類："
+
+#: propsdlg.cpp:395
+msgid "Link target:"
+msgstr "リンク先："
+
+#: propsdlg.cpp:397
+msgid "Contents:"
+msgstr "内容："
+
+#: propsdlg.cpp:399 propsdlg.cpp:503
+msgid "Size:"
+msgstr "サイズ："
+
+#: propsdlg.cpp:401
+msgid "Modified:"
+msgstr "更新日時："
+
+#: propsdlg.cpp:402
+msgid "Inode:"
+msgstr "inode："
+
+#: propsdlg.cpp:403
+msgid "not reported by this filesystem"
+msgstr "このファイルシステムでは提供されません"
+
+#: propsdlg.cpp:409
+msgid "Checksums"
+msgstr "チェックサム"
+
+#: propsdlg.cpp:429
+msgid "C_alculate"
+msgstr "計算(_A)"
+
+#: propsdlg.cpp:453
+#, c-format
+msgid "%s Properties"
+msgstr "%s のプロパティ"
+
+#: propsdlg.cpp:476
+#, c-format
+msgid "(%s) Properties"
+msgstr "(%s) のプロパティ"
+
+#: propsdlg.cpp:482
+msgid "Unlocked encrypted volume"
+msgstr "ロック解除済みの暗号化ボリューム"
+
+#: propsdlg.cpp:484
+msgid "Partition"
+msgstr "パーティション"
+
+#: propsdlg.cpp:486
+msgid "Disk image file"
+msgstr "ディスクイメージファイル"
+
+#: propsdlg.cpp:488
+msgid "Disk image inside a filesystem"
+msgstr "ファイルシステム内のディスクイメージ"
+
+#: propsdlg.cpp:490
+msgid "Lost partition window"
+msgstr "失われたパーティションの範囲"
+
+#: propsdlg.cpp:492
+msgid "Volume (LVM, RAID or LDM)"
+msgstr "論理ボリューム (LVM、RAID または LDM)"
+
+#: propsdlg.cpp:494
+msgid "Optical drive"
+msgstr "光学ドライブ"
+
+#: propsdlg.cpp:496
+msgid "Physical disk"
+msgstr "物理ディスク"
+
+#: propsdlg.cpp:500
+msgid "Device:"
+msgstr "デバイス："
+
+#: propsdlg.cpp:505
+msgid "Sector size:"
+msgstr "セクターサイズ："
+
+#: propsdlg.cpp:507
+msgid "Start:"
+msgstr "開始位置："
+
+#: propsdlg.cpp:507
+#, c-format
+msgid "sector %llu (byte offset %llu)"
+msgstr "セクター %llu (バイトオフセット %llu)"
+
+#: propsdlg.cpp:509
+msgid "Filesystem:"
+msgstr "ファイルシステム："
+
+#: propsdlg.cpp:509
+msgid "none recognized"
+msgstr "認識されていません"
+
+#: propsdlg.cpp:511
+msgid "Label:"
+msgstr "ボリュームラベル："
+
+#: propsdlg.cpp:513
+msgid "UUID:"
+msgstr "UUID："
+
+#: propsdlg.cpp:515
+msgid "Encryption:"
+msgstr "暗号化："
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", locked"
+msgstr "、ロック中"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", unlocked"
+msgstr "、ロック解除済み"
+
+#: propsdlg.cpp:517
+msgid "Encryption UUID:"
+msgstr "暗号化 UUID："
+
+#: propsdlg.cpp:519
+msgid "Read from:"
+msgstr "読み取り元："
+
+#: propsdlg.cpp:521
+msgid "Backing file:"
+msgstr "元ファイル："
+
+#: propsdlg.cpp:523
+msgid "Members:"
+msgstr "メンバーデバイス："
+
+#: propsdlg.cpp:525
+msgid "Mounted at:"
+msgstr "マウント先："
+
+#: row.cpp:83
+msgid "no filesystem"
+msgstr "ファイルシステムなし"
+
+#: row.cpp:89
+msgid "mounted"
+msgstr "マウント済み"
+
+#: textview.cpp:40
+msgid "Automatic"
+msgstr "自動"
+
+#: textview.cpp:189
+#, c-format
+msgid "%s, %s"
+msgstr "%s、%s"
+
+#: textview.cpp:191
+#, c-format
+msgid "showing the first %s"
+msgstr "先頭 %s のみ表示"
+
+#: textview.cpp:270
+#, c-format
+msgid "%s — Text"
+msgstr "%s — テキスト"
+
+#: textview.cpp:274
+msgid "_Wrap lines"
+msgstr "折り返し(_W)"
+
+#: textview.cpp:294
+msgid "Find (Ctrl+F)"
+msgstr "検索 (Ctrl+F)"
+
+#: window.cpp:52
+msgid "unknown error"
+msgstr "不明なエラー"
+
+#: window.cpp:130
+#, c-format
+msgid "%s byte"
+msgid_plural "%s bytes"
+msgstr[0] "%s バイト"
+
+#: window.cpp:345
+msgid "Another operation is still running"
+msgstr "別の操作を実行中です"
+
+#: window.cpp:525
+msgid "encrypted"
+msgstr "暗号化"
+
+#: window.cpp:677 window.cpp:705
+#, c-format
+msgid "(%s) has no filesystem GRUB can read"
+msgstr "(%s) には GRUB が読み取れるファイルシステムがありません"
+
+#: window.cpp:722 window.cpp:739 window.cpp:740
+#, c-format
+msgid "Cannot open %s"
+msgstr "%s を開けません"
+
+#: window.cpp:723
+msgid "This file is inside a volume FsRover itself has mounted. Browse to it in FsRover and use \"Open as Disk Image\" instead."
+msgstr "このファイルは FsRover 自身がマウントしたボリューム内にあります。FsRover でこのファイルを表示し、「ディスクイメージとして開く」を使用してください。"
+
+#: window.cpp:729 window.cpp:1039
+#, c-format
+msgid "Opening %s…"
+msgstr "%s を開いています…"
+
+#: window.cpp:786 window.cpp:2331
+msgid "Ready"
+msgstr "準備完了"
+
+#: window.cpp:861
+msgid "Empty folder"
+msgstr "空のフォルダー"
+
+#: window.cpp:863
+#, c-format
+msgid "%zu folders, %zu files"
+msgstr "フォルダー %zu 個、ファイル %zu 個"
+
+#: window.cpp:886
+#, c-format
+msgid "Loading %s…"
+msgstr "%s を読み込んでいます…"
+
+#: window.cpp:940
+#, c-format
+msgid "Extracting %s"
+msgstr "%s を展開しています"
+
+#: window.cpp:947
+#, c-format
+msgid "Failed: %s"
+msgstr "失敗：%s"
+
+#: window.cpp:949
+#, c-format
+msgid "%llu file, %s"
+msgid_plural "%llu files, %s"
+msgstr[0] "%llu 個のファイル、%s"
+
+#: window.cpp:952
+#, c-format
+msgid "(%zu error)"
+msgid_plural "(%zu errors)"
+msgstr[0] "(エラー %zu 件)"
+
+#: window.cpp:971
+#, c-format
+msgid "File dialog failed: %s"
+msgstr "ファイルダイアログでエラーが発生しました：%s"
+
+#: window.cpp:985
+msgid "Not a local path"
+msgstr "ローカルパスではありません"
+
+#: window.cpp:985
+msgid "Choose a file or folder on this computer."
+msgstr "このコンピューター上のファイルまたはフォルダーを選択してください。"
+
+#: window.cpp:1004
+#, c-format
+msgid "Extracting to %s…"
+msgstr "%s に展開しています…"
+
+#: window.cpp:1008
+#, c-format
+msgid "Extract to %s: %s"
+msgstr "%s への展開：%s"
+
+#: window.cpp:1020
+#, c-format
+msgid "Cannot open: %s"
+msgstr "開けません：%s"
+
+#: window.cpp:1036
+#, c-format
+msgid "Cannot create a temporary directory in %s"
+msgstr "%s に一時ディレクトリを作成できません"
+
+#: window.cpp:1043
+#, c-format
+msgid "Opened %s"
+msgstr "%s を開きました"
+
+#: window.cpp:1044
+#, c-format
+msgid "Open %s: %s"
+msgstr "%s を開く：%s"
+
+#: window.cpp:1107
+msgid "The device ended before its reported size"
+msgstr "デバイスが、報告されたサイズに達する前に終端に達しました"
+
+#: window.cpp:1117
+#, c-format
+msgid "Write failed: %s"
+msgstr "書き込みに失敗しました：%s"
+
+#: window.cpp:1126
+#, c-format
+msgid "Exporting (%s): %s of %s"
+msgstr "(%s) を書き出しています：%s / %s"
+
+#: window.cpp:1132
+#, c-format
+msgid "Cannot flush %s: %s"
+msgstr "%s をフラッシュできません：%s"
+
+#: window.cpp:1134
+#, c-format
+msgid "Cannot close %s: %s"
+msgstr "%s を閉じられません：%s"
+
+#: window.cpp:1136
+#, c-format
+msgid "Cannot replace %s: %s"
+msgstr "%s を置き換えられません：%s"
+
+#: window.cpp:1158
+#, c-format
+msgid "Exporting (%s)…"
+msgstr "(%s) を書き出しています…"
+
+#: window.cpp:1164
+#, c-format
+msgid "Exported (%s) to %s, %s"
+msgstr "(%s) を %s に書き出しました、%s"
+
+#: window.cpp:1168
+#, c-format
+msgid "Export of (%s) failed"
+msgstr "(%s) の書き出しに失敗しました"
+
+#: window.cpp:1170
+#, c-format
+msgid "Cannot export (%s)"
+msgstr "(%s) を書き出せません"
+
+#: window.cpp:1198
+msgid "Open Compressed Disk Image"
+msgstr "圧縮ディスクイメージを開く"
+
+#: window.cpp:1199
+msgid "Open Disk Image"
+msgstr "ディスクイメージを開く"
+
+#: window.cpp:1268
+msgid "Extract To"
+msgstr "展開先"
+
+#: window.cpp:1305
+#, c-format
+msgid "Cannot open %s as a disk image"
+msgstr "%s をディスクイメージとして開けません"
+
+#: window.cpp:1502
+#, c-format
+msgid "Export (%s) as Raw Image"
+msgstr "(%s) を RAW イメージとして書き出し"
+
+#: window.cpp:1535
+msgid "Only attached images and lost partitions can be detached"
+msgstr "切り離せるのは、追加したイメージと失われたパーティションだけです"
+
+#: window.cpp:1543 window.cpp:1562
+#, c-format
+msgid "Cannot detach (%s)"
+msgstr "(%s) を切り離せません"
+
+#: window.cpp:1543
+msgid "Unmount it first."
+msgstr "先にマウントを解除してください。"
+
+#: window.cpp:1564
+#, c-format
+msgid "Detached (%s)"
+msgstr "(%s) を切り離しました"
+
+#: window.cpp:1623
+msgid "Navigation"
+msgstr "ナビゲーション"
+
+#: window.cpp:1623
+msgid "Back"
+msgstr "戻る"
+
+#: window.cpp:1623
+msgid "Forward"
+msgstr "進む"
+
+#: window.cpp:1623
+msgid "Up one level"
+msgstr "1 つ上の階層へ"
+
+#: window.cpp:1623
+msgid "Edit the path"
+msgstr "パスを編集"
+
+#: window.cpp:1624 window.cpp:2013
+msgid "Refresh"
+msgstr "更新"
+
+#: window.cpp:1624
+msgid "Files"
+msgstr "ファイル"
+
+#: window.cpp:1624
+msgid "Open a disk image"
+msgstr "ディスクイメージを開く"
+
+#: window.cpp:1624
+msgid "Extract the selection"
+msgstr "選択項目を展開"
+
+#: window.cpp:1625
+msgid "Select all"
+msgstr "すべて選択"
+
+#: window.cpp:1625 window.cpp:2053 window.cpp:2073
+msgid "Properties"
+msgstr "プロパティ"
+
+#: window.cpp:1625
+msgid "View as text"
+msgstr "テキストを表示"
+
+#: window.cpp:1625
+msgid "View as hex"
+msgstr "16進数で表示"
+
+#: window.cpp:1642
+msgid "Read-only filesystem browser built on GRUB drivers."
+msgstr "GRUB のドライバーを基にした読み取り専用のファイルシステムブラウザー。"
+
+#: window.cpp:1646
+msgid "translator-credits"
+msgstr "A1ive"
+
+#: window.cpp:1962
+msgid "Cancelling…"
+msgstr "キャンセルしています…"
+
+#: window.cpp:2010
+msgid "Open Disk Image…"
+msgstr "ディスクイメージを開く…"
+
+#: window.cpp:2011
+msgid "Open Compressed Disk Image…"
+msgstr "圧縮ディスクイメージを開く…"
+
+#: window.cpp:2012
+msgid "Access Physical Disks…"
+msgstr "物理ディスクにアクセス…"
+
+#: window.cpp:2014
+msgid "Select All"
+msgstr "すべて選択"
+
+#: window.cpp:2015
+msgid "Invert Selection"
+msgstr "選択の切り替え"
+
+#: window.cpp:2020
+msgid "Help"
+msgstr "ヘルプ"
+
+#: window.cpp:2021
+msgid "Keyboard Shortcuts"
+msgstr "キーボードショートカット"
+
+#: window.cpp:2022
+msgid "About FsRover"
+msgstr "FsRover について"
+
+#: window.cpp:2030
+msgid "Filename Encoding"
+msgstr "ファイル名のエンコード"
+
+#: window.cpp:2031
+msgid "Preserve Timestamps When Extracting"
+msgstr "展開時にタイムスタンプを保持"
+
+#: window.cpp:2044
+msgid "Open"
+msgstr "開く"
+
+#: window.cpp:2045
+msgid "Extract To…"
+msgstr "展開先を指定…"
+
+#: window.cpp:2046
+msgid "View as Text"
+msgstr "テキストを表示"
+
+#: window.cpp:2047 window.cpp:2069
+msgid "View as Hex"
+msgstr "16進数で表示"
+
+#: window.cpp:2048
+msgid "View as Image"
+msgstr "画像を表示"
+
+#: window.cpp:2049
+msgid "View as Markdown"
+msgstr "Markdown プレビュー"
+
+#: window.cpp:2050
+msgid "Open as Disk Image"
+msgstr "ディスクイメージとして開く"
+
+#: window.cpp:2051
+msgid "Open as Compressed Disk Image"
+msgstr "ディスクイメージとして開く (透過解凍)"
+
+#: window.cpp:2052
+msgid "File Map"
+msgstr "ファイルの格納マップ"
+
+#: window.cpp:2054
+msgid "Copy Name"
+msgstr "ファイル名をコピー"
+
+#: window.cpp:2055
+msgid "Copy Path"
+msgstr "パスをコピー"
+
+#: window.cpp:2063
+msgid "Browse"
+msgstr "閲覧"
+
+#: window.cpp:2064
+msgid "Mount…"
+msgstr "マウント…"
+
+#: window.cpp:2065
+msgid "Unmount"
+msgstr "マウント解除"
+
+#: window.cpp:2066
+msgid "Unlock…"
+msgstr "ロック解除…"
+
+#: window.cpp:2067
+msgid "Unlock VeraCrypt / TrueCrypt…"
+msgstr "VeraCrypt / TrueCrypt のロック解除…"
+
+#: window.cpp:2068
+msgid "Open Plain dm-crypt…"
+msgstr "plain dm-crypt を開く…"
+
+#: window.cpp:2070
+msgid "Export Raw Image…"
+msgstr "RAW イメージを書き出し…"
+
+#: window.cpp:2071
+msgid "Search for Lost Partitions…"
+msgstr "失われたパーティションを検索…"
+
+#: window.cpp:2072
+msgid "Detach"
+msgstr "切り離し"
+
+#: window.cpp:2115
+msgid "Name"
+msgstr "名前"
+
+#: window.cpp:2117
+msgid "Modified"
+msgstr "更新日時"
+
+#: window.cpp:2145
+msgid "Pick a volume on the left, or open a disk image (Ctrl+O)."
+msgstr "左側でボリュームを選択するか、ディスクイメージを開いてください (Ctrl+O)。"
+
+#: window.cpp:2151
+msgid "_Access Physical Disks…"
+msgstr "物理ディスクにアクセス(_A)…"
+
+#: window.cpp:2154
+msgid "Some disks need administrator permission to be read. FsRover asks for it without running as root."
+msgstr "一部のディスクの読み取りには管理者権限が必要です。FsRover は root として実行せずに権限を要求します。"
+
+#: window.cpp:2178
+msgid "_Extract…"
+msgstr "展開(_E)…"
+
+#: window.cpp:2183
+msgid "Extract the selection (Ctrl+E)"
+msgstr "選択項目を展開 (Ctrl+E)"
+
+#: window.cpp:2190
+msgid "(device)/path"
+msgstr "(デバイス)/パス"
+
+#: window.cpp:2196
+msgid "Back (Alt+Left)"
+msgstr "戻る (Alt+←)"
+
+#: window.cpp:2198
+msgid "Forward (Alt+Right)"
+msgstr "進む (Alt+→)"
+
+#: window.cpp:2200
+msgid "Up (Alt+Up)"
+msgstr "上へ (Alt+↑)"
+
+#: window.cpp:2202
+msgid "Open Disk Image (Ctrl+O)"
+msgstr "ディスクイメージを開く (Ctrl+O)"
+
+#: window.cpp:2214
+msgid "Starting…"
+msgstr "起動しています…"
+
+#: window.cpp:2222
+msgid "Cancel"
+msgstr "キャンセル"

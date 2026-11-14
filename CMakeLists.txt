@@ -155,6 +155,14 @@ if(ROVER_GTK)
 
 		# md4c is third-party C; build it without the project's -Werror.
 		add_library(rover-md4c STATIC FsRover/md4c/md4c.c FsRover/md4c/entity.c)
+		# BLAKE2sp/BLAKE3 for the checksum list; also third-party C (blake3.h
+		# carries MSVC-only pragmas), so likewise outside -Werror.
+		add_library(rover-blake STATIC
+			FsRover/blake2/blake2s-ref.c
+			FsRover/blake2/blake2sp-ref.c
+			FsRover/blake3/blake3.c
+			FsRover/blake3_glue.c)
+		target_compile_options(rover-blake PRIVATE -Wno-unknown-pragmas)
 
 		set(GTKROVER_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/gtkrover-resources.c")
 		add_custom_command(OUTPUT "${GTKROVER_RESOURCES}"
@@ -194,7 +202,7 @@ if(ROVER_GTK)
 			GDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_12)
 		set_source_files_properties("${GTKROVER_RESOURCES}" PROPERTIES COMPILE_OPTIONS -w)
 		target_compile_options(GtkRover PRIVATE -Wall -Wextra -Werror)
-		target_link_libraries(GtkRover PRIVATE rover-grub rover-md4c PkgConfig::GTK4
+		target_link_libraries(GtkRover PRIVATE rover-grub rover-md4c rover-blake PkgConfig::GTK4
 			PkgConfig::FUSE3 pthread)
 		if(LIBMAGIC_FOUND)
 			target_compile_definitions(GtkRover PRIVATE HAVE_LIBMAGIC=1)

@@ -1,0 +1,1202 @@
+# Traditional Chinese translation of FsRover (GTK).
+# Copyright (C) 2026 A1ive
+# This file is distributed under the same license as FsRover.
+msgid ""
+msgstr ""
+"Project-Id-Version: fsrover\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-14 21:00+0800\n"
+"Last-Translator: A1ive\n"
+"Language-Team: Chinese (traditional)\n"
+"Language: zh_TW\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: cryptodlg.cpp:95
+#, c-format
+msgid "Unlocking (%s)…"
+msgstr "正在解鎖 (%s)…"
+
+#: cryptodlg.cpp:97
+msgid "Another operation is still running."
+msgstr "另一項作業仍在進行中。"
+
+#: cryptodlg.cpp:114
+#, c-format
+msgid "Unlock (%s) failed"
+msgstr "解鎖 (%s) 失敗"
+
+#: cryptodlg.cpp:118
+#, c-format
+msgid "Unlocked (%s) as (%s)"
+msgstr "已將 (%s) 解鎖為 (%s)"
+
+#: cryptodlg.cpp:152 mount.cpp:430
+msgid "_Cancel"
+msgstr "取消(_C)"
+
+#: cryptodlg.cpp:164
+msgid "_Unlock"
+msgstr "解鎖(_U)"
+
+#: cryptodlg.cpp:186
+msgid "Passphrase"
+msgstr "密碼"
+
+#: cryptodlg.cpp:265
+msgid "Choose Key File"
+msgstr "選擇金鑰檔案"
+
+#: cryptodlg.cpp:275 mount.cpp:429
+msgid "Browse…"
+msgstr "瀏覽…"
+
+#: cryptodlg.cpp:323
+#, c-format
+msgid "Unlock (%s)"
+msgstr "解鎖 (%s)"
+
+#: cryptodlg.cpp:324
+msgid "Encrypted volume."
+msgstr "加密磁碟區。"
+
+#: cryptodlg.cpp:325
+#, c-format
+msgid "%s volume%s. Enter its passphrase or choose a key file."
+msgstr "%s 磁碟區%s。請輸入密碼或選擇金鑰檔案。"
+
+#: cryptodlg.cpp:333
+msgid "Use a _key file"
+msgstr "使用金鑰檔案(_K)"
+
+#: cryptodlg.cpp:339
+msgid "Unlock Volume"
+msgstr "解鎖磁碟區"
+
+#: cryptodlg.cpp:365
+msgid "Enter a passphrase or choose a non-empty key file."
+msgstr "請輸入密碼，或選擇一個非空的金鑰檔案。"
+
+#: cryptodlg.cpp:447
+msgid "No key files"
+msgstr "沒有金鑰檔案"
+
+#: cryptodlg.cpp:477
+msgid "Add Key Files"
+msgstr "新增金鑰檔案"
+
+#: cryptodlg.cpp:498
+msgid "Autodetect (slow)"
+msgstr "自動偵測（較慢）"
+
+#: cryptodlg.cpp:506
+#, c-format
+msgid "Unlock VeraCrypt volume (%s)"
+msgstr "解鎖 VeraCrypt 磁碟區 (%s)"
+
+#: cryptodlg.cpp:510
+msgid "Personal Iterations Multiplier; 0 uses the volume's default"
+msgstr "個人迭代乘數（PIM）；0 表示使用磁碟區的預設值"
+
+#: cryptodlg.cpp:512
+msgid "_Password:"
+msgstr "密碼(_P)："
+
+#: cryptodlg.cpp:513
+msgid "P_IM:"
+msgstr "P_IM："
+
+#: cryptodlg.cpp:514 cryptodlg.cpp:701
+msgid "_Hash:"
+msgstr "雜湊(_H)："
+
+#: cryptodlg.cpp:516
+msgid "_TrueCrypt volume"
+msgstr "TrueCrypt 磁碟區(_T)"
+
+#: cryptodlg.cpp:517
+msgid "Open the hi_dden volume"
+msgstr "開啟隱藏磁碟區(_D)"
+
+#: cryptodlg.cpp:518
+msgid "Use the _backup headers"
+msgstr "使用備份磁碟區標頭(_B)"
+
+#: cryptodlg.cpp:524
+msgid "Add _Key Files…"
+msgstr "新增金鑰檔案(_K)…"
+
+#: cryptodlg.cpp:525
+msgid "Clear"
+msgstr "清除"
+
+#: cryptodlg.cpp:537
+msgid "Unlock VeraCrypt / TrueCrypt"
+msgstr "解鎖 VeraCrypt / TrueCrypt"
+
+#: cryptodlg.cpp:559
+#, c-format
+msgid "Cannot use key file %s"
+msgstr "無法使用金鑰檔案 %s"
+
+#: cryptodlg.cpp:571
+msgid "Enter a password or add key files."
+msgstr "請輸入密碼或新增金鑰檔案。"
+
+#: cryptodlg.cpp:581
+msgid "Trying every hash; this can take a while…"
+msgstr "正在逐一嘗試所有雜湊演算法，可能需要一段時間…"
+
+#: cryptodlg.cpp:609
+msgid "None (use as is)"
+msgstr "無（按原樣使用）"
+
+#: cryptodlg.cpp:678
+#, c-format
+msgid "Open plain dm-crypt volume (%s)"
+msgstr "開啟 plain dm-crypt 磁碟區 (%s)"
+
+#: cryptodlg.cpp:680
+msgid "A plain volume has no header: wrong parameters are not detected and simply show garbage."
+msgstr "plain 磁碟區沒有標頭：參數錯誤不會被偵測出來，只會顯示為亂碼。"
+
+#: cryptodlg.cpp:699
+msgid "_Cipher:"
+msgstr "加密演算法(_C)："
+
+#: cryptodlg.cpp:700
+msgid "P_resets:"
+msgstr "預設集(_R)："
+
+#: cryptodlg.cpp:702
+msgid "_Key size (bits):"
+msgstr "金鑰長度（位元）(_K)："
+
+#: cryptodlg.cpp:703
+msgid "_Sector size:"
+msgstr "磁區大小(_S)："
+
+#: cryptodlg.cpp:704
+msgid "_Offset (512-byte sectors):"
+msgstr "位移（512 位元組磁區）(_O)："
+
+#: cryptodlg.cpp:705
+msgid "S_kip (IV sectors):"
+msgstr "略過（IV 磁區）(_K)："
+
+#: cryptodlg.cpp:706
+msgid "_Passphrase:"
+msgstr "密碼(_P)："
+
+#: cryptodlg.cpp:708
+msgid "Use a key _file as the volume key"
+msgstr "使用金鑰檔案作為磁碟區金鑰(_F)"
+
+#: cryptodlg.cpp:713
+msgid "Key _file:"
+msgstr "金鑰檔案(_F)："
+
+#: cryptodlg.cpp:714
+msgid "Key file o_ffset (bytes):"
+msgstr "金鑰檔案位移（位元組）(_F)："
+
+#: cryptodlg.cpp:719
+msgid "Open Plain dm-crypt"
+msgstr "開啟 plain dm-crypt"
+
+#: cryptodlg.cpp:739
+msgid "The cipher must name a mode, e.g. aes-xts-plain64."
+msgstr "加密演算法必須包含模式，例如 aes-xts-plain64。"
+
+#: cryptodlg.cpp:754
+msgid "The key file is too short for this key size."
+msgstr "金鑰檔案長度不足以提供此金鑰長度。"
+
+#: cryptodlg.cpp:769
+msgid "Enter a passphrase or choose a key file."
+msgstr "請輸入密碼或選擇金鑰檔案。"
+
+#: hexview.cpp:80
+#, c-format
+msgid "Offset 0x%llX of %s"
+msgstr "位移 0x%llX，共 %s"
+
+#: hexview.cpp:289
+#, c-format
+msgid "%s — Hex"
+msgstr "%s — 十六進位"
+
+#: hexview.cpp:301 imageview.cpp:194 mdview.cpp:559 textview.cpp:289
+msgid "Reading…"
+msgstr "正在讀取…"
+
+#: hexview.cpp:303
+msgid "Go to offset (0x… or decimal)"
+msgstr "跳至位移（0x… 或十進位）"
+
+#: hostdisk.cpp:295
+#, c-format
+msgid "The helper failed (pkexec exit status %d)."
+msgstr "輔助程式失敗（pkexec 結束狀態 %d）。"
+
+#: hostdisk.cpp:328
+#, c-format
+msgid "Access granted to %zu disk"
+msgid_plural "Access granted to %zu disks"
+msgstr[0] "已取得 %zu 個磁碟的存取權限"
+
+#: hostdisk.cpp:331
+msgid "No access to the physical disks"
+msgstr "無法存取實體磁碟"
+
+#: hostdisk.cpp:333
+msgid "No physical disk could be opened"
+msgstr "沒有可以開啟的實體磁碟"
+
+#: hostdisk.cpp:375
+msgid "All physical disks are already readable"
+msgstr "所有實體磁碟均已可讀取"
+
+#: hostdisk.cpp:381
+msgid "Waiting for authorization…"
+msgstr "正在等待授權…"
+
+#: imageview.cpp:90 imageview.cpp:95
+msgid "Unrecognized image format"
+msgstr "無法識別的圖片格式"
+
+#: imageview.cpp:184
+#, c-format
+msgid "%s — Image"
+msgstr "%s — 圖片"
+
+#: imageview.cpp:197
+msgid "_Fit"
+msgstr "符合視窗(_F)"
+
+#: imageview.cpp:206
+msgid "Zoom out"
+msgstr "縮小"
+
+#: imageview.cpp:208
+msgid "Actual size"
+msgstr "實際大小"
+
+#: imageview.cpp:210
+msgid "Zoom in"
+msgstr "放大"
+
+#: imageview.cpp:231
+#, c-format
+msgid "The image is larger than %s"
+msgstr "圖片大於 %s"
+
+#: lostdlg.cpp:160
+#, c-format
+msgid "%s of %s"
+msgstr "%s / %s"
+
+#: lostdlg.cpp:166
+#, c-format
+msgid "Searching… %zu found"
+msgid_plural "Searching… %zu found"
+msgstr[0] "正在搜尋… 已找到 %zu 個"
+
+#: lostdlg.cpp:173
+msgid "Stopped."
+msgstr "已停止。"
+
+#: lostdlg.cpp:174
+msgid "Search complete."
+msgstr "搜尋完成。"
+
+#: lostdlg.cpp:175
+#, c-format
+msgid "%zu partition found."
+msgid_plural "%zu partitions found."
+msgstr[0] "找到 %zu 個分割區。"
+
+#: lostdlg.cpp:178 lostdlg.cpp:344
+msgid "_Search"
+msgstr "搜尋(_S)"
+
+#: lostdlg.cpp:202
+msgid "Stopping…"
+msgstr "正在停止…"
+
+#: lostdlg.cpp:211
+msgid "_Stop"
+msgstr "停止(_S)"
+
+#: lostdlg.cpp:215
+msgid "Searching…"
+msgstr "正在搜尋…"
+
+#: lostdlg.cpp:261
+msgid "Cannot open the lost partition"
+msgstr "無法開啟遺失的分割區"
+
+#: lostdlg.cpp:328
+msgid "Offset"
+msgstr "位移（位元組）"
+
+#: lostdlg.cpp:328 window.cpp:2116
+msgid "Size"
+msgstr "大小"
+
+#: lostdlg.cpp:328 mapview.cpp:40 window.cpp:2118
+msgid "Type"
+msgstr "類型"
+
+#: lostdlg.cpp:328
+msgid "Filesystem"
+msgstr "檔案系統"
+
+#: lostdlg.cpp:328
+msgid "Label"
+msgstr "標籤"
+
+#: lostdlg.cpp:328
+msgid "Flags"
+msgstr "狀態"
+
+#: lostdlg.cpp:330
+#, c-format
+msgid "Lost Partitions on (%s)"
+msgstr "(%s) 上遺失的分割區"
+
+#: lostdlg.cpp:334 mapview.cpp:222 propsdlg.cpp:114
+msgid "_Close"
+msgstr "關閉(_C)"
+
+#: lostdlg.cpp:342
+msgid "Also look for _ext backup superblocks"
+msgstr "同時尋找 ext 備份超級區塊(_E)"
+
+#: lostdlg.cpp:343
+msgid "_Deep search (every sector, much slower)"
+msgstr "深度搜尋：檢查每個磁區（慢得多）(_D)"
+
+#: lostdlg.cpp:346
+msgid "_Open"
+msgstr "開啟(_O)"
+
+#: lostdlg.cpp:351
+msgid "Searches the device for filesystems that no partition table entry points at."
+msgstr "在裝置上搜尋沒有分割表項目指向的檔案系統。"
+
+#: mapview.cpp:40
+msgid "Extent"
+msgstr "組號"
+
+#: mapview.cpp:40
+msgid "Logical offset"
+msgstr "檔案位移"
+
+#: mapview.cpp:40
+msgid "Length"
+msgstr "檔案長度"
+
+#: mapview.cpp:40 propsdlg.cpp:498
+msgid "Device"
+msgstr "裝置"
+
+#: mapview.cpp:41
+msgid "Address space"
+msgstr "位址空間"
+
+#: mapview.cpp:41
+msgid "Storage offset"
+msgstr "儲存位移"
+
+#: mapview.cpp:41
+msgid "Storage length"
+msgstr "儲存長度"
+
+#: mapview.cpp:41
+msgid "Encoding"
+msgstr "編碼"
+
+#: mapview.cpp:42
+msgid "Decoded offset"
+msgstr "解碼後位移"
+
+#: mapview.cpp:42
+msgid "Decoded length"
+msgstr "解碼後長度"
+
+#: mapview.cpp:165 propsdlg.cpp:92
+msgid "Copied to the clipboard"
+msgstr "已複製到剪貼簿"
+
+#: mapview.cpp:180
+msgid "Cannot save the file map"
+msgstr "無法儲存檔案儲存映射"
+
+#: mapview.cpp:191
+msgid "Save File Map"
+msgstr "儲存檔案儲存映射"
+
+#: mapview.cpp:216
+#, c-format
+msgid "%s — File Map"
+msgstr "%s — 檔案儲存映射"
+
+#: mapview.cpp:220
+msgid "_Copy as TSV"
+msgstr "複製為 TSV(_C)"
+
+#: mapview.cpp:221
+msgid "_Save as TSV…"
+msgstr "另存為 TSV(_S)…"
+
+#: mapview.cpp:226
+msgid "Mapping…"
+msgstr "正在讀取中繼資料…"
+
+#: mapview.cpp:282
+#, c-format
+msgid "%u extent"
+msgid_plural "%u extents"
+msgstr[0] "%u 個區段"
+
+#: mapview.cpp:285
+#, c-format
+msgid "stopped after %zu rows"
+msgstr "已在 %zu 列後停止"
+
+#: mdview.cpp:579
+#, c-format
+msgid "%s — Markdown"
+msgstr "%s — Markdown"
+
+#: mdview.cpp:593
+#, c-format
+msgid "%s, showing the first %s"
+msgstr "%s，僅顯示前 %s"
+
+#: mdview.cpp:607
+msgid "FsRover Help"
+msgstr "FsRover 說明"
+
+#: mdview.cpp:612
+msgid "The help text is missing."
+msgstr "缺少說明文字。"
+
+#: mount.cpp:260
+#, c-format
+msgid "(%s) was unmounted"
+msgstr "(%s) 已被卸載"
+
+#: mount.cpp:307 window.cpp:1093
+#, c-format
+msgid "Cannot create %s: %s"
+msgstr "無法建立 %s：%s"
+
+#: mount.cpp:314
+#, c-format
+msgid "%s is not a folder"
+msgstr "%s 不是資料夾"
+
+#: mount.cpp:319
+#, c-format
+msgid "%s is not empty"
+msgstr "%s 不是空資料夾"
+
+#: mount.cpp:329
+#, c-format
+msgid "FUSE could not mount %s. Is fusermount3 installed and /dev/fuse usable?"
+msgstr "FUSE 無法掛載 %s。請確認已安裝 fusermount3 且 /dev/fuse 可用。"
+
+#: mount.cpp:386
+msgid "Choose an Empty Folder"
+msgstr "選擇一個空資料夾"
+
+#: mount.cpp:401
+msgid "Enter an absolute folder path."
+msgstr "請輸入資料夾的絕對路徑。"
+
+#: mount.cpp:410
+#, c-format
+msgid "Mounted (%s) at %s"
+msgstr "已將 (%s) 掛載到 %s"
+
+#: mount.cpp:426
+#, c-format
+msgid "Mount (%s)"
+msgstr "掛載 (%s)"
+
+#: mount.cpp:431
+msgid "_Mount"
+msgstr "掛載(_M)"
+
+#: mount.cpp:437
+#, c-format
+msgid "Mount (%s) read-only"
+msgstr "以唯讀方式掛載 (%s)"
+
+#: mount.cpp:438
+msgid "The volume appears as a folder that every program can read. It stays mounted until you unmount it or quit FsRover."
+msgstr "該磁碟區會顯示為一個所有程式都能讀取的資料夾，直到卸載或結束 FsRover 為止。"
+
+#: mount.cpp:451
+msgid "_Open the folder after mounting"
+msgstr "掛載後開啟該資料夾(_O)"
+
+#: mount.cpp:503
+#, c-format
+msgid "Unmounted (%s)"
+msgstr "已卸載 (%s)"
+
+#: propsdlg.cpp:98
+msgid "C_opy"
+msgstr "複製(_O)"
+
+#: propsdlg.cpp:273 window.cpp:945 window.cpp:1130 window.cpp:1169
+msgid "Cancelled"
+msgstr "已取消"
+
+#: propsdlg.cpp:338
+msgid "Calculating…"
+msgstr "正在計算…"
+
+#: propsdlg.cpp:376
+msgid "Name:"
+msgstr "名稱："
+
+#: propsdlg.cpp:377
+msgid "Location:"
+msgstr "位置："
+
+#: propsdlg.cpp:379
+msgid "Error:"
+msgstr "錯誤："
+
+#: propsdlg.cpp:392 propsdlg.cpp:501
+msgid "Type:"
+msgstr "類型："
+
+#: propsdlg.cpp:395
+msgid "Link target:"
+msgstr "連結目標："
+
+#: propsdlg.cpp:397
+msgid "Contents:"
+msgstr "內容："
+
+#: propsdlg.cpp:399 propsdlg.cpp:503
+msgid "Size:"
+msgstr "大小："
+
+#: propsdlg.cpp:401
+msgid "Modified:"
+msgstr "修改日期："
+
+#: propsdlg.cpp:402
+msgid "Inode:"
+msgstr "Inode："
+
+#: propsdlg.cpp:403
+msgid "not reported by this filesystem"
+msgstr "此檔案系統未提供"
+
+#: propsdlg.cpp:409
+msgid "Checksums"
+msgstr "總和檢查碼"
+
+#: propsdlg.cpp:429
+msgid "C_alculate"
+msgstr "計算(_A)"
+
+#: propsdlg.cpp:453
+#, c-format
+msgid "%s Properties"
+msgstr "%s 內容"
+
+#: propsdlg.cpp:476
+#, c-format
+msgid "(%s) Properties"
+msgstr "(%s) 內容"
+
+#: propsdlg.cpp:482
+msgid "Unlocked encrypted volume"
+msgstr "已解鎖的加密磁碟區"
+
+#: propsdlg.cpp:484
+msgid "Partition"
+msgstr "分割區"
+
+#: propsdlg.cpp:486
+msgid "Disk image file"
+msgstr "磁碟映像檔"
+
+#: propsdlg.cpp:488
+msgid "Disk image inside a filesystem"
+msgstr "檔案系統內的磁碟映像"
+
+#: propsdlg.cpp:490
+msgid "Lost partition window"
+msgstr "遺失的分割區範圍"
+
+#: propsdlg.cpp:492
+msgid "Volume (LVM, RAID or LDM)"
+msgstr "邏輯磁碟區（LVM、RAID 或 LDM）"
+
+#: propsdlg.cpp:494
+msgid "Optical drive"
+msgstr "光碟機"
+
+#: propsdlg.cpp:496
+msgid "Physical disk"
+msgstr "實體磁碟"
+
+#: propsdlg.cpp:500
+msgid "Device:"
+msgstr "裝置："
+
+#: propsdlg.cpp:505
+msgid "Sector size:"
+msgstr "磁區大小："
+
+#: propsdlg.cpp:507
+msgid "Start:"
+msgstr "起始位置："
+
+#: propsdlg.cpp:507
+#, c-format
+msgid "sector %llu (byte offset %llu)"
+msgstr "磁區 %llu（位元組位移 %llu）"
+
+#: propsdlg.cpp:509
+msgid "Filesystem:"
+msgstr "檔案系統："
+
+#: propsdlg.cpp:509
+msgid "none recognized"
+msgstr "未識別"
+
+#: propsdlg.cpp:511
+msgid "Label:"
+msgstr "磁碟區標籤："
+
+#: propsdlg.cpp:513
+msgid "UUID:"
+msgstr "UUID："
+
+#: propsdlg.cpp:515
+msgid "Encryption:"
+msgstr "加密："
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", locked"
+msgstr "，已鎖定"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", unlocked"
+msgstr "，已解鎖"
+
+#: propsdlg.cpp:517
+msgid "Encryption UUID:"
+msgstr "加密 UUID："
+
+#: propsdlg.cpp:519
+msgid "Read from:"
+msgstr "資料來源："
+
+#: propsdlg.cpp:521
+msgid "Backing file:"
+msgstr "來源檔案："
+
+#: propsdlg.cpp:523
+msgid "Members:"
+msgstr "成員裝置："
+
+#: propsdlg.cpp:525
+msgid "Mounted at:"
+msgstr "掛載位置："
+
+#: row.cpp:83
+msgid "no filesystem"
+msgstr "無檔案系統"
+
+#: row.cpp:89
+msgid "mounted"
+msgstr "已掛載"
+
+#: textview.cpp:40
+msgid "Automatic"
+msgstr "自動"
+
+#: textview.cpp:189
+#, c-format
+msgid "%s, %s"
+msgstr "%s，%s"
+
+#: textview.cpp:191
+#, c-format
+msgid "showing the first %s"
+msgstr "僅顯示前 %s"
+
+#: textview.cpp:270
+#, c-format
+msgid "%s — Text"
+msgstr "%s — 文字"
+
+#: textview.cpp:274
+msgid "_Wrap lines"
+msgstr "自動換行(_W)"
+
+#: textview.cpp:294
+msgid "Find (Ctrl+F)"
+msgstr "尋找（Ctrl+F）"
+
+#: window.cpp:52
+msgid "unknown error"
+msgstr "未知的錯誤"
+
+#: window.cpp:130
+#, c-format
+msgid "%s byte"
+msgid_plural "%s bytes"
+msgstr[0] "%s 位元組"
+
+#: window.cpp:345
+msgid "Another operation is still running"
+msgstr "另一項作業仍在進行中"
+
+#: window.cpp:525
+msgid "encrypted"
+msgstr "已加密"
+
+#: window.cpp:677 window.cpp:705
+#, c-format
+msgid "(%s) has no filesystem GRUB can read"
+msgstr "(%s) 上沒有 GRUB 能讀取的檔案系統"
+
+#: window.cpp:722 window.cpp:739 window.cpp:740
+#, c-format
+msgid "Cannot open %s"
+msgstr "無法開啟 %s"
+
+#: window.cpp:723
+msgid "This file is inside a volume FsRover itself has mounted. Browse to it in FsRover and use \"Open as Disk Image\" instead."
+msgstr "該檔案位於 FsRover 自己掛載的磁碟區中。請在 FsRover 中瀏覽到它，然後使用「作為磁碟映像開啟」。"
+
+#: window.cpp:729 window.cpp:1039
+#, c-format
+msgid "Opening %s…"
+msgstr "正在開啟 %s…"
+
+#: window.cpp:786 window.cpp:2331
+msgid "Ready"
+msgstr "就緒"
+
+#: window.cpp:861
+msgid "Empty folder"
+msgstr "空資料夾"
+
+#: window.cpp:863
+#, c-format
+msgid "%zu folders, %zu files"
+msgstr "%zu 個資料夾，%zu 個檔案"
+
+#: window.cpp:886
+#, c-format
+msgid "Loading %s…"
+msgstr "正在載入 %s…"
+
+#: window.cpp:940
+#, c-format
+msgid "Extracting %s"
+msgstr "正在擷取 %s"
+
+#: window.cpp:947
+#, c-format
+msgid "Failed: %s"
+msgstr "失敗：%s"
+
+#: window.cpp:949
+#, c-format
+msgid "%llu file, %s"
+msgid_plural "%llu files, %s"
+msgstr[0] "%llu 個檔案，%s"
+
+#: window.cpp:952
+#, c-format
+msgid "(%zu error)"
+msgid_plural "(%zu errors)"
+msgstr[0] "（%zu 個錯誤）"
+
+#: window.cpp:971
+#, c-format
+msgid "File dialog failed: %s"
+msgstr "檔案對話方塊發生錯誤：%s"
+
+#: window.cpp:985
+msgid "Not a local path"
+msgstr "不是本機路徑"
+
+#: window.cpp:985
+msgid "Choose a file or folder on this computer."
+msgstr "請選擇這台電腦上的檔案或資料夾。"
+
+#: window.cpp:1004
+#, c-format
+msgid "Extracting to %s…"
+msgstr "正在擷取到 %s…"
+
+#: window.cpp:1008
+#, c-format
+msgid "Extract to %s: %s"
+msgstr "擷取到 %s：%s"
+
+#: window.cpp:1020
+#, c-format
+msgid "Cannot open: %s"
+msgstr "無法開啟：%s"
+
+#: window.cpp:1036
+#, c-format
+msgid "Cannot create a temporary directory in %s"
+msgstr "無法在 %s 中建立暫存目錄"
+
+#: window.cpp:1043
+#, c-format
+msgid "Opened %s"
+msgstr "已開啟 %s"
+
+#: window.cpp:1044
+#, c-format
+msgid "Open %s: %s"
+msgstr "開啟 %s：%s"
+
+#: window.cpp:1107
+msgid "The device ended before its reported size"
+msgstr "裝置在達到其回報的大小之前就結束了"
+
+#: window.cpp:1117
+#, c-format
+msgid "Write failed: %s"
+msgstr "寫入失敗：%s"
+
+#: window.cpp:1126
+#, c-format
+msgid "Exporting (%s): %s of %s"
+msgstr "正在匯出 (%s)：%s / %s"
+
+#: window.cpp:1132
+#, c-format
+msgid "Cannot flush %s: %s"
+msgstr "無法排清 %s：%s"
+
+#: window.cpp:1134
+#, c-format
+msgid "Cannot close %s: %s"
+msgstr "無法關閉 %s：%s"
+
+#: window.cpp:1136
+#, c-format
+msgid "Cannot replace %s: %s"
+msgstr "無法取代 %s：%s"
+
+#: window.cpp:1158
+#, c-format
+msgid "Exporting (%s)…"
+msgstr "正在匯出 (%s)…"
+
+#: window.cpp:1164
+#, c-format
+msgid "Exported (%s) to %s, %s"
+msgstr "已將 (%s) 匯出到 %s，%s"
+
+#: window.cpp:1168
+#, c-format
+msgid "Export of (%s) failed"
+msgstr "匯出 (%s) 失敗"
+
+#: window.cpp:1170
+#, c-format
+msgid "Cannot export (%s)"
+msgstr "無法匯出 (%s)"
+
+#: window.cpp:1198
+msgid "Open Compressed Disk Image"
+msgstr "開啟壓縮的磁碟映像"
+
+#: window.cpp:1199
+msgid "Open Disk Image"
+msgstr "開啟磁碟映像"
+
+#: window.cpp:1268
+msgid "Extract To"
+msgstr "擷取到"
+
+#: window.cpp:1305
+#, c-format
+msgid "Cannot open %s as a disk image"
+msgstr "無法將 %s 作為磁碟映像開啟"
+
+#: window.cpp:1502
+#, c-format
+msgid "Export (%s) as Raw Image"
+msgstr "將 (%s) 匯出為原始映像"
+
+#: window.cpp:1535
+msgid "Only attached images and lost partitions can be detached"
+msgstr "只能中斷連結已附加的映像和遺失的分割區"
+
+#: window.cpp:1543 window.cpp:1562
+#, c-format
+msgid "Cannot detach (%s)"
+msgstr "無法中斷連結 (%s)"
+
+#: window.cpp:1543
+msgid "Unmount it first."
+msgstr "請先卸載它。"
+
+#: window.cpp:1564
+#, c-format
+msgid "Detached (%s)"
+msgstr "已中斷連結 (%s)"
+
+#: window.cpp:1623
+msgid "Navigation"
+msgstr "瀏覽"
+
+#: window.cpp:1623
+msgid "Back"
+msgstr "上一頁"
+
+#: window.cpp:1623
+msgid "Forward"
+msgstr "下一頁"
+
+#: window.cpp:1623
+msgid "Up one level"
+msgstr "上一層"
+
+#: window.cpp:1623
+msgid "Edit the path"
+msgstr "編輯路徑"
+
+#: window.cpp:1624 window.cpp:2013
+msgid "Refresh"
+msgstr "重新整理"
+
+#: window.cpp:1624
+msgid "Files"
+msgstr "檔案"
+
+#: window.cpp:1624
+msgid "Open a disk image"
+msgstr "開啟磁碟映像"
+
+#: window.cpp:1624
+msgid "Extract the selection"
+msgstr "擷取所選項目"
+
+#: window.cpp:1625
+msgid "Select all"
+msgstr "全選"
+
+#: window.cpp:1625 window.cpp:2053 window.cpp:2073
+msgid "Properties"
+msgstr "內容"
+
+#: window.cpp:1625
+msgid "View as text"
+msgstr "檢視文字"
+
+#: window.cpp:1625
+msgid "View as hex"
+msgstr "檢視十六進位"
+
+#: window.cpp:1642
+msgid "Read-only filesystem browser built on GRUB drivers."
+msgstr "以 GRUB 驅動程式為基礎的唯讀檔案系統瀏覽器。"
+
+#: window.cpp:1646
+msgid "translator-credits"
+msgstr "A1ive"
+
+#: window.cpp:1962
+msgid "Cancelling…"
+msgstr "正在取消…"
+
+#: window.cpp:2010
+msgid "Open Disk Image…"
+msgstr "開啟磁碟映像…"
+
+#: window.cpp:2011
+msgid "Open Compressed Disk Image…"
+msgstr "開啟壓縮的磁碟映像…"
+
+#: window.cpp:2012
+msgid "Access Physical Disks…"
+msgstr "存取實體磁碟…"
+
+#: window.cpp:2014
+msgid "Select All"
+msgstr "全選"
+
+#: window.cpp:2015
+msgid "Invert Selection"
+msgstr "反向選取"
+
+#: window.cpp:2020
+msgid "Help"
+msgstr "說明"
+
+#: window.cpp:2021
+msgid "Keyboard Shortcuts"
+msgstr "快速鍵"
+
+#: window.cpp:2022
+msgid "About FsRover"
+msgstr "關於 FsRover"
+
+#: window.cpp:2030
+msgid "Filename Encoding"
+msgstr "檔案名稱編碼"
+
+#: window.cpp:2031
+msgid "Preserve Timestamps When Extracting"
+msgstr "擷取時保留時間戳記"
+
+#: window.cpp:2044
+msgid "Open"
+msgstr "開啟"
+
+#: window.cpp:2045
+msgid "Extract To…"
+msgstr "擷取到…"
+
+#: window.cpp:2046
+msgid "View as Text"
+msgstr "檢視文字"
+
+#: window.cpp:2047 window.cpp:2069
+msgid "View as Hex"
+msgstr "檢視十六進位"
+
+#: window.cpp:2048
+msgid "View as Image"
+msgstr "檢視圖片"
+
+#: window.cpp:2049
+msgid "View as Markdown"
+msgstr "Markdown 預覽"
+
+#: window.cpp:2050
+msgid "Open as Disk Image"
+msgstr "作為磁碟映像開啟"
+
+#: window.cpp:2051
+msgid "Open as Compressed Disk Image"
+msgstr "作為磁碟映像開啟（透明解壓縮）"
+
+#: window.cpp:2052
+msgid "File Map"
+msgstr "檔案儲存映射"
+
+#: window.cpp:2054
+msgid "Copy Name"
+msgstr "複製檔案名稱"
+
+#: window.cpp:2055
+msgid "Copy Path"
+msgstr "複製路徑"
+
+#: window.cpp:2063
+msgid "Browse"
+msgstr "瀏覽"
+
+#: window.cpp:2064
+msgid "Mount…"
+msgstr "掛載…"
+
+#: window.cpp:2065
+msgid "Unmount"
+msgstr "卸載"
+
+#: window.cpp:2066
+msgid "Unlock…"
+msgstr "解鎖…"
+
+#: window.cpp:2067
+msgid "Unlock VeraCrypt / TrueCrypt…"
+msgstr "解鎖 VeraCrypt / TrueCrypt…"
+
+#: window.cpp:2068
+msgid "Open Plain dm-crypt…"
+msgstr "開啟 plain dm-crypt…"
+
+#: window.cpp:2070
+msgid "Export Raw Image…"
+msgstr "匯出原始映像…"
+
+#: window.cpp:2071
+msgid "Search for Lost Partitions…"
+msgstr "搜尋遺失的分割區…"
+
+#: window.cpp:2072
+msgid "Detach"
+msgstr "中斷連結"
+
+#: window.cpp:2115
+msgid "Name"
+msgstr "名稱"
+
+#: window.cpp:2117
+msgid "Modified"
+msgstr "修改日期"
+
+#: window.cpp:2145
+msgid "Pick a volume on the left, or open a disk image (Ctrl+O)."
+msgstr "請在左側選擇一個磁碟區，或開啟磁碟映像（Ctrl+O）。"
+
+#: window.cpp:2151
+msgid "_Access Physical Disks…"
+msgstr "存取實體磁碟(_A)…"
+
+#: window.cpp:2154
+msgid "Some disks need administrator permission to be read. FsRover asks for it without running as root."
+msgstr "部分磁碟需要系統管理員權限才能讀取。FsRover 會要求授權，而不必以 root 身分執行。"
+
+#: window.cpp:2178
+msgid "_Extract…"
+msgstr "擷取(_E)…"
+
+#: window.cpp:2183
+msgid "Extract the selection (Ctrl+E)"
+msgstr "擷取所選項目（Ctrl+E）"
+
+#: window.cpp:2190
+msgid "(device)/path"
+msgstr "(裝置)/路徑"
+
+#: window.cpp:2196
+msgid "Back (Alt+Left)"
+msgstr "上一頁（Alt+←）"
+
+#: window.cpp:2198
+msgid "Forward (Alt+Right)"
+msgstr "下一頁（Alt+→）"
+
+#: window.cpp:2200
+msgid "Up (Alt+Up)"
+msgstr "上一層（Alt+↑）"
+
+#: window.cpp:2202
+msgid "Open Disk Image (Ctrl+O)"
+msgstr "開啟磁碟映像（Ctrl+O）"
+
+#: window.cpp:2214
+msgid "Starting…"
+msgstr "正在啟動…"
+
+#: window.cpp:2222
+msgid "Cancel"
+msgstr "取消"

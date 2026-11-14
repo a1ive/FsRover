@@ -31,6 +31,11 @@
 
 #include <rover.h>
 
+#include <cerrno>
+
+#include "../FsRover/blake2/blake2.h"
+#include "../FsRover/blake3_glue.h"
+
 namespace
 {
 
@@ -46,7 +51,13 @@ GtkWidget *
 value_label (const std::string &value)
 {
 	GtkWidget *label = gtk_label_new (value.c_str ());
+	PangoAttrList *attrs = pango_attr_list_new ();
 
+	/* Digests and paths break mid-word; a hyphen there would read as
+	   part of the value.  */
+	pango_attr_list_insert (attrs, pango_attr_insert_hyphens_new (FALSE));
+	gtk_label_set_attributes (GTK_LABEL (label), attrs);
+	pango_attr_list_unref (attrs);
 	gtk_label_set_xalign (GTK_LABEL (label), 0);
 	gtk_label_set_selectable (GTK_LABEL (label), TRUE);
 	gtk_label_set_wrap (GTK_LABEL (label), TRUE);
@@ -200,10 +211,13 @@ enum
 	HASH_SHA512,
 	HASH_CRC32,
 	HASH_CRC64,
+	HASH_BLAKE2SP,
+	HASH_BLAKE3,
 	HASH_COUNT
 };
 
-const char *const HASH_NAMES[HASH_COUNT] = { "MD5", "SHA-1", "SHA-256", "SHA-512", "CRC32", "CRC64" };
+const char *const HASH_NAMES[HASH_COUNT] =
+	{ "MD5", "SHA-1", "SHA-256", "SHA-512", "CRC32", "CRC64", "BLAKE2sp", "BLAKE3" };
 
 struct hash_result
 {
@@ -225,6 +239,25 @@ struct props_ui
 
 using props_ptr = std::shared_ptr<props_ui>;
 
+struct blake3_deleter
+{
+	void operator() (rover_blake3 *b) const { rover_blake3_free (b); }
+};
+
+std::string
+hex_digest (const unsigned char *digest, size_t len)
+{
+	static const char DIGITS[] = "0123456789abcdef";
+	std::string out (len * 2, '0');
+
+	for (size_t i = 0; i < len; i++)
+	{
+		out[i * 2] = DIGITS[digest[i] >> 4];
+		out[i * 2 + 1] = DIGITS[digest[i] & 15];
+	}
+	return out;
+}
+
 /* Grub thread: one pass over the file feeding every selected digest.  */
 hash_result
 hash_file (const props_ptr &u, unsigned mask)
@@ -237,6 +270,8 @@ hash_file (const props_ptr &u, unsigned mask)
 	guint64 crc64_table[256];
 	guint32 crc32 = 0xffffffffu;
 	guint64 crc64 = ~(guint64) 0;
+	blake2sp_state blake2sp {};
+	std::unique_ptr<rover_blake3, blake3_deleter> blake3;
 	std::vector<unsigned char> buf ((size_t) 1 << 20);
 	unsigned long long total;
 	unsigned long long done = 0;
@@ -255,6 +290,20 @@ hash_file (const props_ptr &u, unsigned mask)
 		}
 		crc32_table[i] = c;
 		crc64_table[i] = d;
+	}
+	if ((mask & (1u << HASH_BLAKE2SP)) && blake2sp_init (&blake2sp, BLAKE2S_OUTBYTES) < 0)
+	{
+		out.error = "BLAKE2sp initialization failed";
+		return out;
+	}
+	if (mask & (1u << HASH_BLAKE3))
+	{
+		blake3.reset (rover_blake3_new ());
+		if (!blake3)
+		{
+			out.error = g_strerror (ENOMEM);
+			return out;
+		}
 	}
 	f = rover_file_open (u->path.c_str ());
 	if (!f)
@@ -290,6 +339,10 @@ hash_file (const props_ptr &u, unsigned mask)
 		if (mask & (1u << HASH_CRC64))
 			for (long long i = 0; i < r; i++)
 				crc64 = crc64_table[(crc64 ^ buf[(size_t) i]) & 0xff] ^ (crc64 >> 8);
+		if (mask & (1u << HASH_BLAKE2SP))
+			blake2sp_update (&blake2sp, buf.data (), (size_t) r);
+		if (blake3)
+			rover_blake3_update (blake3.get (), buf.data (), (size_t) r);
 		done += (unsigned long long) r;
 		gint64 now = g_get_monotonic_time ();
 		if (now - last >= 100000)
@@ -316,6 +369,18 @@ hash_file (const props_ptr &u, unsigned mask)
 		out.values[HASH_CRC32] = fmt ("%08x", (unsigned) (crc32 ^ 0xffffffffu));
 	if (out.error.empty () && (mask & (1u << HASH_CRC64)))
 		out.values[HASH_CRC64] = fmt ("%016llx", (unsigned long long) (crc64 ^ ~(guint64) 0));
+	if (out.error.empty () && (mask & (1u << HASH_BLAKE2SP)))
+	{
+		unsigned char digest[BLAKE2S_OUTBYTES];
+		blake2sp_final (&blake2sp, digest, sizeof (digest));
+		out.values[HASH_BLAKE2SP] = hex_digest (digest, sizeof (digest));
+	}
+	if (out.error.empty () && blake3)
+	{
+		unsigned char digest[ROVER_BLAKE3_LEN];
+		rover_blake3_final (blake3.get (), digest);
+		out.values[HASH_BLAKE3] = hex_digest (digest, sizeof (digest));
+	}
 	return out;
 }
 
@@ -416,7 +481,7 @@ fill_file_props (const props_ptr &u, GtkWidget *box, const file_info &info)
 		gtk_widget_set_margin_start (inner, 8);
 		gtk_widget_set_margin_end (inner, 8);
 		gtk_flow_box_set_selection_mode (GTK_FLOW_BOX (checks), GTK_SELECTION_NONE);
-		gtk_flow_box_set_max_children_per_line (GTK_FLOW_BOX (checks), 6);
+		gtk_flow_box_set_max_children_per_line (GTK_FLOW_BOX (checks), 4);
 		for (int i = 0; i < HASH_COUNT; i++)
 		{
 			u->checks[i] = gtk_check_button_new_with_label (HASH_NAMES[i]);

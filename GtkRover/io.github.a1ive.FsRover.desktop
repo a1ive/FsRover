@@ -2,9 +2,13 @@
 Type=Application
 Name=FsRover
 GenericName=Filesystem Browser
+GenericName[ja]=ファイルシステムブラウザー
 GenericName[zh_CN]=文件系统浏览器
+GenericName[zh_TW]=檔案系統瀏覽器
 Comment=Browse and extract filesystems, disk images and archives read-only
+Comment[ja]=ファイルシステム、ディスクイメージ、アーカイブを読み取り専用で閲覧・展開します
 Comment[zh_CN]=以只读方式浏览和提取文件系统、磁盘镜像与归档
+Comment[zh_TW]=以唯讀方式瀏覽和擷取檔案系統、磁碟映像與封存檔
 Exec=GtkRover %F
 Icon=drive-harddisk
 Terminal=false
