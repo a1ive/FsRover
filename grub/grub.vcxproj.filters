@@ -282,6 +282,9 @@
     <ClCompile Include="grub-core\fs\archelp.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\bcachefs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\bfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

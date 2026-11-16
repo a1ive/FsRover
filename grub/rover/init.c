@@ -105,6 +105,7 @@
 	mod (afs)	\
 	mod (apfs)	\
 	mod (arj)	\
+	mod (bcachefs)	\
 	mod (bfs)	\
 	mod (bootfs)	\
 	mod (btrfs)	\

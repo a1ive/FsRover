@@ -216,6 +216,9 @@
       <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lzfse;$(ProjectDir)grub-core\lib\libzbitmap;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="grub-core\fs\archelp.c" />
+    <ClCompile Include="grub-core\fs\bcachefs.c">
+      <AdditionalIncludeDirectories>$(ProjectDir)grub-core\lib\lz4;$(ProjectDir)grub-core\lib\zstd;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\bfs.c" />
     <ClCompile Include="grub-core\fs\bootfs.c" />
     <ClCompile Include="grub-core\fs\cab.c">

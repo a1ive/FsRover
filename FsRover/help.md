@@ -22,6 +22,33 @@ FsRover is a read-only multi-filesystem explorer for Windows.
 
 ### 1.1 Linux and flash filesystems
 
+#### bcachefs — `bcachefs`
+
+> Origin: FsRover · Label: yes · UUID: yes · Timestamps: per-file + volume · Symlinks: resolved
+
+**Cleanly unmounted filesystems only** — the journal is not replayed, so a
+volume that was not unmounted cleanly is refused at mount time.
+
+**Compression:** LZ4, gzip (deflate), Zstandard. Inline-data extents and
+reflinked (shared) extents are read; preallocated ranges read back as zeros.
+
+**Multi-device:** other members are found by the filesystem UUID. Replicas on
+the opened device are preferred; if a member is missing, another visible
+member can supply a replica. This requires an available non-cached replica
+of each metadata node and data extent being read. A disk read failure does
+not trigger a retry on another replica. Block lists mark extents stored on
+another member as unmappable.
+
+The root subvolume is presented; subvolumes and snapshots appear as
+directories at the places they are linked.
+
+**Casefold directories:** path lookup ignores ASCII letter case. Unicode
+case folding is not implemented.
+
+**Not supported:** encryption, erasure-coded stripes with a missing data
+block, checksum verification, reading extents with only cached replicas
+(bucket generations are not validated). Extents marked poisoned are refused.
+
 #### Btrfs — `btrfs`
 
 > Origin: GRUB · Label: yes · UUID: yes · Timestamps: per-file · Symlinks: resolved

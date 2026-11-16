@@ -31,7 +31,7 @@ FsRover is a read-only multi-filesystem explorer for Windows and Linux, powered 
 
 ## Supported Filesystems
 
-- **Linux and flash:** Btrfs, cramfs, DwarFS, EROFS, ext2/3/4, F2FS, JFS, JFFS2, littlefs, NILFS2, ReiserFS, UBIFS, XFS, YAFFS1/2, ZFS
+- **Linux and flash:** bcachefs, Btrfs, cramfs, DwarFS, EROFS, ext2/3/4, F2FS, JFS, JFFS2, littlefs, NILFS2, ReiserFS, UBIFS, XFS, YAFFS1/2, ZFS
 - **Windows:** FAT12/16/32, exFAT, NTFS, ReFS 1.x/3.x, registry hives
 - **macOS:** APFS, HFS, HFS+/HFSX
 - **Unix and other:** ADFS, AFFS, AFS, BFS, SGI EFS, FATX/XTAF, FbFS, HPFS, LynxFS, MINIX1/2/3, QNX4/6, RedoxFS, romfs, SFS, System V, UFS1/2, UnixWare BFS, VMFS, VxFS
