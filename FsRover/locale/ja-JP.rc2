@@ -1,0 +1,355 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+/////////////////////////////////////////////////////////////////////////////
+// Japanese
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"更新"
+	IDS_BTN_EXTRACT		"展開"
+	IDS_BTN_UP		"↑"
+	IDS_BTN_CANCEL		"キャンセル"
+	IDS_COL_NAME		"名前"
+	IDS_COL_SIZE		"サイズ"
+	IDS_COL_MODIFIED	"更新日時"
+	IDS_MENU_EXTRACT	"展開"
+	IDS_MENU_MOUNT		"ディスクとしてマウント"
+	IDS_MENU_UNMOUNT	"マウント解除"
+	IDS_STATUS_STARTING	"バックエンドを起動しています..."
+	IDS_STATUS_LISTING	"一覧を取得しています..."
+	IDS_STATUS_ENUM		"ディスクを列挙しています..."
+	IDS_STATUS_EXTRACTING	"展開しています..."
+	IDS_STATUS_CANCELLING	"キャンセルしています..."
+	IDS_STATUS_NOTHING	"展開する項目がありません"
+	IDS_STATUS_MOUNTING	"マウントしています..."
+	IDS_STATUS_UNMOUNTING	"マウントを解除しています..."
+	IDS_FMT_DEVICES		"%d 台のデバイス"
+	IDS_FMT_ITEMS		"%d 個の項目"
+	IDS_FMT_EXTRACT_DONE	"%llu 個のファイルを展開しました (%s)"
+	IDS_FMT_EXTRACT_PROG	"展開中 (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"%s としてマウントしました"
+	IDS_FMT_UNMOUNTED	"%s のマウントを解除しました"
+	IDS_PICK_FOLDER		"展開先のフォルダーを選択"
+	IDS_MENU_DOKAN_MOUNT	"ドライブ文字にマウント"
+	IDS_MENU_DOKAN_UNMOUNT	"ドライブ文字をマウント解除"
+	IDS_FMT_DOKAN_MOUNTED	"%s を %s にマウントしました"
+	IDS_FMT_TRAY_UNMOUNT	"%s をマウント解除 (%s)"
+	IDS_ASK_UNMOUNT_ALL	"マウント中のドライブがあります。すべてマウント解除して終了しますか?"
+	IDS_TRAY_OPEN		"FsRover を開く"
+	IDS_TRAY_EXIT		"終了"
+	IDS_MENU_PROPS		"プロパティ"
+	IDS_MAP_TITLE	"ファイルの格納マップ"
+	IDS_MAP_LOADING	"メタデータを読み込み中…"
+	IDS_MAP_PARTIAL	"部分的な結果（キャンセルまたは 100,000 行の上限）"
+	IDS_MAP_COPY	"選択行をコピー"
+	IDS_MAP_GROUP	"グループ"
+	IDS_MAP_LOGICAL	"ファイル位置"
+	IDS_MAP_LENGTH	"ファイル長"
+	IDS_MAP_TYPE	"種類"
+	IDS_MAP_DEVICE	"ボリューム"
+	IDS_MAP_SPACE	"アドレス空間"
+	IDS_MAP_OFFSET	"格納位置"
+	IDS_MAP_STORED	"格納長"
+	IDS_MAP_ENCODING	"エンコード"
+	IDS_MAP_DECODED_OFFSET	"復号後の位置"
+	IDS_MAP_DECODED_LENGTH	"復号後の長さ"
+	IDS_MAP_CLOSE	"閉じる"
+	IDS_MAP_DETAILS	"詳細を表示（バイト単位）"
+	IDS_MAP_SUM_SIZE	"サイズ %s"
+	IDS_MAP_SUM_EXTENTS	"%s エクステント"
+	IDS_MAP_SUM_FRAGMENTS	"ディスク上の断片 %s"
+	IDS_MAP_COL_RANGE	"ファイル範囲"
+	IDS_MAP_COL_SIZE	"サイズ"
+	IDS_MAP_COL_STATUS	"状態"
+	IDS_MAP_COL_LOCATION	"ディスク上の位置"
+	IDS_MAP_FS_LOGICAL	"FS 論理アドレス %s"
+	IDS_MAP_SHARED	"（共有）"
+	IDS_MAP_CAT_DATA	"データ"
+	IDS_MAP_CAT_UNWRITTEN	"未書き込み（ゼロとして読み取り）"
+	IDS_MAP_CAT_HOLE	"スパース（穴）"
+	IDS_MAP_CAT_ZERO	"ゼロ埋め"
+	IDS_MAP_CAT_INLINE	"メタデータ内に格納"
+	IDS_MAP_CAT_ENCODED	"圧縮/エンコード"
+	IDS_MAP_CAT_UNKNOWN	"位置不明"
+	IDS_LOST_MENU	"失われたパーティションを検索"
+	IDS_LOST_TITLE	"失われたパーティションの検索"
+	IDS_LOST_NOTE	"NTFS、FAT、exFAT、ext2/3/4、XFS、Btrfs、HFS/HFS+、APFS、ReFS、F2FS のボリュームと、失われた GPT/EBR エントリを探します。ファイルシステムを読み取れるパーティションはスキップします。"
+	IDS_LOST_EXT_BACKUP	"ext のブロックグループ 3 のバックアップスーパーブロックも確認する（低速）"
+	IDS_LOST_SEARCH	"再検索"
+	IDS_LOST_STOP	"停止"
+	IDS_LOST_OPEN	"選択項目を開く"
+	IDS_LOST_CLOSE	"閉じる"
+	IDS_LOST_FMT_SCANNING	"検索中... %d%% - %d 件検出"
+	IDS_LOST_FMT_DONE	"検索完了 - %d 件検出"
+	IDS_LOST_FMT_STOPPED	"検索を停止しました - %d 件検出"
+	IDS_LOST_FMT_OPENED	"(%s) として開きました"
+	IDS_LOST_COL_OFFSET	"オフセット（バイト）"
+	IDS_LOST_COL_SIZE	"サイズ"
+	IDS_LOST_COL_TYPE	"種類"
+	IDS_LOST_COL_FS	"ファイルシステム"
+	IDS_LOST_COL_LABEL	"ラベル"
+	IDS_LOST_COL_FLAGS	"状態"
+	IDS_LOST_COL_UUID	"UUID"
+	IDS_LOST_F_VERIFIED	"読み取り可"
+	IDS_LOST_F_BACKUP	"バックアップから"
+	IDS_LOST_F_TABLE	"失われたテーブル項目"
+	IDS_LOST_F_EXISTING	"テーブル項目あり"
+	IDS_LOST_F_OVERLAP	"重複"
+	IDS_LOST_F_TRUNCATED	"切り詰め"
+	IDS_LOST_DEEP	"詳細検索：すべてのセクターを調べ、見つかったボリュームの内部も検索する（非常に低速）"
+
+	IDS_PROPS_CALCULATING	"計算中..."
+	IDS_PROPS_COMPLETE	"完了しました。"
+	IDS_PROPS_SELECT_ONE	"少なくとも 1 つのハッシュ アルゴリズムを選択してください。"
+	IDS_MENU_HEX		"16進数で表示"
+	IDS_HEX_TITLE		"16進数表示"
+	IDS_HEX_OFFSET		"Offset(h)"
+	IDS_HEX_TEXT		"テキスト"
+	IDS_SIZE_SYMLINK	"シンボリックリンク"
+	IDS_FMT_CRYPTO_TITLE	"%s のロック解除"
+	IDS_CRYPTO_BADKEY	"ボリュームのロックを解除できませんでした。パスフレーズまたはキーファイルを確認してください。"
+	IDS_CRYPTO_KEYFILE	"キーファイルを選択"
+	IDS_MENU_COPY_NAME	"ファイル名をコピー"
+	IDS_MENU_COPY_PATH	"パスをコピー"
+	IDS_HEX_GO		"移動"
+	IDS_MENU_MOUNT_DECOMP	"ディスクとしてマウント (透過解凍)"
+	IDS_MENU_TEXT		"テキストを表示"
+	IDS_TEXT_TITLE		"テキスト表示"
+	IDS_TEXT_ENCODING	"エンコード："
+	IDS_TEXT_WRAP		"折り返し"
+	IDS_TEXT_LINENUM	"行番号"
+	IDS_TEXT_FONT		"フォント"
+	IDS_TEXT_AUTO		"自動"
+	IDS_TEXT_LOADING	"読み込み中..."
+	IDS_FMT_TEXT_INFO	"%s、%d 行"
+	IDS_FMT_TEXT_TRUNC	"（先頭 %s / 全体 %s のみ表示）"
+	IDS_ASK_TEXT_BIG	"ファイルが大きいため (%s)、開くのに時間がかかることがあります。開きますか?"
+	IDS_ASK_TEXT_BIN	"このファイルはバイナリ ファイルのようです。開きますか?"
+	IDS_MENU_IMAGE		"画像を表示"
+	IDS_IMAGE_TITLE		"画像表示"
+	IDS_IMAGE_BAD		"この画像をデコードできません。"
+	IDS_IMAGE_TOOBIG	"画像ファイルが大きすぎるため開けません。"
+	IDS_IMAGE_NO_D2D	"このシステムでは Direct2D を利用できません。"
+	IDS_MENU_FILE		"ファイル(&F)"
+	IDS_MENU_SELECTION	"選択(&S)"
+	IDS_MENU_SETTINGS	"設定(&T)"
+	IDS_MENU_FS_ENCODING	"ファイル名のエンコード(&E)"
+	IDS_MENU_DOKAN		"マウント(&M)"
+	IDS_MENU_HELP		"ヘルプ(&H)"
+	IDS_MENU_SEL_ALL	"すべて選択(&A)\tCtrl+A"
+	IDS_MENU_SEL_INVERT	"選択の切り替え(&I)"
+	IDS_DOKAN_NONE		"マウント中のドライブはありません"
+	IDS_DOKAN_UNAVAILABLE	"Dokan ドライバーがインストールされていません"
+	IDS_MENU_SUPPORT	"サポートされている機能(&F)"
+	IDS_MENU_SHORTCUTS	"キーボードショートカット(&K)"
+	IDS_KEY_LIST		"Alt+← — 戻る\r\nAlt+→ — 進む\r\nAlt+↑ — 上の階層へ\r\nCtrl+A — すべて選択\r\nEnter — アドレスバーに入力したパスへ移動"
+	IDS_MENU_ABOUT		"FsRover について(&A)"
+	IDS_ABOUT_CREDITS	"使用しているオープンソース プロジェクト："
+	IDS_SUPPORT_FS		"ファイルシステム"
+	IDS_SUPPORT_PARTMAP	"パーティションマップ"
+	IDS_SUPPORT_DISKFILTER	"ディスクフィルター"
+	IDS_SUPPORT_CRYPTODISK	"暗号化ディスク"
+	IDS_SUPPORT_IOFILTER	"I/O フィルター"
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_INSTALL	"Dokan をインストール"
+	IDS_DOKAN_INSTALLING	"Dokan をインストールしています..."
+	IDS_DOKAN_INSTALL_OK	"Dokan をインストールしました。"
+	IDS_FMT_DOKAN_INSTALL_FAIL	"Dokan をインストールできませんでした: %s"
+#endif
+	IDS_DOKAN_LETTER	"ドライブ文字："
+	IDS_DOKAN_OPEN_EXPLORER	"マウント後にエクスプローラーで開く"
+	IDS_DP_DEVICE		"デバイス"
+	IDS_DP_FS		"ファイルシステム"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"ボリュームラベル"
+	IDS_DP_SIZE		"サイズ"
+	IDS_DP_LBA		"開始 LBA"
+	IDS_DP_SECTOR		"セクターサイズ"
+	IDS_DP_PARENT_FILE	"元ファイル"
+	IDS_DP_PARENTS		"メンバーデバイス"
+	IDS_DP_UNKNOWN		"認識されていません"
+	IDS_DP_COPY		"コピー"
+	IDS_DP_PARENT_DEV	"元デバイス"
+	IDS_DP_TYPE		"種類"
+	IDS_DP_COLON		"："
+	IDS_DP_FREE		"未割り当て"
+	IDS_DP_T_DISK		"ローカルディスク"
+	IDS_DP_T_PART		"パーティション"
+	IDS_DP_T_IMAGE		"ディスクイメージ"
+	IDS_DP_T_VOLUME		"論理ボリューム"
+	IDS_DP_T_CRYPTO		"暗号化ボリューム"
+	IDS_DP_T_PSEUDO		"疑似デバイス"
+	IDS_FMT_EXTRACT_LINKS	"（%llu 個のシンボリックリンクをスキップ）"
+	IDS_FMT_EXTRACT_ERRORS	"（%llu 個のファイルに失敗、最初のエラー: %s）"
+	IDS_MENU_TIMESTAMPS	"タイムスタンプを保持(&T)"
+	IDS_BTN_BACK		"←"
+	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"ディスクイメージを書き出し"
+	IDS_PICK_IMAGE		"ディスクイメージを保存"
+	IDS_FILTER_IMAGE	"RAW ディスクイメージ (*.img)"
+	IDS_STATUS_EXPORTING	"イメージを書き出しています..."
+	IDS_FMT_EXPORT_PROG	"書き出し中 %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"%s を書き出しました (%s)"
+	IDS_MENU_OPEN_IMAGE	"イメージを開く(&O)..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"イメージを開く (透過解凍)(&D)..."
+	IDS_PICK_OPEN_IMAGE	"ディスクイメージを選択"
+	IDS_FILTER_OPEN_IMAGE	"ディスクイメージ / アーカイブ"
+	IDS_FILTER_ALL		"すべてのファイル (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_RUNAS		"管理者として実行(&R)"
+	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
+#endif
+	IDS_BACKEND_START_FAILED	"バックエンドワーカーを起動できませんでした。"
+	IDS_BACKEND_STOP_FAILED	"バックエンドワーカーを正常に停止できませんでした。"
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_NEED_ADMIN	"Dokan の使用には管理者権限が必要です"
+	IDS_DOKAN_WOW64		"Dokan のインストールには 64 ビット版の FsRover が必要です"
+#endif
+	IDS_FMT_MOUNT_BACKEND	"バックエンド: %s"
+	IDS_MOUNT_UNAVAILABLE	"WinFsp と Dokan は利用できません"
+	IDS_MENU_MARKDOWN	"Markdown プレビュー"
+	IDS_MD_TITLE		"Markdown プレビュー"
+	IDS_MD_ASK_LINK		"このリンクをブラウザーで開きますか？"
+	IDS_FMT_MD_TRUNC	"先頭 %s のみ表示しています (全体 %s)。"
+	IDS_CMDLINE_USAGE	"使い方: FsRover.exe [オプション]\n\n  -m, --minimize\t\t最小化した状態で起動します。\n  -f, --file=ファイル\t\t指定したファイルを仮想ディスクとしてマウントします。\n  -d, --file-dec=ファイル\t\t同上。イメージを透過的に展開します。\n  -n, --no-times\t\t抽出した項目のタイムスタンプを保持しません。\n  -c, --fs-encoding=ENC\tファイル名のエンコード: UTF-8、GBK、Big5、Shift-JIS、EUC-KR。\n  -h, --help\t\tこのメッセージを表示します。"
+	IDS_FMT_CMDLINE_ARG	"不明な引数です -- 「%s」"
+	IDS_MENU_HELPDOC	"ヘルプ ドキュメント(&H)"
+	IDS_MENU_VERACRYPT	"VeraCrypt ボリュームとしてロック解除"
+	IDS_FMT_VC_TITLE	"VeraCrypt ボリュームのロック解除 - %s"
+	IDS_VC_BADKEY		"ボリュームのロックを解除できませんでした。パスフレーズ、キーファイル、PIM、ハッシュ、および TrueCrypt ボリュームか隠しボリュームかを確認してください。"
+	IDS_VC_KEYFILES		"キーファイルを選択"
+	IDS_VC_PRF_AUTO		"すべて試す (低速)"
+	IDS_VC_BADPIM		"PIM は 0 から 2147468 の数値で指定してください。空欄は既定値です。"
+	IDS_MENU_PLAINMOUNT	"plain dm-crypt ボリュームとしてマウント"
+	IDS_FMT_PM_TITLE	"plain dm-crypt ボリュームのマウント - %s"
+	IDS_PM_FAILED		"ボリュームをマップできませんでした。暗号化方式、鍵長、セクタサイズを確認してください。"
+	IDS_PM_KEYFILE		"キーファイルを選択"
+	IDS_PM_BADPARAM		"暗号化方式は cipher-mode-iv の形式で、鍵長は 8 の倍数 (ビット) を指定してください。"
+	IDS_PM_HASH_NONE	"なし"
+	IDS_PROPS_NO_INODE	"このファイルシステムでは取得できません"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_SMART		"S.M.A.R.T. を表示"
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"健康状態"
+	IDS_SM_TEMPERATURE	"温度"
+	IDS_SM_GOOD		"正常"
+	IDS_SM_CAUTION		"注意"
+	IDS_SM_BAD		"異常"
+	IDS_SM_UNKNOWN		"不明"
+	IDS_SM_FIRMWARE		"ファームウェア"
+	IDS_SM_SERIAL		"シリアル番号"
+	IDS_SM_INTERFACE	"インターフェイス"
+	IDS_SM_MODE		"転送モード"
+	IDS_SM_DRIVE		"ドライブ"
+	IDS_SM_STANDARD		"規格"
+	IDS_SM_FEATURES		"機能"
+	IDS_SM_READS		"総読み込み量"
+	IDS_SM_WRITES		"総書き込み量"
+	IDS_SM_NAND		"NAND 総書き込み量"
+	IDS_SM_BUFFER		"バッファサイズ"
+	IDS_SM_RPM		"回転数"
+	IDS_SM_POWER_COUNT	"電源投入回数"
+	IDS_SM_POWER_HOURS	"使用時間"
+	IDS_SM_ATTR		"属性"
+	IDS_SM_NO_DATA		"このディスクの S.M.A.R.T. 情報を取得できません。"
+	IDS_SM_HEX		"HEX"
+#endif
+END
+
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "暗号化ボリュームのロック解除"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"パスフレーズ：", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"キーファイルを使用", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"参照", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 100, 50, 14
+END
+
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "VeraCrypt ボリュームのロック解除"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"パスフレーズ：", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"キーファイル：", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 105, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"追加", IDC_VC_BROWSE, 178, 39, 27, 14
+	PUSHBUTTON	"クリア", IDC_VC_CLEARKEYS, 206, 39, 27, 14, WS_DISABLED
+	LTEXT		"PIM：", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"ハッシュ：", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"TrueCrypt ボリューム", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"隠しボリューム", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"バックアップヘッダーを使用", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"OK", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 138, 50, 14
+END
+
+IDD_PLAINMOUNT DIALOGEX 0, 0, 240, 186
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "plain dm-crypt ボリュームのマウント"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_PM_INFO, 7, 7, 226, 10
+	LTEXT		"暗号化方式：", IDC_STATIC, 7, 24, 60, 8
+	COMBOBOX	IDC_PM_CIPHER, 70, 22, 163, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"鍵長 (ビット)：", IDC_STATIC, 7, 42, 60, 8
+	COMBOBOX	IDC_PM_KEYBITS, 70, 40, 50, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"セクタ：", IDC_STATIC, 130, 42, 28, 8
+	COMBOBOX	IDC_PM_SECTOR, 162, 40, 71, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"ハッシュ：", IDC_STATIC, 7, 60, 60, 8
+	COMBOBOX	IDC_PM_HASH, 70, 58, 163, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"位置 (セクタ)：", IDC_STATIC, 7, 80, 60, 8
+	EDITTEXT	IDC_PM_OFFSET, 70, 78, 50, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"IV：", IDC_STATIC, 130, 80, 30, 8
+	EDITTEXT	IDC_PM_SKIP, 162, 78, 71, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"パスフレーズ：", IDC_STATIC, 7, 98, 60, 8
+	EDITTEXT	IDC_PM_PASS, 70, 96, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"キーファイルを使用", IDC_PM_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 114, 226, 10
+	EDITTEXT	IDC_PM_KEYFILE, 7, 128, 180, 12, ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"参照", IDC_PM_BROWSE, 191, 127, 42, 14, WS_DISABLED
+	LTEXT		"ファイル位置：", IDC_STATIC, 7, 148, 60, 8
+	EDITTEXT	IDC_PM_KEYOFFSET, 70, 146, 60, 12, ES_NUMBER | ES_AUTOHSCROLL | WS_DISABLED
+	DEFPUSHBUTTON	"OK", IDOK, 128, 164, 50, 14
+	PUSHBUTTON	"キャンセル", IDCANCEL, 183, 164, 50, 14
+END
+
+IDD_PROPS DIALOGEX 0, 0, 227, 257
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "プロパティ"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"ファイル", IDC_STATIC, 7, 7, 213, 50
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+	LTEXT		"Inode 番号:", IDC_STATIC, 17, 44, 55, 8
+	LTEXT		"", IDC_PROPS_INODE, 74, 44, 140, 8
+
+	GROUPBOX	"ハッシュ", IDC_STATIC, 7, 62, 213, 188
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 79, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 79, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 79, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 93, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 93, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 93, 62, 10
+	CONTROL		"BLAKE2sp", IDC_PROPS_BLAKE2SP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 107, 58, 10
+	CONTROL		"BLAKE3", IDC_PROPS_BLAKE3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 107, 52, 10
+	PUSHBUTTON	"計算", IDC_PROPS_CALC, 17, 123, 60, 14
+	PUSHBUTTON	"コピー", IDC_PROPS_COPY, 154, 123, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 143, 197, 10
+	LTEXT		"準備完了。", IDC_PROPS_STATUS, 17, 157, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 169, 197, 74, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END

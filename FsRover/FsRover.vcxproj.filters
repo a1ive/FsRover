@@ -287,5 +287,17 @@
     <None Include="help.md">
       <Filter>RC</Filter>
     </None>
+    <None Include="locale\en-US.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\zh-CN.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\zh-TW.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\ja-JP.rc2">
+      <Filter>RC</Filter>
+    </None>
   </ItemGroup>
 </Project>
