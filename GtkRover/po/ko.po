@@ -1,0 +1,1211 @@
+# Korean translation of FsRover (GTK).
+# Copyright (C) 2026 A1ive
+# This file is distributed under the same license as FsRover.
+msgid ""
+msgstr ""
+"Project-Id-Version: fsrover\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-18 19:42+0900\n"
+"Last-Translator: FsRover contributors\n"
+"Language-Team: Korean\n"
+"Language: ko\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: cryptodlg.cpp:95
+#, c-format
+msgid "Unlocking (%s)…"
+msgstr "(%s) 잠금을 해제하는 중…"
+
+#: cryptodlg.cpp:97
+msgid "Another operation is still running."
+msgstr "다른 작업이 아직 진행 중입니다."
+
+#: cryptodlg.cpp:114
+#, c-format
+msgid "Unlock (%s) failed"
+msgstr "(%s) 잠금 해제 실패"
+
+#: cryptodlg.cpp:118
+#, c-format
+msgid "Unlocked (%s) as (%s)"
+msgstr "(%s) 잠금을 해제하여 (%s)(으)로 열었습니다"
+
+#: cryptodlg.cpp:152 mount.cpp:430
+msgid "_Cancel"
+msgstr "취소(_C)"
+
+#: cryptodlg.cpp:164
+msgid "_Unlock"
+msgstr "잠금 해제(_U)"
+
+#: cryptodlg.cpp:186
+msgid "Passphrase"
+msgstr "암호"
+
+#: cryptodlg.cpp:265
+msgid "Choose Key File"
+msgstr "키 파일 선택"
+
+#: cryptodlg.cpp:275 mount.cpp:429
+msgid "Browse…"
+msgstr "찾아보기…"
+
+#: cryptodlg.cpp:323
+#, c-format
+msgid "Unlock (%s)"
+msgstr "(%s) 잠금 해제"
+
+#: cryptodlg.cpp:324
+msgid "Encrypted volume."
+msgstr "암호화된 볼륨입니다."
+
+#: cryptodlg.cpp:325
+#, c-format
+msgid "%s volume%s. Enter its passphrase or choose a key file."
+msgstr "%s 볼륨%s입니다. 암호를 입력하거나 키 파일을 선택하세요."
+
+#: cryptodlg.cpp:333
+msgid "Use a _key file"
+msgstr "키 파일 사용(_K)"
+
+#: cryptodlg.cpp:339
+msgid "Unlock Volume"
+msgstr "볼륨 잠금 해제"
+
+#: cryptodlg.cpp:365
+msgid "Enter a passphrase or choose a non-empty key file."
+msgstr "암호를 입력하거나 비어 있지 않은 키 파일을 선택하세요."
+
+#: cryptodlg.cpp:447
+msgid "No key files"
+msgstr "키 파일 없음"
+
+#: cryptodlg.cpp:477
+msgid "Add Key Files"
+msgstr "키 파일 추가"
+
+#: cryptodlg.cpp:498
+msgid "Autodetect (slow)"
+msgstr "자동 감지 (느림)"
+
+#: cryptodlg.cpp:506
+#, c-format
+msgid "Unlock VeraCrypt volume (%s)"
+msgstr "VeraCrypt 볼륨 (%s) 잠금 해제"
+
+#: cryptodlg.cpp:510
+msgid "Personal Iterations Multiplier; 0 uses the volume's default"
+msgstr "개인 반복 승수(PIM)입니다. 0을 입력하면 볼륨의 기본값을 사용합니다."
+
+#: cryptodlg.cpp:512
+msgid "_Password:"
+msgstr "암호(_P):"
+
+#: cryptodlg.cpp:513
+msgid "P_IM:"
+msgstr "PIM(_I):"
+
+#: cryptodlg.cpp:514 cryptodlg.cpp:701
+msgid "_Hash:"
+msgstr "해시(_H):"
+
+#: cryptodlg.cpp:516
+msgid "_TrueCrypt volume"
+msgstr "TrueCrypt 볼륨(_T)"
+
+#: cryptodlg.cpp:517
+msgid "Open the hi_dden volume"
+msgstr "숨겨진 볼륨 열기(_D)"
+
+#: cryptodlg.cpp:518
+msgid "Use the _backup headers"
+msgstr "백업 헤더 사용(_B)"
+
+#: cryptodlg.cpp:524
+msgid "Add _Key Files…"
+msgstr "키 파일 추가(_K)…"
+
+#: cryptodlg.cpp:525
+msgid "Clear"
+msgstr "지우기"
+
+#: cryptodlg.cpp:537
+msgid "Unlock VeraCrypt / TrueCrypt"
+msgstr "VeraCrypt / TrueCrypt 잠금 해제"
+
+#: cryptodlg.cpp:559
+#, c-format
+msgid "Cannot use key file %s"
+msgstr "키 파일 %s을(를) 사용할 수 없습니다"
+
+#: cryptodlg.cpp:571
+msgid "Enter a password or add key files."
+msgstr "암호를 입력하거나 키 파일을 추가하세요."
+
+#: cryptodlg.cpp:581
+msgid "Trying every hash; this can take a while…"
+msgstr "모든 해시를 시도하는 중입니다. 시간이 걸릴 수 있습니다…"
+
+#: cryptodlg.cpp:609
+msgid "None (use as is)"
+msgstr "없음 (그대로 사용)"
+
+#: cryptodlg.cpp:678
+#, c-format
+msgid "Open plain dm-crypt volume (%s)"
+msgstr "plain dm-crypt 볼륨 (%s) 열기"
+
+#: cryptodlg.cpp:680
+msgid ""
+"A plain volume has no header: wrong parameters are not detected and simply "
+"show garbage."
+msgstr "plain 볼륨에는 헤더가 없습니다. 설정값이 잘못되어도 오류가 표시되지 않으며 데이터가 깨져 보입니다."
+
+#: cryptodlg.cpp:699
+msgid "_Cipher:"
+msgstr "암호화 방식(_C):"
+
+#: cryptodlg.cpp:700
+msgid "P_resets:"
+msgstr "사전 설정(_R):"
+
+#: cryptodlg.cpp:702
+msgid "_Key size (bits):"
+msgstr "키 크기(비트)(_K):"
+
+#: cryptodlg.cpp:703
+msgid "_Sector size:"
+msgstr "섹터 크기(_S):"
+
+#: cryptodlg.cpp:704
+msgid "_Offset (512-byte sectors):"
+msgstr "오프셋(512바이트 섹터)(_O):"
+
+#: cryptodlg.cpp:705
+msgid "S_kip (IV sectors):"
+msgstr "IV 건너뛸 섹터 수(_V):"
+
+#: cryptodlg.cpp:706
+msgid "_Passphrase:"
+msgstr "암호(_P):"
+
+#: cryptodlg.cpp:708
+msgid "Use a key _file as the volume key"
+msgstr "키 파일을 볼륨 키로 사용(_F)"
+
+#: cryptodlg.cpp:713
+msgid "Key _file:"
+msgstr "키 파일(_L):"
+
+#: cryptodlg.cpp:714
+msgid "Key file o_ffset (bytes):"
+msgstr "키 파일 오프셋(바이트)(_B):"
+
+#: cryptodlg.cpp:719
+msgid "Open Plain dm-crypt"
+msgstr "plain dm-crypt 열기"
+
+#: cryptodlg.cpp:739
+msgid "The cipher must name a mode, e.g. aes-xts-plain64."
+msgstr "aes-xts-plain64처럼 모드를 포함한 암호화 방식을 입력하세요."
+
+#: cryptodlg.cpp:754
+msgid "The key file is too short for this key size."
+msgstr "키 파일이 지정한 키 크기보다 작습니다."
+
+#: cryptodlg.cpp:769
+msgid "Enter a passphrase or choose a key file."
+msgstr "암호를 입력하거나 키 파일을 선택하세요."
+
+#: hexview.cpp:80
+#, c-format
+msgid "Offset 0x%llX of %s"
+msgstr "오프셋 0x%llX (전체 %s)"
+
+#: hexview.cpp:289
+#, c-format
+msgid "%s — Hex"
+msgstr "%s — 16진수 보기"
+
+#: hexview.cpp:301 imageview.cpp:194 mdview.cpp:559 textview.cpp:289
+msgid "Reading…"
+msgstr "읽는 중…"
+
+#: hexview.cpp:303
+msgid "Go to offset (0x… or decimal)"
+msgstr "오프셋으로 이동 (0x… 또는 10진수)"
+
+#: hostdisk.cpp:295
+#, c-format
+msgid "The helper failed (pkexec exit status %d)."
+msgstr "보조 프로그램이 실패했습니다 (pkexec 종료 상태 %d)."
+
+#: hostdisk.cpp:328
+#, c-format
+msgid "Access granted to %zu disk"
+msgid_plural "Access granted to %zu disks"
+msgstr[0] "디스크 %zu개에 대한 접근 권한을 받았습니다"
+
+#: hostdisk.cpp:331
+msgid "No access to the physical disks"
+msgstr "물리 디스크에 접근할 수 없습니다"
+
+#: hostdisk.cpp:333
+msgid "No physical disk could be opened"
+msgstr "열 수 있는 물리 디스크가 없습니다"
+
+#: hostdisk.cpp:375
+msgid "All physical disks are already readable"
+msgstr "이미 모든 물리 디스크를 읽을 수 있습니다"
+
+#: hostdisk.cpp:381
+msgid "Waiting for authorization…"
+msgstr "권한 승인을 기다리는 중…"
+
+#: imageview.cpp:90 imageview.cpp:95
+msgid "Unrecognized image format"
+msgstr "인식할 수 없는 이미지 형식"
+
+#: imageview.cpp:184
+#, c-format
+msgid "%s — Image"
+msgstr "%s — 이미지 보기"
+
+#: imageview.cpp:197
+msgid "_Fit"
+msgstr "창에 맞추기(_F)"
+
+#: imageview.cpp:206
+msgid "Zoom out"
+msgstr "축소"
+
+#: imageview.cpp:208
+msgid "Actual size"
+msgstr "실제 크기"
+
+#: imageview.cpp:210
+msgid "Zoom in"
+msgstr "확대"
+
+#: imageview.cpp:231
+#, c-format
+msgid "The image is larger than %s"
+msgstr "이미지가 %s보다 큽니다"
+
+#: lostdlg.cpp:160
+#, c-format
+msgid "%s of %s"
+msgstr "%s / %s"
+
+#: lostdlg.cpp:166
+#, c-format
+msgid "Searching… %zu found"
+msgid_plural "Searching… %zu found"
+msgstr[0] "검색 중… %zu개 발견"
+
+#: lostdlg.cpp:173
+msgid "Stopped."
+msgstr "중지했습니다."
+
+#: lostdlg.cpp:174
+msgid "Search complete."
+msgstr "검색을 완료했습니다."
+
+#: lostdlg.cpp:175
+#, c-format
+msgid "%zu partition found."
+msgid_plural "%zu partitions found."
+msgstr[0] "파티션 %zu개를 찾았습니다."
+
+#: lostdlg.cpp:178 lostdlg.cpp:344
+msgid "_Search"
+msgstr "검색(_S)"
+
+#: lostdlg.cpp:202
+msgid "Stopping…"
+msgstr "중지하는 중…"
+
+#: lostdlg.cpp:211
+msgid "_Stop"
+msgstr "중지(_S)"
+
+#: lostdlg.cpp:215
+msgid "Searching…"
+msgstr "검색 중…"
+
+#: lostdlg.cpp:261
+msgid "Cannot open the lost partition"
+msgstr "손실된 파티션을 열 수 없습니다"
+
+#: lostdlg.cpp:328
+msgid "Offset"
+msgstr "오프셋"
+
+#: lostdlg.cpp:328 window.cpp:2116
+msgid "Size"
+msgstr "크기"
+
+#: lostdlg.cpp:328 mapview.cpp:40 window.cpp:2118
+msgid "Type"
+msgstr "유형"
+
+#: lostdlg.cpp:328
+msgid "Filesystem"
+msgstr "파일 시스템"
+
+#: lostdlg.cpp:328
+msgid "Label"
+msgstr "레이블"
+
+#: lostdlg.cpp:328
+msgid "Flags"
+msgstr "상태"
+
+#: lostdlg.cpp:330
+#, c-format
+msgid "Lost Partitions on (%s)"
+msgstr "(%s)의 손실된 파티션"
+
+#: lostdlg.cpp:334 mapview.cpp:222 propsdlg.cpp:114
+msgid "_Close"
+msgstr "닫기(_C)"
+
+#: lostdlg.cpp:342
+msgid "Also look for _ext backup superblocks"
+msgstr "ext 백업 슈퍼블록도 확인(_E)"
+
+#: lostdlg.cpp:343
+msgid "_Deep search (every sector, much slower)"
+msgstr "정밀 검색(_D) (모든 섹터 검사, 매우 느림)"
+
+#: lostdlg.cpp:346
+msgid "_Open"
+msgstr "열기(_O)"
+
+#: lostdlg.cpp:351
+msgid ""
+"Searches the device for filesystems that no partition table entry points at."
+msgstr "파티션 테이블에 등록되지 않은 파일 시스템을 장치에서 검색합니다."
+
+#: mapview.cpp:40
+msgid "Extent"
+msgstr "익스텐트"
+
+#: mapview.cpp:40
+msgid "Logical offset"
+msgstr "논리 오프셋"
+
+#: mapview.cpp:40
+msgid "Length"
+msgstr "길이"
+
+#: mapview.cpp:40 propsdlg.cpp:498
+msgid "Device"
+msgstr "장치"
+
+#: mapview.cpp:41
+msgid "Address space"
+msgstr "주소 공간"
+
+#: mapview.cpp:41
+msgid "Storage offset"
+msgstr "저장 오프셋"
+
+#: mapview.cpp:41
+msgid "Storage length"
+msgstr "저장 길이"
+
+#: mapview.cpp:41
+msgid "Encoding"
+msgstr "인코딩"
+
+#: mapview.cpp:42
+msgid "Decoded offset"
+msgstr "디코딩 후 오프셋"
+
+#: mapview.cpp:42
+msgid "Decoded length"
+msgstr "디코딩 후 길이"
+
+#: mapview.cpp:165 propsdlg.cpp:92
+msgid "Copied to the clipboard"
+msgstr "클립보드에 복사했습니다"
+
+#: mapview.cpp:180
+msgid "Cannot save the file map"
+msgstr "파일 저장 위치를 저장할 수 없습니다"
+
+#: mapview.cpp:191
+msgid "Save File Map"
+msgstr "파일 저장 위치 저장"
+
+#: mapview.cpp:216
+#, c-format
+msgid "%s — File Map"
+msgstr "%s — 파일 저장 위치"
+
+#: mapview.cpp:220
+msgid "_Copy as TSV"
+msgstr "TSV로 복사(_C)"
+
+#: mapview.cpp:221
+msgid "_Save as TSV…"
+msgstr "TSV로 저장(_S)…"
+
+#: mapview.cpp:226
+msgid "Mapping…"
+msgstr "저장 위치를 확인하는 중…"
+
+#: mapview.cpp:282
+#, c-format
+msgid "%u extent"
+msgid_plural "%u extents"
+msgstr[0] "익스텐트 %u개"
+
+#: mapview.cpp:285
+#, c-format
+msgid "stopped after %zu rows"
+msgstr "%zu행에서 중단됨"
+
+#: mdview.cpp:579
+#, c-format
+msgid "%s — Markdown"
+msgstr "%s — Markdown 미리 보기"
+
+#: mdview.cpp:593
+#, c-format
+msgid "%s, showing the first %s"
+msgstr "%s, 앞부분 %s만 표시"
+
+#: mdview.cpp:607
+msgid "FsRover Help"
+msgstr "FsRover 도움말"
+
+#: mdview.cpp:612
+msgid "The help text is missing."
+msgstr "도움말 문서가 없습니다."
+
+#: mount.cpp:260
+#, c-format
+msgid "(%s) was unmounted"
+msgstr "(%s) 마운트를 해제했습니다"
+
+#: mount.cpp:307 window.cpp:1093
+#, c-format
+msgid "Cannot create %s: %s"
+msgstr "%s을(를) 만들 수 없습니다: %s"
+
+#: mount.cpp:314
+#, c-format
+msgid "%s is not a folder"
+msgstr "%s은(는) 폴더가 아닙니다"
+
+#: mount.cpp:319
+#, c-format
+msgid "%s is not empty"
+msgstr "%s이(가) 비어 있지 않습니다"
+
+#: mount.cpp:329
+#, c-format
+msgid "FUSE could not mount %s. Is fusermount3 installed and /dev/fuse usable?"
+msgstr "FUSE에서 %s을(를) 마운트할 수 없습니다. fusermount3이 설치되어 있고 /dev/fuse를 사용할 수 있는지 확인하세요."
+
+#: mount.cpp:386
+msgid "Choose an Empty Folder"
+msgstr "빈 폴더 선택"
+
+#: mount.cpp:401
+msgid "Enter an absolute folder path."
+msgstr "폴더의 절대 경로를 입력하세요."
+
+#: mount.cpp:410
+#, c-format
+msgid "Mounted (%s) at %s"
+msgstr "(%s)을(를) %s에 마운트했습니다"
+
+#: mount.cpp:426
+#, c-format
+msgid "Mount (%s)"
+msgstr "(%s) 마운트"
+
+#: mount.cpp:431
+msgid "_Mount"
+msgstr "마운트(_M)"
+
+#: mount.cpp:437
+#, c-format
+msgid "Mount (%s) read-only"
+msgstr "(%s)을(를) 읽기 전용으로 마운트"
+
+#: mount.cpp:438
+msgid ""
+"The volume appears as a folder that every program can read. It stays mounted "
+"until you unmount it or quit FsRover."
+msgstr "볼륨은 모든 프로그램에서 읽을 수 있는 폴더로 표시됩니다. 마운트를 해제하거나 FsRover를 종료할 때까지 연결된 상태로 유지됩니다."
+
+#: mount.cpp:451
+msgid "_Open the folder after mounting"
+msgstr "마운트한 뒤 폴더 열기(_O)"
+
+#: mount.cpp:503
+#, c-format
+msgid "Unmounted (%s)"
+msgstr "(%s) 마운트 해제 완료"
+
+#: propsdlg.cpp:98
+msgid "C_opy"
+msgstr "복사(_O)"
+
+#: propsdlg.cpp:273 window.cpp:945 window.cpp:1130 window.cpp:1169
+msgid "Cancelled"
+msgstr "취소했습니다"
+
+#: propsdlg.cpp:338
+msgid "Calculating…"
+msgstr "계산하는 중…"
+
+#: propsdlg.cpp:376
+msgid "Name:"
+msgstr "이름:"
+
+#: propsdlg.cpp:377
+msgid "Location:"
+msgstr "위치:"
+
+#: propsdlg.cpp:379
+msgid "Error:"
+msgstr "오류:"
+
+#: propsdlg.cpp:392 propsdlg.cpp:501
+msgid "Type:"
+msgstr "유형:"
+
+#: propsdlg.cpp:395
+msgid "Link target:"
+msgstr "링크 대상:"
+
+#: propsdlg.cpp:397
+msgid "Contents:"
+msgstr "내용:"
+
+#: propsdlg.cpp:399 propsdlg.cpp:503
+msgid "Size:"
+msgstr "크기:"
+
+#: propsdlg.cpp:401
+msgid "Modified:"
+msgstr "수정한 날짜:"
+
+#: propsdlg.cpp:402
+msgid "Inode:"
+msgstr "아이노드:"
+
+#: propsdlg.cpp:403
+msgid "not reported by this filesystem"
+msgstr "이 파일 시스템에서 제공하지 않음"
+
+#: propsdlg.cpp:409
+msgid "Checksums"
+msgstr "체크섬"
+
+#: propsdlg.cpp:429
+msgid "C_alculate"
+msgstr "계산(_A)"
+
+#: propsdlg.cpp:453
+#, c-format
+msgid "%s Properties"
+msgstr "%s 속성"
+
+#: propsdlg.cpp:476
+#, c-format
+msgid "(%s) Properties"
+msgstr "(%s) 속성"
+
+#: propsdlg.cpp:482
+msgid "Unlocked encrypted volume"
+msgstr "잠금 해제된 암호화 볼륨"
+
+#: propsdlg.cpp:484
+msgid "Partition"
+msgstr "파티션"
+
+#: propsdlg.cpp:486
+msgid "Disk image file"
+msgstr "디스크 이미지 파일"
+
+#: propsdlg.cpp:488
+msgid "Disk image inside a filesystem"
+msgstr "파일 시스템 내부의 디스크 이미지"
+
+#: propsdlg.cpp:490
+msgid "Lost partition window"
+msgstr "손실된 파티션 영역"
+
+#: propsdlg.cpp:492
+msgid "Volume (LVM, RAID or LDM)"
+msgstr "볼륨 (LVM, RAID 또는 LDM)"
+
+#: propsdlg.cpp:494
+msgid "Optical drive"
+msgstr "광학 드라이브"
+
+#: propsdlg.cpp:496
+msgid "Physical disk"
+msgstr "물리 디스크"
+
+#: propsdlg.cpp:500
+msgid "Device:"
+msgstr "장치:"
+
+#: propsdlg.cpp:505
+msgid "Sector size:"
+msgstr "섹터 크기:"
+
+#: propsdlg.cpp:507
+msgid "Start:"
+msgstr "시작 위치:"
+
+#: propsdlg.cpp:507
+#, c-format
+msgid "sector %llu (byte offset %llu)"
+msgstr "섹터 %llu (바이트 오프셋 %llu)"
+
+#: propsdlg.cpp:509
+msgid "Filesystem:"
+msgstr "파일 시스템:"
+
+#: propsdlg.cpp:509
+msgid "none recognized"
+msgstr "인식된 파일 시스템 없음"
+
+#: propsdlg.cpp:511
+msgid "Label:"
+msgstr "레이블:"
+
+#: propsdlg.cpp:513
+msgid "UUID:"
+msgstr "UUID:"
+
+#: propsdlg.cpp:515
+msgid "Encryption:"
+msgstr "암호화:"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", locked"
+msgstr ", 잠김"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", unlocked"
+msgstr ", 잠금 해제됨"
+
+#: propsdlg.cpp:517
+msgid "Encryption UUID:"
+msgstr "암호화 UUID:"
+
+#: propsdlg.cpp:519
+msgid "Read from:"
+msgstr "읽기 원본:"
+
+#: propsdlg.cpp:521
+msgid "Backing file:"
+msgstr "원본 파일:"
+
+#: propsdlg.cpp:523
+msgid "Members:"
+msgstr "구성 장치:"
+
+#: propsdlg.cpp:525
+msgid "Mounted at:"
+msgstr "마운트 위치:"
+
+#: row.cpp:83
+msgid "no filesystem"
+msgstr "파일 시스템 없음"
+
+#: row.cpp:89
+msgid "mounted"
+msgstr "마운트됨"
+
+#: textview.cpp:40
+msgid "Automatic"
+msgstr "자동"
+
+#: textview.cpp:189
+#, c-format
+msgid "%s, %s"
+msgstr "%s, %s"
+
+#: textview.cpp:191
+#, c-format
+msgid "showing the first %s"
+msgstr "앞부분 %s만 표시"
+
+#: textview.cpp:270
+#, c-format
+msgid "%s — Text"
+msgstr "%s — 텍스트 보기"
+
+#: textview.cpp:274
+msgid "_Wrap lines"
+msgstr "자동 줄 바꿈(_W)"
+
+#: textview.cpp:294
+msgid "Find (Ctrl+F)"
+msgstr "찾기 (Ctrl+F)"
+
+#: window.cpp:52
+msgid "unknown error"
+msgstr "알 수 없는 오류"
+
+#: window.cpp:130
+#, c-format
+msgid "%s byte"
+msgid_plural "%s bytes"
+msgstr[0] "%s바이트"
+
+#: window.cpp:345
+msgid "Another operation is still running"
+msgstr "다른 작업이 아직 진행 중입니다"
+
+#: window.cpp:525
+msgid "encrypted"
+msgstr "암호화됨"
+
+#: window.cpp:677 window.cpp:705
+#, c-format
+msgid "(%s) has no filesystem GRUB can read"
+msgstr "(%s)에 GRUB이 읽을 수 있는 파일 시스템이 없습니다"
+
+#: window.cpp:722 window.cpp:739 window.cpp:740
+#, c-format
+msgid "Cannot open %s"
+msgstr "%s을(를) 열 수 없습니다"
+
+#: window.cpp:723
+msgid ""
+"This file is inside a volume FsRover itself has mounted. Browse to it in "
+"FsRover and use \"Open as Disk Image\" instead."
+msgstr "이 파일은 FsRover가 마운트한 볼륨에 있습니다. FsRover에서 파일을 찾은 뒤 “디스크 이미지로 열기”를 사용하세요."
+
+#: window.cpp:729 window.cpp:1039
+#, c-format
+msgid "Opening %s…"
+msgstr "%s을(를) 여는 중…"
+
+#: window.cpp:786 window.cpp:2331
+msgid "Ready"
+msgstr "준비됨"
+
+#: window.cpp:861
+msgid "Empty folder"
+msgstr "빈 폴더"
+
+#: window.cpp:863
+#, c-format
+msgid "%zu folders, %zu files"
+msgstr "폴더 %zu개, 파일 %zu개"
+
+#: window.cpp:886
+#, c-format
+msgid "Loading %s…"
+msgstr "%s을(를) 불러오는 중…"
+
+#: window.cpp:940
+#, c-format
+msgid "Extracting %s"
+msgstr "%s 추출 중"
+
+#: window.cpp:947
+#, c-format
+msgid "Failed: %s"
+msgstr "실패: %s"
+
+#: window.cpp:949
+#, c-format
+msgid "%llu file, %s"
+msgid_plural "%llu files, %s"
+msgstr[0] "파일 %llu개, %s"
+
+#: window.cpp:952
+#, c-format
+msgid "(%zu error)"
+msgid_plural "(%zu errors)"
+msgstr[0] "(오류 %zu건)"
+
+#: window.cpp:971
+#, c-format
+msgid "File dialog failed: %s"
+msgstr "파일 대화 상자 오류: %s"
+
+#: window.cpp:985
+msgid "Not a local path"
+msgstr "로컬 경로가 아닙니다"
+
+#: window.cpp:985
+msgid "Choose a file or folder on this computer."
+msgstr "이 컴퓨터에 있는 파일이나 폴더를 선택하세요."
+
+#: window.cpp:1004
+#, c-format
+msgid "Extracting to %s…"
+msgstr "%s에 추출하는 중…"
+
+#: window.cpp:1008
+#, c-format
+msgid "Extract to %s: %s"
+msgstr "%s에 추출: %s"
+
+#: window.cpp:1020
+#, c-format
+msgid "Cannot open: %s"
+msgstr "열 수 없습니다: %s"
+
+#: window.cpp:1036
+#, c-format
+msgid "Cannot create a temporary directory in %s"
+msgstr "%s에 임시 폴더를 만들 수 없습니다"
+
+#: window.cpp:1043
+#, c-format
+msgid "Opened %s"
+msgstr "%s을(를) 열었습니다"
+
+#: window.cpp:1044
+#, c-format
+msgid "Open %s: %s"
+msgstr "%s 열기: %s"
+
+#: window.cpp:1107
+msgid "The device ended before its reported size"
+msgstr "장치가 보고한 크기보다 일찍 읽기가 끝났습니다"
+
+#: window.cpp:1117
+#, c-format
+msgid "Write failed: %s"
+msgstr "쓰기 실패: %s"
+
+#: window.cpp:1126
+#, c-format
+msgid "Exporting (%s): %s of %s"
+msgstr "(%s) 내보내는 중: %s / %s"
+
+#: window.cpp:1132
+#, c-format
+msgid "Cannot flush %s: %s"
+msgstr "%s의 쓰기 버퍼를 비울 수 없습니다: %s"
+
+#: window.cpp:1134
+#, c-format
+msgid "Cannot close %s: %s"
+msgstr "%s을(를) 닫을 수 없습니다: %s"
+
+#: window.cpp:1136
+#, c-format
+msgid "Cannot replace %s: %s"
+msgstr "%s을(를) 바꿀 수 없습니다: %s"
+
+#: window.cpp:1158
+#, c-format
+msgid "Exporting (%s)…"
+msgstr "(%s) 내보내는 중…"
+
+#: window.cpp:1164
+#, c-format
+msgid "Exported (%s) to %s, %s"
+msgstr "(%s)을(를) %s에 내보냈습니다, %s"
+
+#: window.cpp:1168
+#, c-format
+msgid "Export of (%s) failed"
+msgstr "(%s) 내보내기 실패"
+
+#: window.cpp:1170
+#, c-format
+msgid "Cannot export (%s)"
+msgstr "(%s)을(를) 내보낼 수 없습니다"
+
+#: window.cpp:1198
+msgid "Open Compressed Disk Image"
+msgstr "압축된 디스크 이미지 열기"
+
+#: window.cpp:1199
+msgid "Open Disk Image"
+msgstr "디스크 이미지 열기"
+
+#: window.cpp:1268
+msgid "Extract To"
+msgstr "추출할 위치 선택"
+
+#: window.cpp:1305
+#, c-format
+msgid "Cannot open %s as a disk image"
+msgstr "%s을(를) 디스크 이미지로 열 수 없습니다"
+
+#: window.cpp:1502
+#, c-format
+msgid "Export (%s) as Raw Image"
+msgstr "(%s)을(를) 원시 이미지로 내보내기"
+
+#: window.cpp:1535
+msgid "Only attached images and lost partitions can be detached"
+msgstr "연결한 이미지와 손실된 파티션만 분리할 수 있습니다"
+
+#: window.cpp:1543 window.cpp:1562
+#, c-format
+msgid "Cannot detach (%s)"
+msgstr "(%s)을(를) 분리할 수 없습니다"
+
+#: window.cpp:1543
+msgid "Unmount it first."
+msgstr "먼저 마운트를 해제하세요."
+
+#: window.cpp:1564
+#, c-format
+msgid "Detached (%s)"
+msgstr "(%s)을(를) 분리했습니다"
+
+#: window.cpp:1623
+msgid "Navigation"
+msgstr "탐색"
+
+#: window.cpp:1623
+msgid "Back"
+msgstr "뒤로"
+
+#: window.cpp:1623
+msgid "Forward"
+msgstr "앞으로"
+
+#: window.cpp:1623
+msgid "Up one level"
+msgstr "상위 폴더로 이동"
+
+#: window.cpp:1623
+msgid "Edit the path"
+msgstr "경로 편집"
+
+#: window.cpp:1624 window.cpp:2013
+msgid "Refresh"
+msgstr "새로 고침"
+
+#: window.cpp:1624
+msgid "Files"
+msgstr "파일"
+
+#: window.cpp:1624
+msgid "Open a disk image"
+msgstr "디스크 이미지 열기"
+
+#: window.cpp:1624
+msgid "Extract the selection"
+msgstr "선택 항목 추출"
+
+#: window.cpp:1625
+msgid "Select all"
+msgstr "모두 선택"
+
+#: window.cpp:1625 window.cpp:2053 window.cpp:2073
+msgid "Properties"
+msgstr "속성"
+
+#: window.cpp:1625
+msgid "View as text"
+msgstr "텍스트로 보기"
+
+#: window.cpp:1625
+msgid "View as hex"
+msgstr "16진수로 보기"
+
+#: window.cpp:1642
+msgid "Read-only filesystem browser built on GRUB drivers."
+msgstr "GRUB 드라이버를 사용하는 읽기 전용 파일 시스템 탐색기입니다."
+
+#: window.cpp:1646
+msgid "translator-credits"
+msgstr "FsRover 기여자"
+
+#: window.cpp:1962
+msgid "Cancelling…"
+msgstr "취소하는 중…"
+
+#: window.cpp:2010
+msgid "Open Disk Image…"
+msgstr "디스크 이미지 열기…"
+
+#: window.cpp:2011
+msgid "Open Compressed Disk Image…"
+msgstr "압축된 디스크 이미지 열기…"
+
+#: window.cpp:2012
+msgid "Access Physical Disks…"
+msgstr "물리 디스크 접근…"
+
+#: window.cpp:2014
+msgid "Select All"
+msgstr "모두 선택"
+
+#: window.cpp:2015
+msgid "Invert Selection"
+msgstr "선택 반전"
+
+#: window.cpp:2020
+msgid "Help"
+msgstr "도움말"
+
+#: window.cpp:2021
+msgid "Keyboard Shortcuts"
+msgstr "키보드 바로 가기"
+
+#: window.cpp:2022
+msgid "About FsRover"
+msgstr "FsRover 정보"
+
+#: window.cpp:2030
+msgid "Filename Encoding"
+msgstr "파일 이름 인코딩"
+
+#: window.cpp:2031
+msgid "Preserve Timestamps When Extracting"
+msgstr "추출 시 타임스탬프 유지"
+
+#: window.cpp:2044
+msgid "Open"
+msgstr "열기"
+
+#: window.cpp:2045
+msgid "Extract To…"
+msgstr "추출 위치 선택…"
+
+#: window.cpp:2046
+msgid "View as Text"
+msgstr "텍스트로 보기"
+
+#: window.cpp:2047 window.cpp:2069
+msgid "View as Hex"
+msgstr "16진수로 보기"
+
+#: window.cpp:2048
+msgid "View as Image"
+msgstr "이미지로 보기"
+
+#: window.cpp:2049
+msgid "View as Markdown"
+msgstr "Markdown으로 보기"
+
+#: window.cpp:2050
+msgid "Open as Disk Image"
+msgstr "디스크 이미지로 열기"
+
+#: window.cpp:2051
+msgid "Open as Compressed Disk Image"
+msgstr "압축된 디스크 이미지로 열기"
+
+#: window.cpp:2052
+msgid "File Map"
+msgstr "파일 저장 위치"
+
+#: window.cpp:2054
+msgid "Copy Name"
+msgstr "이름 복사"
+
+#: window.cpp:2055
+msgid "Copy Path"
+msgstr "경로 복사"
+
+#: window.cpp:2063
+msgid "Browse"
+msgstr "찾아보기"
+
+#: window.cpp:2064
+msgid "Mount…"
+msgstr "마운트…"
+
+#: window.cpp:2065
+msgid "Unmount"
+msgstr "마운트 해제"
+
+#: window.cpp:2066
+msgid "Unlock…"
+msgstr "잠금 해제…"
+
+#: window.cpp:2067
+msgid "Unlock VeraCrypt / TrueCrypt…"
+msgstr "VeraCrypt / TrueCrypt 잠금 해제…"
+
+#: window.cpp:2068
+msgid "Open Plain dm-crypt…"
+msgstr "plain dm-crypt 열기…"
+
+#: window.cpp:2070
+msgid "Export Raw Image…"
+msgstr "원시 이미지 내보내기…"
+
+#: window.cpp:2071
+msgid "Search for Lost Partitions…"
+msgstr "손실된 파티션 검색…"
+
+#: window.cpp:2072
+msgid "Detach"
+msgstr "분리"
+
+#: window.cpp:2115
+msgid "Name"
+msgstr "이름"
+
+#: window.cpp:2117
+msgid "Modified"
+msgstr "수정한 날짜"
+
+#: window.cpp:2145
+msgid "Pick a volume on the left, or open a disk image (Ctrl+O)."
+msgstr "왼쪽에서 볼륨을 선택하거나 디스크 이미지(Ctrl+O)를 여세요."
+
+#: window.cpp:2151
+msgid "_Access Physical Disks…"
+msgstr "물리 디스크 접근(_A)…"
+
+#: window.cpp:2154
+msgid ""
+"Some disks need administrator permission to be read. FsRover asks for it "
+"without running as root."
+msgstr "일부 디스크를 읽으려면 관리자 권한이 필요합니다. FsRover는 root로 실행하지 않고 읽기 권한을 요청합니다."
+
+#: window.cpp:2178
+msgid "_Extract…"
+msgstr "추출(_E)…"
+
+#: window.cpp:2183
+msgid "Extract the selection (Ctrl+E)"
+msgstr "선택 항목 추출 (Ctrl+E)"
+
+#: window.cpp:2190
+msgid "(device)/path"
+msgstr "(장치)/경로"
+
+#: window.cpp:2196
+msgid "Back (Alt+Left)"
+msgstr "뒤로 (Alt+←)"
+
+#: window.cpp:2198
+msgid "Forward (Alt+Right)"
+msgstr "앞으로 (Alt+→)"
+
+#: window.cpp:2200
+msgid "Up (Alt+Up)"
+msgstr "상위 폴더로 이동 (Alt+↑)"
+
+#: window.cpp:2202
+msgid "Open Disk Image (Ctrl+O)"
+msgstr "디스크 이미지 열기 (Ctrl+O)"
+
+#: window.cpp:2214
+msgid "Starting…"
+msgstr "시작하는 중…"
+
+#: window.cpp:2222
+msgid "Cancel"
+msgstr "취소"

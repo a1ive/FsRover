@@ -274,6 +274,7 @@
     <None Include="locale\zh-CN.rc2" />
     <None Include="locale\zh-TW.rc2" />
     <None Include="locale\ja-JP.rc2" />
+    <None Include="locale\ko-KR.rc2" />
     <None Include="packages.config" />
     <None Include="FsRover.manifest" />
     <None Include="blake2\COPYING" />

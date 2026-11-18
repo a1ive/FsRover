@@ -99,6 +99,9 @@ init_language (void)
 	case LANG_JAPANESE:
 		lang = MAKELANGID (LANG_JAPANESE, SUBLANG_DEFAULT);
 		break;
+	case LANG_KOREAN:
+		lang = MAKELANGID (LANG_KOREAN, SUBLANG_KOREAN);
+		break;
 	default:
 		lang = MAKELANGID (LANG_ENGLISH, SUBLANG_ENGLISH_US);
 		break;

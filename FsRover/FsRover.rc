@@ -234,3 +234,4 @@ END
 #include "locale/zh-CN.rc2"
 #include "locale/zh-TW.rc2"
 #include "locale/ja-JP.rc2"
+#include "locale/ko-KR.rc2"

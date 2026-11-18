@@ -299,5 +299,8 @@
     <None Include="locale\ja-JP.rc2">
       <Filter>RC</Filter>
     </None>
+    <None Include="locale\ko-KR.rc2">
+      <Filter>RC</Filter>
+    </None>
   </ItemGroup>
 </Project>
