@@ -112,9 +112,12 @@ about_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		about_apply_dpi (dlg);
 
 		std::wstring name = L"FsRover " + widen (ROVER_VERSION_STR) + L" (" ROVER_ARCH_W L")";
-		SetDlgItemTextW (dlg, IDC_ABOUT_NAME, name.c_str ());
+		SetDlgItemTextW (dlg, IDC_ABOUT_NAME, ltr_run (name).c_str ());
+		SetDlgItemTextW (dlg, IDC_ABOUT_LICENSE,
+			ltr_run (window_text (GetDlgItem (dlg, IDC_ABOUT_LICENSE))).c_str ());
 		SetDlgItemTextW (dlg, IDC_ABOUT_CREDITS_LABEL, res_str (IDS_ABOUT_CREDITS).c_str ());
 		SetDlgItemTextW (dlg, IDC_ABOUT_CREDITS, k_credits);
+		set_ltr_layout (GetDlgItem (dlg, IDC_ABOUT_CREDITS));
 		/* Keep focus off the edit: the dialog manager select-alls
 		   an edit it focuses (DLGC_HASSETSEL).  */
 		SetFocus (GetDlgItem (dlg, IDOK));
@@ -220,7 +223,7 @@ show_about (void)
 {
 	modal_scope hold;
 
-	DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_ABOUT), g_main, about_dlg_proc, 0);
+	dialog_box (IDD_ABOUT, g_main, about_dlg_proc, 0);
 }
 
 /* The bundled help page, shown by the markdown viewer (which holds the
@@ -246,7 +249,7 @@ show_shortcuts (void)
 {
 	modal_scope hold;
 
-	MessageBoxW (g_main, res_str (IDS_KEY_LIST).c_str (), menu_caption (IDS_MENU_SHORTCUTS).c_str (), MB_ICONINFORMATION | MB_OK);
+	msg_box (g_main, res_str (IDS_KEY_LIST).c_str (), menu_caption (IDS_MENU_SHORTCUTS).c_str (), MB_ICONINFORMATION | MB_OK);
 }
 
 void
@@ -260,6 +263,5 @@ show_support (void)
 		+ support_section (IDS_SUPPORT_IOFILTER, s.iofilter);
 
 	modal_scope hold;
-	DialogBoxParamW (GetModuleHandleW (nullptr),
-		MAKEINTRESOURCEW (IDD_SUPPORT), g_main, support_dlg_proc, (LPARAM) text.c_str ());
+	dialog_box (IDD_SUPPORT, g_main, support_dlg_proc, (LPARAM) text.c_str ());
 }

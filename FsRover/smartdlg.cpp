@@ -662,7 +662,7 @@ sm_draw_box (HDC dc, int x, int y, const std::wstring &caption, const std::wstri
 	int h = sm_scale (SM_BOX_H);
 	RECT tr = { x, y, x + w, y + g_sm_lay.small_h };
 	RECT box = { x, tr.bottom + sm_scale (2), x + w, tr.bottom + sm_scale (2) + h };
-	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
+	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ();
 	HBRUSH brush;
 
 	SelectObject (dc, g_sm_small_font);
@@ -680,7 +680,7 @@ sm_draw_box (HDC dc, int x, int y, const std::wstring &caption, const std::wstri
 	SelectObject (dc, g_sm_head_font);
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, value.c_str (), -1, &box,
-		DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+		DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ());
 }
 
 void
@@ -690,7 +690,7 @@ sm_draw_row (HDC dc, const std::wstring &label, const std::wstring &value,
 	RECT tr = { x, y, x + label_w, y + g_sm_lay.row_h };
 
 	SetTextColor (dc, GetSysColor (COLOR_GRAYTEXT));
-	DrawTextW (dc, label.c_str (), -1, &tr, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+	DrawTextW (dc, label.c_str (), -1, &tr, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ());
 	tr = { value_x, y, value_x + value_w, y + g_sm_lay.row_h };
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, value.c_str (), -1, &tr, fmt);
@@ -701,8 +701,8 @@ sm_paint (HWND dlg, HDC dc)
 {
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	HFONT old = (HFONT) SelectObject (dc, g_sm_head_font);
-	UINT left = DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
-	UINT right = DT_RIGHT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
+	UINT left = DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ();
+	UINT right = DT_RIGHT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ();
 	int m = sm_scale (SM_MARGIN);
 	int gap = sm_scale (SM_GAP);
 	int x0, x_lv, x_rv, x_rl, w_lv, y;
@@ -1032,7 +1032,7 @@ show_smart (const backend_diskent &d)
 	{
 		modal_scope hold;
 
-		MessageBoxW (g_main, res_str (IDS_SM_NO_DATA).c_str (),
+		msg_box (g_main, res_str (IDS_SM_NO_DATA).c_str (),
 			res_str (IDS_SM_TITLE).c_str (), MB_ICONWARNING | MB_OK);
 		return;
 	}
@@ -1043,8 +1043,7 @@ show_smart (const backend_diskent &d)
 	sm_build ();
 	{
 		modal_scope hold;
-		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_SMART),
-			g_main, smart_dlg_proc, 0);
+		dialog_box (IDD_SMART, g_main, smart_dlg_proc, 0);
 	}
 	g_smart = nullptr;
 	g_sm_left.clear ();

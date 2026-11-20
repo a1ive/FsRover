@@ -100,6 +100,9 @@ void draw_bar (const DRAWITEMSTRUCT *di)
 	RECT rc = di->rcItem;
 	int w = rc.right - rc.left, h = rc.bottom - rc.top;
 	HDC dc = CreateCompatibleDC (di->hDC);
+	/* A memory DC does not inherit the dialog's mirroring; give it the
+	   same layout, or the final BitBlt flips the bar and its labels.  */
+	SetLayout (dc, GetLayout (di->hDC));
 	HBITMAP bmp = CreateCompatibleBitmap (di->hDC, w, h);
 	HGDIOBJ old_bmp = SelectObject (dc, bmp);
 	HGDIOBJ old_font = SelectObject (dc, font);
@@ -122,6 +125,8 @@ void draw_bar (const DRAWITEMSTRUCT *di)
 	GetTextMetricsW (dc, &tm);
 	int y = strip.bottom + dpi_scale (dpi, 6), box = tm.tmHeight * 2 / 3, x = 0;
 	SetBkMode (dc, TRANSPARENT);
+	if (ui_rtl ())
+		SetTextAlign (dc, TA_RTLREADING);
 	SetTextColor (dc, GetSysColor (COLOR_BTNTEXT));
 	for (int c = 0; c < CAT_COUNT; c++)
 	{
@@ -407,6 +412,7 @@ void show_file_map (const std::string &name)
 	struct { DLGTEMPLATE dlg; WORD menu, cls, title; } templ = {};
 	templ.dlg.style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_MODALFRAME;
 	templ.dlg.cx = 700; templ.dlg.cy = 400;
+	dialog_template_rtl (&templ.dlg);
 	{
 		modal_scope hold;
 		DialogBoxIndirectParamW (GetModuleHandleW (nullptr), &templ.dlg, g_main, proc, 0);

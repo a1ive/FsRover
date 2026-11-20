@@ -96,7 +96,7 @@ show_mount_dialog (HWND owner, const backend_diskent &d)
 	g_dokan_disk = d;
 	{
 		modal_scope hold;
-		if (DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DOKANMOUNT), owner, dokan_mount_dlg_proc, 0) != 1)
+		if (dialog_box (IDD_DOKANMOUNT, owner, dokan_mount_dlg_proc, 0) != 1)
 			return {};
 	}
 
@@ -149,7 +149,7 @@ show_dokan_install (HWND owner, HWND status)
 	if (ok)
 	{
 		set_status (res_str (IDS_DOKAN_INSTALL_OK).c_str ());
-		MessageBoxW (owner, res_str (IDS_DOKAN_INSTALL_OK).c_str (), res_str (IDS_APP_TITLE).c_str (), MB_ICONINFORMATION | MB_OK);
+		msg_box (owner, res_str (IDS_DOKAN_INSTALL_OK).c_str (), res_str (IDS_APP_TITLE).c_str (), MB_ICONINFORMATION | MB_OK);
 	}
 	else
 	{
@@ -157,7 +157,7 @@ show_dokan_install (HWND owner, HWND status)
 		// Could not install Dokan: %s
 		_snwprintf_s (text, 320, _TRUNCATE, res_str (IDS_FMT_DOKAN_INSTALL_FAIL).c_str (), err.c_str ());
 		set_status (text);
-		MessageBoxW (owner, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
+		msg_box (owner, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 	}
 }
 #endif

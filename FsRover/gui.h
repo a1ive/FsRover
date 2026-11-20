@@ -112,6 +112,17 @@ bool cmdline_parse (void);
 std::wstring window_text (HWND wnd);
 std::wstring res_str (UINT id);
 void init_language (void);
+/* Right-to-left UI (see util.cpp): the helpers mirror what does not
+   inherit the process layout, and are plain calls otherwise.  */
+bool ui_rtl (void);
+INT_PTR dialog_box (UINT id, HWND owner, DLGPROC proc, LPARAM param);
+void dialog_template_rtl (DLGTEMPLATE *templ);
+int msg_box (HWND owner, const wchar_t *text, const wchar_t *caption, UINT type);
+int track_popup_menu (HMENU menu, UINT flags, int x, int y, HWND owner);
+UINT dt_reading (void);
+UINT il_mirror (void);
+void set_ltr_layout (HWND wnd);
+std::wstring ltr_run (const std::wstring &s);
 bool is_elevated (void);	/* elevated token: physical disks, driver install */
 bool is_wow64 (void);	/* 32-bit process on 64-bit Windows */
 HICON load_system_icon (const wchar_t *dll, int id, int size);

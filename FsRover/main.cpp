@@ -280,6 +280,7 @@ create_children (HWND wnd)
 
 	g_address = CreateWindowExW (WS_EX_CLIENTEDGE, L"EDIT", L"",
 		child | ES_AUTOHSCROLL, 0, 0, 0, 0, wnd, nullptr, nullptr, nullptr);
+	set_ltr_layout (g_address);
 	g_btn_extract = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_EXTRACT).c_str (),
 		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_EXTRACT, nullptr, nullptr);
 	g_btn_up = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_UP).c_str (),
@@ -431,7 +432,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		create_menu_bar (wnd);
 		if (!backend_start (wnd, g_cmdline.no_windisk))
 		{
-			MessageBoxW (wnd, res_str (IDS_BACKEND_START_FAILED).c_str (),
+			msg_box (wnd, res_str (IDS_BACKEND_START_FAILED).c_str (),
 				res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 			return -1;
 		}
@@ -579,7 +580,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		if (dokanfs_count () > 0)
 		{
 			modal_scope hold;
-			if (MessageBoxW (wnd, res_str (IDS_ASK_UNMOUNT_ALL).c_str (), res_str (IDS_APP_TITLE).c_str (),
+			if (msg_box (wnd, res_str (IDS_ASK_UNMOUNT_ALL).c_str (), res_str (IDS_APP_TITLE).c_str (),
 				MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES)
 				return 0;
 			dokanfs_unmount_all ();
@@ -593,7 +594,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		smart_shutdown ();
 #endif
 		if (!backend_stop ())
-			MessageBoxW (nullptr, res_str (IDS_BACKEND_STOP_FAILED).c_str (),
+			msg_box (nullptr, res_str (IDS_BACKEND_STOP_FAILED).c_str (),
 				res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
 		PostQuitMessage (0);
 		return 0;

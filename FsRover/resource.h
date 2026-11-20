@@ -17,7 +17,7 @@
  */
 
 /* String IDs shared by FsRover.rc and main.cpp.  Every user-visible
-   string lives in the stringtable (en-US, zh-CN, zh-TW, ja-JP); the
+   string lives in the stringtable (one locale/*.rc2 per language); the
    IDS_FMT_* entries are printf format strings and must keep the same
    specifiers in the same order in every language.  */
 
@@ -137,6 +137,7 @@
 #define IDC_ABOUT_CREDITS_LABEL	1403
 #define IDC_ABOUT_CREDITS	1404
 #define IDC_ABOUT_URL		1405
+#define IDC_ABOUT_LICENSE	1406
 
 #define IDC_SUPPORT_TEXT	1501
 

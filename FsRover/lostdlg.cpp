@@ -511,6 +511,7 @@ show_lost_scan (const backend_diskent &d)
 	templ.dlg.style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_MODALFRAME;
 	templ.dlg.cx = 650;
 	templ.dlg.cy = 360;
+	dialog_template_rtl (&templ.dlg);
 	{
 		modal_scope hold;
 		DialogBoxIndirectParamW (GetModuleHandleW (nullptr), &templ.dlg, g_main, proc, 0);

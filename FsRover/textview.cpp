@@ -621,7 +621,7 @@ text_on_chunk (backend_result *res)
 	{
 		HWND dlg = g_text;
 		g_text = nullptr;
-		MessageBoxW (dlg, widen (res->error).c_str (), res_str (IDS_TEXT_TITLE).c_str (), MB_ICONERROR);
+		msg_box (dlg, widen (res->error).c_str (), res_str (IDS_TEXT_TITLE).c_str (), MB_ICONERROR);
 		EndDialog (dlg, 0);
 		return;
 	}
@@ -646,7 +646,7 @@ text_on_chunk (backend_result *res)
 			ask = buf;
 		}
 		if (!ask.empty ()
-			&& MessageBoxW (g_text, ask.c_str (), res_str (IDS_TEXT_TITLE).c_str (),
+			&& msg_box (g_text, ask.c_str (), res_str (IDS_TEXT_TITLE).c_str (),
 				MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) != IDYES)
 		{
 			HWND dlg = g_text;

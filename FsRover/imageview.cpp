@@ -994,7 +994,7 @@ img_on_chunk (backend_result *res)
 	{
 		HWND dlg = g_img;
 		g_img = nullptr;
-		MessageBoxW (dlg, widen (res->error).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
+		msg_box (dlg, widen (res->error).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
 		EndDialog (dlg, 0);
 		return;
 	}
@@ -1008,7 +1008,7 @@ img_on_chunk (backend_result *res)
 		{
 			HWND dlg = g_img;
 			g_img = nullptr;
-			MessageBoxW (dlg, res_str (IDS_IMAGE_TOOBIG).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONWARNING);
+			msg_box (dlg, res_str (IDS_IMAGE_TOOBIG).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONWARNING);
 			EndDialog (dlg, 0);
 			return;
 		}
@@ -1017,7 +1017,7 @@ img_on_chunk (backend_result *res)
 			wchar_t buf[256];
 			swprintf (buf, 256, res_str (IDS_ASK_TEXT_BIG).c_str (),
 				  format_size (res->file_size).c_str ());
-			if (MessageBoxW (g_img, buf, res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) != IDYES)
+			if (msg_box (g_img, buf, res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) != IDYES)
 			{
 				img_close (g_img);
 				return;
@@ -1040,7 +1040,7 @@ img_on_chunk (backend_result *res)
 	{
 		HWND dlg = g_img;
 		g_img = nullptr;
-		MessageBoxW (dlg, res_str (IDS_IMAGE_BAD).c_str (),
+		msg_box (dlg, res_str (IDS_IMAGE_BAD).c_str (),
 			     res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
 		EndDialog (dlg, 0);
 		return;
@@ -1062,7 +1062,7 @@ show_image (const std::string &path)
 	if (!img_load_d2d ())
 	{
 		modal_scope hold;
-		MessageBoxW (g_main, res_str (IDS_IMAGE_NO_D2D).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
+		msg_box (g_main, res_str (IDS_IMAGE_NO_D2D).c_str (), res_str (IDS_IMAGE_TITLE).c_str (), MB_ICONERROR);
 		return;
 	}
 	g_img_path = path;

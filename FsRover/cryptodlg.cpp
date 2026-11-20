@@ -191,7 +191,7 @@ crypto_unlock_done (backend_result *res)
 	{
 		crypto_enable_inputs (g_crypto, TRUE);
 		ShowWindow (GetDlgItem (g_crypto, IDC_CRYPTO_PROGRESS), SW_HIDE);
-		MessageBoxW (g_crypto, res_str (IDS_CRYPTO_BADKEY).c_str (), nullptr, MB_ICONWARNING | MB_OK);
+		msg_box (g_crypto, res_str (IDS_CRYPTO_BADKEY).c_str (), nullptr, MB_ICONWARNING | MB_OK);
 		SetDlgItemTextW (g_crypto, IDC_CRYPTO_PASS, L"");
 		SetFocus (GetDlgItem (g_crypto, IDC_CRYPTO_PASS));
 		return;
@@ -456,7 +456,7 @@ vc_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 
 			if (!vc_read_pim (dlg, &pim))
 			{
-				MessageBoxW (dlg, res_str (IDS_VC_BADPIM).c_str (),
+				msg_box (dlg, res_str (IDS_VC_BADPIM).c_str (),
 					nullptr, MB_ICONWARNING | MB_OK);
 				SetFocus (GetDlgItem (dlg, IDC_VC_PIM));
 				return TRUE;
@@ -511,7 +511,7 @@ veracrypt_unlock_done (backend_result *res)
 	{
 		vc_enable_inputs (g_vc, TRUE);
 		ShowWindow (GetDlgItem (g_vc, IDC_VC_PROGRESS), SW_HIDE);
-		MessageBoxW (g_vc, res_str (IDS_VC_BADKEY).c_str (), nullptr, MB_ICONWARNING | MB_OK);
+		msg_box (g_vc, res_str (IDS_VC_BADKEY).c_str (), nullptr, MB_ICONWARNING | MB_OK);
 		SetFocus (GetDlgItem (g_vc, IDC_VC_PASS));
 		return;
 	}
@@ -531,7 +531,7 @@ prompt_unlock_veracrypt (const std::string &devname)
 	INT_PTR r;
 	{
 		modal_scope hold;
-		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_VERACRYPT), g_main, vc_dlg_proc, 0);
+		r = dialog_box (IDD_VERACRYPT, g_main, vc_dlg_proc, 0);
 	}
 	if (r == 1 && !g_vc_newdev.empty ())
 	{
@@ -749,7 +749,7 @@ pm_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM)
 				|| key_bits == 0 || (key_bits % 8) != 0
 				|| offset == ~0ULL || skip == ~0ULL)
 			{
-				MessageBoxW (dlg, res_str (IDS_PM_BADPARAM).c_str (),
+				msg_box (dlg, res_str (IDS_PM_BADPARAM).c_str (),
 					nullptr, MB_ICONWARNING | MB_OK);
 				return TRUE;
 			}
@@ -793,7 +793,7 @@ plainmount_done (backend_result *res)
 	if (!res->error.empty ())
 	{
 		pm_enable_inputs (g_pm, TRUE);
-		MessageBoxW (g_pm, res_str (IDS_PM_FAILED).c_str (), nullptr, MB_ICONWARNING | MB_OK);
+		msg_box (g_pm, res_str (IDS_PM_FAILED).c_str (), nullptr, MB_ICONWARNING | MB_OK);
 		return;
 	}
 	g_pm_newdev = res->path;
@@ -811,7 +811,7 @@ prompt_plainmount (const std::string &devname)
 	INT_PTR r;
 	{
 		modal_scope hold;
-		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_PLAINMOUNT), g_main, pm_dlg_proc, 0);
+		r = dialog_box (IDD_PLAINMOUNT, g_main, pm_dlg_proc, 0);
 	}
 	if (r == 1 && !g_pm_newdev.empty ())
 	{
@@ -830,7 +830,7 @@ prompt_unlock (const std::string &devname, const std::string &uuid)
 	INT_PTR r;
 	{
 		modal_scope hold;
-		r = DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_CRYPTO), g_main, crypto_dlg_proc, 0);
+		r = dialog_box (IDD_CRYPTO, g_main, crypto_dlg_proc, 0);
 	}
 	if (r == 1 && !g_crypto_newdev.empty ())
 	{

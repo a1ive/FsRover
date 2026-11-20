@@ -418,7 +418,7 @@ hex_on_chunk (backend_result *res)
 	{
 		HWND dlg = g_hex;
 		g_hex = nullptr;	/* drop the other in-flight chunks */
-		MessageBoxW (dlg, widen (res->error).c_str (), res_str (IDS_HEX_TITLE).c_str (), MB_ICONERROR);
+		msg_box (dlg, widen (res->error).c_str (), res_str (IDS_HEX_TITLE).c_str (), MB_ICONERROR);
 		EndDialog (dlg, 0);
 		return;
 	}

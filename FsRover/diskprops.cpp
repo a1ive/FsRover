@@ -540,7 +540,7 @@ dp_draw_box (HDC dc, const dp_box &b, int x, int y, int h)
 		return;
 
 	RECT tr = { x + pad, y + dp_scale (DP_STRIPE_H) + pad, x + b.w - pad, y + h - pad };
-	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
+	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ();
 
 	SelectObject (dc, g_dp_small_font);
 	if (b.w < dp_scale (DP_BOX_TWOLINE))
@@ -562,7 +562,7 @@ dp_paint (HWND dlg, HDC dc)
 {
 	HFONT body = (HFONT) SendMessageW (dlg, WM_GETFONT, 0, 0);
 	HFONT old = (HFONT) SelectObject (dc, g_dp_head_font);
-	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
+	UINT fmt = DT_LEFT | DT_TOP | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | dt_reading ();
 	int m = dp_scale (DP_MARGIN);
 	int icon = dp_scale (DP_ICON);
 	RECT rc, tr;
@@ -571,7 +571,7 @@ dp_paint (HWND dlg, HDC dc)
 	SetBkMode (dc, TRANSPARENT);
 
 	if (g_dp_hicon)
-		DrawIconEx (dc, m, m, g_dp_hicon, icon, icon, 0, nullptr, DI_NORMAL);
+		DrawIconEx (dc, m, m, g_dp_hicon, icon, icon, 0, nullptr, DI_NORMAL | DI_NOMIRROR);
 	tr = { m + icon + dp_scale (DP_GAP), g_dp_lay.y_spec, rc.right - m, g_dp_lay.height };
 	SetTextColor (dc, GetSysColor (COLOR_WINDOWTEXT));
 	DrawTextW (dc, g_dp_spec.c_str (), -1, &tr, fmt);
@@ -729,7 +729,7 @@ show_disk_props (const backend_diskent &d, const std::vector<backend_diskent> &d
 	dp_build (d, disks);
 	{
 		modal_scope hold;
-		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_DISKPROPS), g_main, disk_props_dlg_proc, 0);
+		dialog_box (IDD_DISKPROPS, g_main, disk_props_dlg_proc, 0);
 	}
 	g_diskprops = nullptr;
 }

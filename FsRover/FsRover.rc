@@ -118,7 +118,7 @@ BEGIN
 	LTEXT		"", IDC_ABOUT_NAME, 44, 12, 229, 10
 	CONTROL		"<a href=""https://github.com/a1ive/FsRover"">https://github.com/a1ive/FsRover</a>", IDC_ABOUT_URL, "SysLink", WS_TABSTOP, 44, 24, 229, 10
 	LTEXT		ROVER_COPYRIGHT, IDC_STATIC, 44, 36, 229, 10
-	LTEXT		"Licensed under the GNU General Public License v3.", IDC_STATIC, 44, 48, 229, 10
+	LTEXT		"Licensed under the GNU General Public License v3.", IDC_ABOUT_LICENSE, 44, 48, 229, 10
 	LTEXT		"", IDC_ABOUT_CREDITS_LABEL, 12, 66, 261, 10
 	EDITTEXT	IDC_ABOUT_CREDITS, 12, 78, 261, 98, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
 	DEFPUSHBUTTON	"OK", IDOK, 223, 181, 50, 14

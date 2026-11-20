@@ -96,7 +96,7 @@ tray_icon::show_menu (void)
 
 	/* Required for the menu to close on an outside click.  */
 	SetForegroundWindow (data_.hWnd);
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, data_.hWnd, nullptr);
+	int cmd = track_popup_menu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, data_.hWnd);
 	DestroyMenu (menu);
 
 	if (cmd == IDM_TRAY_OPEN)

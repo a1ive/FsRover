@@ -176,7 +176,7 @@ md_open_link (HWND dlg, CHARRANGE cr)
 		if (_wcsnicmp (t, L"http://", 7) != 0 && _wcsnicmp (t, L"https://", 8) != 0 && _wcsnicmp (t, L"mailto:", 7) != 0)
 			return;
 		std::wstring ask = res_str (IDS_MD_ASK_LINK) + L"\r\n\r\n" + l.target;
-		if (MessageBoxW (dlg, ask.c_str (), res_str (IDS_MD_TITLE).c_str (),
+		if (msg_box (dlg, ask.c_str (), res_str (IDS_MD_TITLE).c_str (),
 				 MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) == IDYES)
 			ShellExecuteW (dlg, L"open", t, nullptr, nullptr, SW_SHOWNORMAL);
 		return;
@@ -312,7 +312,7 @@ md_show_dialog (void)
 	}
 	{
 		modal_scope hold;
-		DialogBoxParamW (GetModuleHandleW (nullptr), MAKEINTRESOURCEW (IDD_MD), g_main, md_dlg_proc, 0);
+		dialog_box (IDD_MD, g_main, md_dlg_proc, 0);
 	}
 	g_md = nullptr;
 	g_md_doc = md_document ();
@@ -348,7 +348,7 @@ md_on_chunk (backend_result *res)
 	{
 		HWND dlg = g_md;
 		g_md = nullptr;
-		MessageBoxW (dlg, widen (res->error).c_str (), res_str (IDS_MD_TITLE).c_str (), MB_ICONERROR);
+		msg_box (dlg, widen (res->error).c_str (), res_str (IDS_MD_TITLE).c_str (), MB_ICONERROR);
 		EndDialog (dlg, 0);
 		return;
 	}
@@ -362,7 +362,7 @@ md_on_chunk (backend_result *res)
 		{
 			wchar_t buf[256];
 			swprintf (buf, 256, res_str (IDS_ASK_TEXT_BIG).c_str (), format_size (res->file_size).c_str ());
-			if (MessageBoxW (g_md, buf, res_str (IDS_MD_TITLE).c_str (),
+			if (msg_box (g_md, buf, res_str (IDS_MD_TITLE).c_str (),
 					 MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON2) != IDYES)
 			{
 				HWND dlg = g_md;

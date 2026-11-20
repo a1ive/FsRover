@@ -74,6 +74,27 @@ res_str (UINT id)
 	return std::wstring (p, (size_t) len);
 }
 
+namespace
+{
+
+bool g_rtl;	/* see ui_rtl() */
+
+bool
+lang_is_rtl (LANGID lang)
+{
+	wchar_t name[LOCALE_NAME_MAX_LENGTH];
+	DWORD layout = 0;
+
+	if (!LCIDToLocaleName (MAKELCID (lang, SORT_DEFAULT), name, LOCALE_NAME_MAX_LENGTH, 0))
+		return false;
+	if (!GetLocaleInfoEx (name, LOCALE_IREADINGLAYOUT | LOCALE_RETURN_NUMBER,
+		(LPWSTR) &layout, sizeof (layout) / sizeof (wchar_t)))
+		return false;
+	return layout == 1;	/* 0 LTR, 1 RTL, 2/3 vertical */
+}
+
+} // namespace
+
 /* Pin the thread UI language to one of the shipped stringtables so
    LoadStringW resolves deterministically (en-US fallback).  */
 void
@@ -107,6 +128,126 @@ init_language (void)
 		break;
 	}
 	SetThreadUILanguage (lang);
+
+	/* Mirror the UI for the stringtable actually selected, not for the
+	   Windows display language: an Arabic system without an Arabic
+	   table gets the English UI, laid out left to right.  Must run
+	   before the first window exists; see ui_rtl().  */
+	g_rtl = lang_is_rtl (lang);
+	if (g_rtl)
+		SetProcessDefaultLayout (LAYOUT_RTL);
+}
+
+/* Right-to-left UI.  SetProcessDefaultLayout() mirrors the main window
+   and everything parented to it, but dialogs, message boxes and popup
+   menus do not inherit layout and need the helpers below.  Views whose
+   content is inherently left to right (hex dump, line-numbered text,
+   the Direct2D image canvas, the pixel game) are opened with plain
+   DialogBoxParamW and stay unmirrored.  */
+bool
+ui_rtl (void)
+{
+	return g_rtl;
+}
+
+INT_PTR
+dialog_box (UINT id, HWND owner, DLGPROC proc, LPARAM param)
+{
+	HINSTANCE inst = GetModuleHandleW (nullptr);
+	HRSRC res;
+	HGLOBAL mem;
+	const BYTE *src;
+	DWORD size;
+	std::vector<BYTE> copy;
+
+	if (!g_rtl)
+		goto plain;
+	res = FindResourceW (inst, MAKEINTRESOURCEW (id), RT_DIALOG);
+	if (!res || !(mem = LoadResource (inst, res)) || !(src = (const BYTE *) LockResource (mem)))
+		goto plain;
+	size = SizeofResource (inst, res);
+	if (size < sizeof (DLGTEMPLATE))
+		goto plain;
+	copy.assign (src, src + size);
+	dialog_template_rtl ((DLGTEMPLATE *) copy.data ());
+	return DialogBoxIndirectParamW (inst, (const DLGTEMPLATE *) copy.data (), owner, proc, param);
+
+plain:
+	return DialogBoxParamW (inst, MAKEINTRESOURCEW (id), owner, proc, param);
+}
+
+/* Set WS_EX_LAYOUTRTL in a DLGTEMPLATE or DLGTEMPLATEEX (told apart by
+   the 0xFFFF signature in its second WORD).  */
+void
+dialog_template_rtl (DLGTEMPLATE *templ)
+{
+	WORD *w = (WORD *) templ;
+	DWORD *ex = w[0] == 1 && w[1] == 0xFFFF ? (DWORD *) (w + 4) : &templ->dwExtendedStyle;
+
+	if (g_rtl)
+		*ex |= WS_EX_LAYOUTRTL;
+}
+
+int
+msg_box (HWND owner, const wchar_t *text, const wchar_t *caption, UINT type)
+{
+	return MessageBoxW (owner, text, caption, g_rtl ? type | MB_RTLREADING | MB_RIGHT : type);
+}
+
+int
+track_popup_menu (HMENU menu, UINT flags, int x, int y, HWND owner)
+{
+	return (int) TrackPopupMenu (menu, g_rtl ? flags | TPM_LAYOUTRTL : flags, x, y, 0, owner, nullptr);
+}
+
+/* Keep one control left to right inside a mirrored window: paths,
+   URLs and the credits list are ASCII and garble under RTL reading
+   (the trailing '/' or '>' of a line jumps to its other end).  Edit
+   controls are not mirrored but given RTL reading, right alignment
+   and a leading scroll bar instead, so those go as well.  */
+void
+set_ltr_layout (HWND wnd)
+{
+	const LONG_PTR rtl = WS_EX_LAYOUTRTL | WS_EX_RTLREADING | WS_EX_RIGHT | WS_EX_LEFTSCROLLBAR;
+	LONG_PTR ex = GetWindowLongPtrW (wnd, GWL_EXSTYLE);
+	LONG_PTR style = GetWindowLongPtrW (wnd, GWL_STYLE);
+
+	if (!g_rtl)
+		return;
+	SetWindowLongPtrW (wnd, GWL_EXSTYLE, ex & ~rtl);
+	SetWindowLongPtrW (wnd, GWL_STYLE, style & ~(LONG_PTR) ES_RIGHT);
+	SetWindowPos (wnd, nullptr, 0, 0, 0, 0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+	InvalidateRect (wnd, nullptr, TRUE);
+}
+
+/* Wrap a left-to-right run (a size, a date, a version) in LRE..PDF so
+   an RTL paragraph keeps "6 B" and "2026-11-19 04:20" in order instead
+   of reordering the digit groups around the spaces.  Embedding rather
+   than isolate marks: Uniscribe on Windows 7 knows only the former.  */
+std::wstring
+ltr_run (const std::wstring &s)
+{
+	if (!g_rtl || s.empty ())
+		return s;
+	return L"\x202A" + s + L"\x202C";
+}
+
+/* ILC_MIRROR for image lists shown in mirrored controls: the icons
+   (drives, files, shell glyphs) depict objects, not directions, so they
+   are pre-flipped to come out of the mirrored DC the right way round.  */
+UINT
+il_mirror (void)
+{
+	return g_rtl ? ILC_MIRROR : 0;
+}
+
+/* DT_RTLREADING for DrawText into a (mirrored) dialog DC: mirroring
+   flips the coordinates, the reading order has to be asked for.  */
+UINT
+dt_reading (void)
+{
+	return g_rtl ? DT_RTLREADING : 0;
 }
 
 /* Whether this process holds an elevated token.  Physical drives
@@ -175,7 +316,7 @@ load_system_icon (const wchar_t* dll, int id, int size)
 HIMAGELIST
 icon_list (const wchar_t* dll, const int *ids, int count, int size)
 {
-	HIMAGELIST himl = ImageList_Create (size, size, ILC_COLOR32 | ILC_MASK, count, 0);
+	HIMAGELIST himl = ImageList_Create (size, size, ILC_COLOR32 | ILC_MASK | il_mirror (), count, 0);
 
 	for (int i = 0; i < count; i++)
 	{
@@ -197,7 +338,7 @@ button_icons (const wchar_t* dll, int id, int size)
 
 	if (!icon)
 		return nullptr;
-	HIMAGELIST himl = ImageList_Create (size, size, ILC_COLOR32 | ILC_MASK, 1, 0);
+	HIMAGELIST himl = ImageList_Create (size, size, ILC_COLOR32 | ILC_MASK | il_mirror (), 1, 0);
 	ImageList_AddIcon (himl, icon);
 	DestroyIcon (icon);
 	return himl;
@@ -421,7 +562,7 @@ format_size (UINT64 size)
 	if (size < 1024)
 	{
 		swprintf (buf, 32, L"%llu B", size);
-		return buf;
+		return ltr_run (buf);
 	}
 	double v = (double) size;
 	int u = -1;
@@ -431,7 +572,7 @@ format_size (UINT64 size)
 		u++;
 	}
 	swprintf (buf, 32, L"%.1f %s", v, units[u]);
-	return buf;
+	return ltr_run (buf);
 }
 
 std::wstring
@@ -445,7 +586,7 @@ format_mtime (INT64 mtime)
 		return {};
 	swprintf (buf, 32, L"%04d-%02d-%02d %02d:%02d",
 		tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min);
-	return buf;
+	return ltr_run (buf);
 }
 
 std::string

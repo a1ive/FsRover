@@ -193,7 +193,7 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	AppendMenuW (menu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (menu, MF_STRING, IDM_COPY_NAME, res_str (IDS_MENU_COPY_NAME).c_str ());
 	AppendMenuW (menu, MF_STRING, IDM_COPY_PATH, res_str (IDS_MENU_COPY_PATH).c_str ());
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
+	int cmd = track_popup_menu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, g_main);
 	DestroyMenu (menu);
 	if (cmd == IDM_EXTRACT)
 		start_extract (std::move (paths));
@@ -402,7 +402,7 @@ list_apply_dpi (int sm)
 	int shell_size = sm > 48 ? SHIL_JUMBO : sm > 32 ? SHIL_EXTRALARGE : sm > 16 ? SHIL_LARGE : SHIL_SMALL;
 	IImageList *shell_iml = nullptr;
 	SHGetImageList (shell_size, IID_IImageList, reinterpret_cast<void **> (&shell_iml));
-	HIMAGELIST list_iml = ImageList_Create (sm, sm, ILC_COLOR32 | ILC_MASK, 16, 8);
+	HIMAGELIST list_iml = ImageList_Create (sm, sm, ILC_COLOR32 | ILC_MASK | il_mirror (), 16, 8);
 	if (list_iml)
 	{
 		ImageList_SetBkColor (list_iml, CLR_NONE);

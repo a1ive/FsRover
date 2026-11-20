@@ -66,7 +66,7 @@ show_usage (const wchar_t *problem)
 	if (problem)
 		text = std::wstring (problem) + L"\n\n";
 	text += res_str (IDS_CMDLINE_USAGE);
-	MessageBoxW (nullptr, text.c_str (), res_str (IDS_APP_TITLE).c_str (),
+	msg_box (nullptr, text.c_str (), res_str (IDS_APP_TITLE).c_str (),
 		MB_OK | (problem ? MB_ICONERROR : MB_ICONINFORMATION));
 }
 

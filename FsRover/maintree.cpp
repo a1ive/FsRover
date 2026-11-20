@@ -176,7 +176,7 @@ on_tree_rclick (void)
 #endif
 
 	AppendMenuW (menu, MF_STRING, IDM_PROPS, res_str (IDS_MENU_PROPS).c_str ());
-	int cmd = TrackPopupMenu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, g_main, nullptr);
+	int cmd = track_popup_menu (menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, g_main);
 	DestroyMenu (menu);
 	/* TrackPopupMenu never returns a grayed or absent item, so the
 	   guards below only restate what the menu already enforces.  */

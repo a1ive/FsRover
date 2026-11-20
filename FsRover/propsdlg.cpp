@@ -71,7 +71,7 @@ props_start_hash (HWND dlg)
 			mask |= 1u << i;
 	if (!mask)
 	{
-		MessageBoxW (dlg, res_str (IDS_PROPS_SELECT_ONE).c_str (), res_str (IDS_APP_TITLE).c_str (), MB_ICONINFORMATION);
+		msg_box (dlg, res_str (IDS_PROPS_SELECT_ONE).c_str (), res_str (IDS_APP_TITLE).c_str (), MB_ICONINFORMATION);
 		return;
 	}
 	if (g_hashing)
@@ -153,9 +153,7 @@ show_props (const std::string &path)
 	g_hashing = false;
 	{
 		modal_scope hold;
-		DialogBoxParamW (GetModuleHandleW (nullptr),
-				 MAKEINTRESOURCEW (IDD_PROPS), g_main,
-				 props_dlg_proc, 0);
+		dialog_box (IDD_PROPS, g_main, props_dlg_proc, 0);
 	}
 	g_props = nullptr;
 }
