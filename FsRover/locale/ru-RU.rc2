@@ -1,0 +1,362 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+/////////////////////////////////////////////////////////////////////////////
+// Russian
+
+LANGUAGE LANG_RUSSIAN, SUBLANG_RUSSIAN_RUSSIA
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"Обновить"
+	IDS_BTN_EXTRACT		"Извлечь"
+	IDS_BTN_UP		"↑"
+	IDS_BTN_CANCEL		"Отмена"
+	IDS_COL_NAME		"Имя"
+	IDS_COL_SIZE		"Размер"
+	IDS_COL_MODIFIED	"Изменён"
+	IDS_MENU_EXTRACT	"Извлечь"
+	IDS_MENU_MOUNT		"Подключить как диск"
+	IDS_MENU_UNMOUNT	"Отключить"
+	IDS_STATUS_STARTING	"Запуск ядра..."
+	IDS_STATUS_LISTING	"Чтение списка..."
+	IDS_STATUS_ENUM		"Поиск дисков..."
+	IDS_STATUS_EXTRACTING	"Извлечение..."
+	IDS_STATUS_CANCELLING	"Отмена..."
+	IDS_STATUS_NOTHING	"Нечего извлекать"
+	IDS_STATUS_MOUNTING	"Подключение..."
+	IDS_STATUS_UNMOUNTING	"Отключение..."
+	IDS_FMT_DEVICES		"Устройств: %d"
+	IDS_FMT_ITEMS		"Элементов: %d"
+	IDS_FMT_EXTRACT_DONE	"Извлечено файлов: %llu, %s"
+	IDS_FMT_EXTRACT_PROG	"Извлечение (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"Подключено как %s"
+	IDS_FMT_UNMOUNTED	"%s отключён"
+	IDS_PICK_FOLDER		"Выберите папку назначения"
+	IDS_MENU_DOKAN_MOUNT	"Подключить к букве диска"
+	IDS_MENU_DOKAN_UNMOUNT	"Отключить букву диска"
+	IDS_FMT_DOKAN_MOUNTED	"%s подключён к %s"
+	IDS_FMT_TRAY_UNMOUNT	"Отключить %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"Некоторые диски ещё подключены. Отключить их все и выйти?"
+	IDS_TRAY_OPEN		"Открыть FsRover"
+	IDS_TRAY_EXIT		"Выход"
+	IDS_MENU_PROPS		"Свойства"
+	IDS_MAP_TITLE	"Карта размещения файла"
+	IDS_MAP_LOADING	"Чтение метаданных..."
+	IDS_MAP_PARTIAL	"Частичный результат (отменено или достигнут предел в 100 000 строк)"
+	IDS_MAP_COPY	"Копировать выделенное"
+	IDS_MAP_GROUP	"Группа"
+	IDS_MAP_LOGICAL	"Смещение в файле"
+	IDS_MAP_LENGTH	"Длина в файле"
+	IDS_MAP_TYPE	"Тип"
+	IDS_MAP_DEVICE	"Том"
+	IDS_MAP_SPACE	"Адресное пространство"
+	IDS_MAP_OFFSET	"Смещение на носителе"
+	IDS_MAP_STORED	"Длина на носителе"
+	IDS_MAP_ENCODING	"Кодирование"
+	IDS_MAP_DECODED_OFFSET	"Смещение после декодирования"
+	IDS_MAP_DECODED_LENGTH	"Длина после декодирования"
+	IDS_MAP_CLOSE	"Закрыть"
+	IDS_MAP_DETAILS	"Подробно (в байтах)"
+	IDS_MAP_SUM_SIZE	"Размер %s"
+	IDS_MAP_SUM_EXTENTS	"Экстентов: %s"
+	IDS_MAP_SUM_FRAGMENTS	"Фрагментов на диске: %s"
+	IDS_MAP_COL_RANGE	"Диапазон файла"
+	IDS_MAP_COL_SIZE	"Размер"
+	IDS_MAP_COL_STATUS	"Состояние"
+	IDS_MAP_COL_LOCATION	"Расположение на диске"
+	IDS_MAP_FS_LOGICAL	"Логический адрес ФС %s"
+	IDS_MAP_SHARED	" (общий)"
+	IDS_MAP_CAT_DATA	"Данные"
+	IDS_MAP_CAT_UNWRITTEN	"Не записано (читается как нули)"
+	IDS_MAP_CAT_HOLE	"Разреженная область"
+	IDS_MAP_CAT_ZERO	"Заполнено нулями"
+	IDS_MAP_CAT_INLINE	"Встроено в метаданные"
+	IDS_MAP_CAT_ENCODED	"Сжато/закодировано"
+	IDS_MAP_CAT_UNKNOWN	"Не отображается"
+	IDS_LOST_MENU	"Поиск потерянных разделов"
+	IDS_LOST_TITLE	"Поиск потерянных разделов"
+	IDS_LOST_NOTE	"Ищет тома NTFS, FAT, exFAT, ext2/3/4, XFS, Btrfs, HFS/HFS+, APFS, ReFS и F2FS, а также потерянные записи GPT/EBR. Разделы, файловая система которых читается, пропускаются."
+	IDS_LOST_EXT_BACKUP	"Проверять также резервные суперблоки ext в группе блоков 3 (медленнее)"
+	IDS_LOST_SEARCH	"Искать снова"
+	IDS_LOST_STOP	"Остановить"
+	IDS_LOST_OPEN	"Открыть выбранное"
+	IDS_LOST_CLOSE	"Закрыть"
+	IDS_LOST_FMT_SCANNING	"Поиск... %d%% - найдено: %d"
+	IDS_LOST_FMT_DONE	"Поиск завершён - найдено: %d"
+	IDS_LOST_FMT_STOPPED	"Поиск остановлен - найдено: %d"
+	IDS_LOST_FMT_OPENED	"Открыт как (%s)"
+	IDS_LOST_COL_OFFSET	"Смещение (байт)"
+	IDS_LOST_COL_SIZE	"Размер"
+	IDS_LOST_COL_TYPE	"Тип"
+	IDS_LOST_COL_FS	"Файловая система"
+	IDS_LOST_COL_LABEL	"Метка"
+	IDS_LOST_COL_FLAGS	"Состояние"
+	IDS_LOST_COL_UUID	"UUID"
+	IDS_LOST_F_VERIFIED	"читается"
+	IDS_LOST_F_BACKUP	"по резервной копии"
+	IDS_LOST_F_TABLE	"потерянная запись таблицы"
+	IDS_LOST_F_EXISTING	"есть в таблице"
+	IDS_LOST_F_OVERLAP	"перекрывается"
+	IDS_LOST_F_TRUNCATED	"усечён"
+	IDS_LOST_DEEP	"Глубокий поиск: проверять каждый сектор, в том числе внутри найденных томов (намного медленнее)"
+
+	IDS_PROPS_CALCULATING	"Вычисление..."
+	IDS_PROPS_COMPLETE	"Готово."
+	IDS_PROPS_SELECT_ONE	"Выберите хотя бы один алгоритм хеширования."
+	IDS_MENU_HEX		"Просмотр в HEX"
+	IDS_HEX_TITLE		"Шестнадцатеричный просмотр"
+	IDS_HEX_OFFSET		"Смещение(h)"
+	IDS_HEX_TEXT		"Текст"
+	IDS_SIZE_SYMLINK	"СИМВ. ССЫЛКА"
+	IDS_FMT_CRYPTO_TITLE	"Разблокировать %s"
+	IDS_CRYPTO_BADKEY	"Не удалось разблокировать том. Проверьте парольную фразу или файл ключа и повторите попытку."
+	IDS_CRYPTO_KEYFILE	"Выберите файл ключа"
+	IDS_MENU_COPY_NAME	"Копировать имя файла"
+	IDS_MENU_COPY_PATH	"Копировать путь"
+	IDS_HEX_GO		"Перейти"
+	IDS_MENU_MOUNT_DECOMP	"Подключить как диск (с распаковкой)"
+	IDS_MENU_TEXT		"Просмотр как текст"
+	IDS_TEXT_TITLE		"Просмотр текста"
+	IDS_TEXT_ENCODING	"Кодировка:"
+	IDS_TEXT_WRAP		"Перенос строк"
+	IDS_TEXT_LINENUM	"Номера строк"
+	IDS_TEXT_FONT		"Шрифт"
+	IDS_TEXT_AUTO		"Авто"
+	IDS_TEXT_LOADING	"Загрузка..."
+	IDS_FMT_TEXT_INFO	"%s, строк: %d"
+	IDS_FMT_TEXT_TRUNC	" (первые %s из %s)"
+	IDS_ASK_TEXT_BIG	"Это большой файл (%s); его открытие может занять время. Всё равно открыть?"
+	IDS_ASK_TEXT_BIN	"Похоже, это двоичный файл. Всё равно открыть?"
+	IDS_MENU_IMAGE		"Просмотр изображения"
+	IDS_IMAGE_TITLE		"Просмотр изображения"
+	IDS_IMAGE_BAD		"Не удаётся декодировать это изображение."
+	IDS_IMAGE_TOOBIG	"Файл изображения слишком велик для открытия."
+	IDS_IMAGE_NO_D2D	"Direct2D недоступен в этой системе."
+	IDS_MENU_FILE		"&Файл"
+	IDS_MENU_SELECTION	"&Выделение"
+	IDS_MENU_SETTINGS	"&Настройки"
+	IDS_MENU_FS_ENCODING	"&Кодировка имён файлов"
+	IDS_MENU_DOKAN		"&Подключение"
+	IDS_MENU_HELP		"&Справка"
+	IDS_MENU_SEL_ALL	"Выделить &все\tCtrl+A"
+	IDS_MENU_SEL_INVERT	"&Обратить выделение"
+	IDS_DOKAN_NONE		"Нет подключённых букв дисков"
+	IDS_DOKAN_UNAVAILABLE	"Драйвер Dokan не установлен"
+	IDS_MENU_SUPPORT	"&Поддерживаемые возможности"
+	IDS_MENU_SHORTCUTS	"&Сочетания клавиш"
+	IDS_KEY_LIST		"Alt+← — Назад\r\nAlt+→ — Вперёд\r\nAlt+↑ — На уровень вверх\r\nCtrl+A — Выделить все\r\nEnter — Перейти по пути, введённому в адресной строке"
+	IDS_MENU_ABOUT		"&О программе FsRover"
+	IDS_ABOUT_CREDITS	"Создано с использованием этих проектов с открытым исходным кодом:"
+	IDS_SUPPORT_FS		"Файловые системы"
+	IDS_SUPPORT_PARTMAP	"Таблицы разделов"
+	IDS_SUPPORT_DISKFILTER	"Дисковые фильтры"
+	IDS_SUPPORT_CRYPTODISK	"Зашифрованные тома"
+	IDS_SUPPORT_IOFILTER	"Фильтры ввода-вывода"
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_INSTALL	"Установить Dokan"
+	IDS_DOKAN_INSTALLING	"Установка Dokan..."
+	IDS_DOKAN_INSTALL_OK	"Dokan успешно установлен."
+	IDS_FMT_DOKAN_INSTALL_FAIL	"Не удалось установить Dokan: %s"
+#endif
+	IDS_DOKAN_LETTER	"Буква диска:"
+	IDS_DOKAN_OPEN_EXPLORER	"Открыть в Проводнике после подключения"
+	IDS_DP_DEVICE		"Устройство"
+	IDS_DP_FS		"Файловая система"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"Метка тома"
+	IDS_DP_SIZE		"Размер"
+	IDS_DP_LBA		"Начальный LBA"
+	IDS_DP_SECTOR		"Размер сектора"
+	IDS_DP_PARENT_FILE	"Файл-источник"
+	IDS_DP_PARENTS		"Устройства-участники"
+	IDS_DP_UNKNOWN		"Не распознано"
+	IDS_DP_COPY		"Копировать"
+	IDS_DP_PARENT_DEV	"Исходное устройство"
+	IDS_DP_TYPE		"Тип"
+	IDS_DP_COLON		":"
+	IDS_DP_FREE		"Не распределено"
+	IDS_DP_T_DISK		"Локальный диск"
+	IDS_DP_T_PART		"Раздел"
+	IDS_DP_T_IMAGE		"Образ диска"
+	IDS_DP_T_VOLUME		"Логический том"
+	IDS_DP_T_CRYPTO		"Зашифрованный том"
+	IDS_DP_T_PSEUDO		"Псевдоустройство"
+	IDS_FMT_EXTRACT_LINKS	" (пропущено символических ссылок: %llu)"
+	IDS_FMT_EXTRACT_ERRORS	" (ошибок: %llu; первая: %s)"
+	IDS_MENU_TIMESTAMPS	"Сохранять &метки времени"
+	IDS_BTN_BACK		"←"
+	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"Экспорт сырого образа"
+	IDS_PICK_IMAGE		"Сохранить сырой образ"
+	IDS_FILTER_IMAGE	"Сырой образ диска (*.img)"
+	IDS_STATUS_EXPORTING	"Экспорт образа..."
+	IDS_FMT_EXPORT_PROG	"Экспорт %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"%s экспортирован, %s"
+	IDS_MENU_OPEN_IMAGE	"&Открыть образ..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"Открыть образ (с &распаковкой)..."
+	IDS_PICK_OPEN_IMAGE	"Выберите образ диска"
+	IDS_FILTER_OPEN_IMAGE	"Образы дисков и архивы"
+	IDS_FILTER_ALL		"Все файлы (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_RUNAS		"&Запустить от имени администратора"
+	IDS_ELEVATE_FAILED	"Не удалось перезапуститься от имени администратора."
+#endif
+	IDS_BACKEND_START_FAILED	"Не удалось запустить рабочий поток ядра."
+	IDS_BACKEND_STOP_FAILED	"Рабочий поток ядра не завершился корректно."
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_NEED_ADMIN	"Для Dokan требуются права администратора"
+	IDS_DOKAN_WOW64		"Для установки Dokan нужна 64-разрядная версия FsRover"
+#endif
+	IDS_FMT_MOUNT_BACKEND	"Механизм: %s"
+	IDS_MOUNT_UNAVAILABLE	"WinFsp и Dokan недоступны"
+	IDS_MENU_MARKDOWN	"Просмотр Markdown"
+	IDS_MD_TITLE		"Просмотр Markdown"
+	IDS_MD_ASK_LINK		"Открыть эту ссылку в браузере?"
+	IDS_FMT_MD_TRUNC	"Показаны только первые %s из %s."
+	IDS_CMDLINE_USAGE	"Использование: FsRover.exe [параметры]\n\n  -m, --minimize\t\tЗапуск в свёрнутом виде.\n  -f, --file=FILE\t\tПодключить FILE как виртуальный диск.\n  -d, --file-dec=FILE\t\tТо же, с распаковкой образа на лету.\n  -n, --no-times\t\tНе сохранять метки времени.\n  -c, --fs-encoding=ENC\tКодировка имён файлов: UTF-8, GBK, Big5, Shift-JIS или EUC-KR.\n  -h, --help\t\tПоказать эту справку."
+	IDS_FMT_CMDLINE_ARG	"Неожиданный аргумент -- '%s'"
+	IDS_MENU_HELPDOC	"Справочный &документ"
+	IDS_MENU_VERACRYPT	"Разблокировать как VeraCrypt"
+	IDS_FMT_VC_TITLE	"Разблокировка тома VeraCrypt - %s"
+	IDS_VC_BADKEY		"Не удалось разблокировать том. Проверьте пароль, файлы ключей, PIM и хеш, а также не является ли том томом TrueCrypt или скрытым."
+	IDS_VC_KEYFILES		"Выберите файлы ключей"
+	IDS_VC_PRF_AUTO		"Перебрать все (медленно)"
+	IDS_VC_BADPIM		"PIM должен быть числом от 0 до 2147468. Оставьте поле пустым для значения по умолчанию."
+	IDS_MENU_PLAINMOUNT	"Подключить как plain dm-crypt"
+	IDS_FMT_PM_TITLE	"Подключение тома plain dm-crypt - %s"
+	IDS_PM_FAILED		"Не удалось отобразить том. Проверьте шифр, размер ключа и размер сектора."
+	IDS_PM_KEYFILE		"Выберите файл ключа"
+	IDS_PM_BADPARAM		"Укажите шифр в виде шифр-режим-iv и размер ключа в битах, кратный 8."
+	IDS_PM_HASH_NONE	"нет"
+	IDS_PROPS_NO_INODE	"не сообщается этой файловой системой"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_SMART		"Просмотр S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"Состояние"
+	IDS_SM_TEMPERATURE	"Температура"
+	IDS_SM_GOOD		"Хорошее"
+	IDS_SM_CAUTION		"Внимание"
+	IDS_SM_BAD		"Плохое"
+	IDS_SM_UNKNOWN		"Неизвестно"
+	IDS_SM_FIRMWARE		"Прошивка"
+	IDS_SM_SERIAL		"Серийный номер"
+	IDS_SM_INTERFACE	"Интерфейс"
+	IDS_SM_MODE		"Режим передачи"
+	IDS_SM_DRIVE		"Буквы дисков"
+	IDS_SM_STANDARD		"Стандарт"
+	IDS_SM_FEATURES		"Возможности"
+	IDS_SM_READS		"Всего прочитано хостом"
+	IDS_SM_WRITES		"Всего записано хостом"
+	IDS_SM_NAND		"Всего записано в NAND"
+	IDS_SM_BUFFER		"Размер буфера"
+	IDS_SM_RPM		"Скорость вращения"
+	IDS_SM_POWER_COUNT	"Число включений"
+	IDS_SM_POWER_HOURS	"Часы работы"
+	IDS_SM_ATTR		"Атрибут"
+	IDS_SM_NO_DATA		"Для этого диска нет данных S.M.A.R.T."
+	IDS_SM_HEX		"HEX"
+#endif
+END
+
+// Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Разблокировка зашифрованного тома"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"Парольная фраза:", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"Использовать файл ключа", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"Обзор", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"ОК", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"Отмена", IDCANCEL, 183, 100, 50, 14
+END
+
+// VeraCrypt/TrueCrypt unlock.  Nothing about such a volume is plaintext, so
+// besides the secret this collects the parameters it does not store.
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Разблокировка тома VeraCrypt"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"Пароль:", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"Файлы ключей:", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 79, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"Добавить", IDC_VC_BROWSE, 152, 39, 40, 14
+	PUSHBUTTON	"Очистить", IDC_VC_CLEARKEYS, 193, 39, 40, 14, WS_DISABLED
+	LTEXT		"PIM:", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Хеш:", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"Том TrueCrypt", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"Скрытый том", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"Использовать резервный заголовок", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"ОК", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"Отмена", IDCANCEL, 183, 138, 50, 14
+END
+
+// Plain dm-crypt mount.  Such a volume has no header, so every parameter is
+// entered here and a wrong one silently produces garbage.
+IDD_PLAINMOUNT DIALOGEX 0, 0, 240, 186
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Подключение тома plain dm-crypt"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_PM_INFO, 7, 7, 226, 10
+	LTEXT		"Шифр:", IDC_STATIC, 7, 24, 60, 8
+	COMBOBOX	IDC_PM_CIPHER, 70, 22, 163, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Ключ (бит):", IDC_STATIC, 7, 42, 60, 8
+	COMBOBOX	IDC_PM_KEYBITS, 70, 40, 50, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Сектор:", IDC_STATIC, 130, 42, 28, 8
+	COMBOBOX	IDC_PM_SECTOR, 162, 40, 71, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Хеш:", IDC_STATIC, 7, 60, 60, 8
+	COMBOBOX	IDC_PM_HASH, 70, 58, 163, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Смещ. (сект.):", IDC_STATIC, 7, 80, 60, 8
+	EDITTEXT	IDC_PM_OFFSET, 70, 78, 50, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Проп. IV:", IDC_STATIC, 130, 80, 30, 8
+	EDITTEXT	IDC_PM_SKIP, 162, 78, 71, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Парольная фраза:", IDC_STATIC, 7, 98, 60, 8
+	EDITTEXT	IDC_PM_PASS, 70, 96, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"Использовать файл ключа", IDC_PM_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 114, 226, 10
+	EDITTEXT	IDC_PM_KEYFILE, 7, 128, 180, 12, ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"Обзор", IDC_PM_BROWSE, 191, 127, 42, 14, WS_DISABLED
+	LTEXT		"Смещ. в файле:", IDC_STATIC, 7, 148, 60, 8
+	EDITTEXT	IDC_PM_KEYOFFSET, 70, 146, 60, 12, ES_NUMBER | ES_AUTOHSCROLL | WS_DISABLED
+	DEFPUSHBUTTON	"ОК", IDOK, 128, 164, 50, 14
+	PUSHBUTTON	"Отмена", IDCANCEL, 183, 164, 50, 14
+END
+
+// File properties: libmagic description on top, hash calculator below
+// (layout borrowed from FileXRay's property page).
+IDD_PROPS DIALOGEX 0, 0, 227, 257
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Свойства"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"Файл", IDC_STATIC, 7, 7, 213, 50
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+	LTEXT		"Inode:", IDC_STATIC, 17, 44, 55, 8
+	LTEXT		"", IDC_PROPS_INODE, 74, 44, 140, 8
+
+	GROUPBOX	"Хеш", IDC_STATIC, 7, 62, 213, 188
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 79, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 79, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 79, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 93, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 93, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 93, 62, 10
+	CONTROL		"BLAKE2sp", IDC_PROPS_BLAKE2SP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 107, 58, 10
+	CONTROL		"BLAKE3", IDC_PROPS_BLAKE3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 107, 52, 10
+	PUSHBUTTON	"Вычислить", IDC_PROPS_CALC, 17, 123, 60, 14
+	PUSHBUTTON	"Копировать", IDC_PROPS_COPY, 154, 123, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 143, 197, 10
+	LTEXT		"Готово.", IDC_PROPS_STATUS, 17, 157, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 169, 197, 74, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END

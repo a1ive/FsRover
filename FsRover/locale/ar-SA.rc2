@@ -1,0 +1,362 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+/////////////////////////////////////////////////////////////////////////////
+// Arabic
+
+LANGUAGE LANG_ARABIC, SUBLANG_ARABIC_SAUDI_ARABIA
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"تحديث"
+	IDS_BTN_EXTRACT		"استخراج"
+	IDS_BTN_UP		"↑"
+	IDS_BTN_CANCEL		"إلغاء"
+	IDS_COL_NAME		"الاسم"
+	IDS_COL_SIZE		"الحجم"
+	IDS_COL_MODIFIED	"تاريخ التعديل"
+	IDS_MENU_EXTRACT	"استخراج"
+	IDS_MENU_MOUNT		"تركيب كقرص"
+	IDS_MENU_UNMOUNT	"إلغاء التركيب"
+	IDS_STATUS_STARTING	"جارٍ بدء المحرك..."
+	IDS_STATUS_LISTING	"جارٍ سرد المحتويات..."
+	IDS_STATUS_ENUM		"جارٍ تعداد الأقراص..."
+	IDS_STATUS_EXTRACTING	"جارٍ الاستخراج..."
+	IDS_STATUS_CANCELLING	"جارٍ الإلغاء..."
+	IDS_STATUS_NOTHING	"لا يوجد ما يُستخرج"
+	IDS_STATUS_MOUNTING	"جارٍ التركيب..."
+	IDS_STATUS_UNMOUNTING	"جارٍ إلغاء التركيب..."
+	IDS_FMT_DEVICES		"الأجهزة: %d"
+	IDS_FMT_ITEMS		"العناصر: %d"
+	IDS_FMT_EXTRACT_DONE	"الملفات المستخرجة: %llu، %s"
+	IDS_FMT_EXTRACT_PROG	"جارٍ الاستخراج (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"تم التركيب باسم %s"
+	IDS_FMT_UNMOUNTED	"تم إلغاء تركيب %s"
+	IDS_PICK_FOLDER		"حدد مجلد الوجهة"
+	IDS_MENU_DOKAN_MOUNT	"تركيب على حرف محرك أقراص"
+	IDS_MENU_DOKAN_UNMOUNT	"إلغاء تركيب حرف محرك الأقراص"
+	IDS_FMT_DOKAN_MOUNTED	"تم تركيب %s على %s"
+	IDS_FMT_TRAY_UNMOUNT	"إلغاء تركيب %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"لا تزال هناك محركات أقراص مركّبة. هل تريد إلغاء تركيبها جميعًا والخروج؟"
+	IDS_TRAY_OPEN		"فتح FsRover"
+	IDS_TRAY_EXIT		"خروج"
+	IDS_MENU_PROPS		"خصائص"
+	IDS_MAP_TITLE	"خريطة تخزين الملف"
+	IDS_MAP_LOADING	"جارٍ قراءة بيانات التعريف..."
+	IDS_MAP_PARTIAL	"نتيجة جزئية (أُلغيت أو بلغت حد 100000 صف)"
+	IDS_MAP_COPY	"نسخ المحدد"
+	IDS_MAP_GROUP	"المجموعة"
+	IDS_MAP_LOGICAL	"الإزاحة في الملف"
+	IDS_MAP_LENGTH	"الطول في الملف"
+	IDS_MAP_TYPE	"النوع"
+	IDS_MAP_DEVICE	"وحدة التخزين"
+	IDS_MAP_SPACE	"مساحة العنونة"
+	IDS_MAP_OFFSET	"إزاحة التخزين"
+	IDS_MAP_STORED	"طول التخزين"
+	IDS_MAP_ENCODING	"الترميز"
+	IDS_MAP_DECODED_OFFSET	"الإزاحة بعد فك الترميز"
+	IDS_MAP_DECODED_LENGTH	"الطول بعد فك الترميز"
+	IDS_MAP_CLOSE	"إغلاق"
+	IDS_MAP_DETAILS	"إظهار التفاصيل (بالبايت)"
+	IDS_MAP_SUM_SIZE	"الحجم %s"
+	IDS_MAP_SUM_EXTENTS	"المقاطع: %s"
+	IDS_MAP_SUM_FRAGMENTS	"الأجزاء على القرص: %s"
+	IDS_MAP_COL_RANGE	"نطاق الملف"
+	IDS_MAP_COL_SIZE	"الحجم"
+	IDS_MAP_COL_STATUS	"الحالة"
+	IDS_MAP_COL_LOCATION	"الموقع على القرص"
+	IDS_MAP_FS_LOGICAL	"العنوان المنطقي في نظام الملفات %s"
+	IDS_MAP_SHARED	" (مشترك)"
+	IDS_MAP_CAT_DATA	"بيانات"
+	IDS_MAP_CAT_UNWRITTEN	"غير مكتوب (يُقرأ أصفارًا)"
+	IDS_MAP_CAT_HOLE	"فجوة متفرقة"
+	IDS_MAP_CAT_ZERO	"مملوء بالأصفار"
+	IDS_MAP_CAT_INLINE	"مضمّن في بيانات التعريف"
+	IDS_MAP_CAT_ENCODED	"مضغوط/مرمّز"
+	IDS_MAP_CAT_UNKNOWN	"غير قابل للتعيين"
+	IDS_LOST_MENU	"البحث عن الأقسام المفقودة"
+	IDS_LOST_TITLE	"البحث عن الأقسام المفقودة"
+	IDS_LOST_NOTE	"يبحث عن وحدات تخزين NTFS وFAT وexFAT وext2/3/4 وXFS وBtrfs وHFS/HFS+ وAPFS وReFS وF2FS، وعن إدخالات GPT/EBR المفقودة. تُتخطّى الأقسام التي يمكن قراءة نظام ملفاتها."
+	IDS_LOST_EXT_BACKUP	"التحقق أيضًا من الكتل الفائقة الاحتياطية لـ ext في مجموعة الكتل 3 (أبطأ)"
+	IDS_LOST_SEARCH	"البحث مرة أخرى"
+	IDS_LOST_STOP	"إيقاف"
+	IDS_LOST_OPEN	"فتح المحدد"
+	IDS_LOST_CLOSE	"إغلاق"
+	IDS_LOST_FMT_SCANNING	"جارٍ البحث... %d%% - تم العثور على: %d"
+	IDS_LOST_FMT_DONE	"اكتمل البحث - تم العثور على: %d"
+	IDS_LOST_FMT_STOPPED	"توقف البحث - تم العثور على: %d"
+	IDS_LOST_FMT_OPENED	"فُتح باسم (%s)"
+	IDS_LOST_COL_OFFSET	"الإزاحة (بايت)"
+	IDS_LOST_COL_SIZE	"الحجم"
+	IDS_LOST_COL_TYPE	"النوع"
+	IDS_LOST_COL_FS	"نظام الملفات"
+	IDS_LOST_COL_LABEL	"التسمية"
+	IDS_LOST_COL_FLAGS	"الحالة"
+	IDS_LOST_COL_UUID	"UUID"
+	IDS_LOST_F_VERIFIED	"قابل للقراءة"
+	IDS_LOST_F_BACKUP	"عبر النسخة الاحتياطية"
+	IDS_LOST_F_TABLE	"إدخال جدول مفقود"
+	IDS_LOST_F_EXISTING	"له إدخال في الجدول"
+	IDS_LOST_F_OVERLAP	"متداخل"
+	IDS_LOST_F_TRUNCATED	"مقطوع"
+	IDS_LOST_DEEP	"بحث عميق: فحص كل قطاع، بما في ذلك داخل وحدات التخزين التي عُثر عليها (أبطأ بكثير)"
+
+	IDS_PROPS_CALCULATING	"جارٍ الحساب..."
+	IDS_PROPS_COMPLETE	"اكتمل."
+	IDS_PROPS_SELECT_ONE	"حدد خوارزمية تجزئة واحدة على الأقل."
+	IDS_MENU_HEX		"عرض سداسي عشري"
+	IDS_HEX_TITLE		"العرض السداسي العشري"
+	IDS_HEX_OFFSET		"الإزاحة(h)"
+	IDS_HEX_TEXT		"النص"
+	IDS_SIZE_SYMLINK	"ارتباط رمزي"
+	IDS_FMT_CRYPTO_TITLE	"إلغاء قفل %s"
+	IDS_CRYPTO_BADKEY	"تعذّر إلغاء قفل وحدة التخزين. تحقق من عبارة المرور أو ملف المفتاح وحاول مرة أخرى."
+	IDS_CRYPTO_KEYFILE	"حدد ملف المفتاح"
+	IDS_MENU_COPY_NAME	"نسخ اسم الملف"
+	IDS_MENU_COPY_PATH	"نسخ المسار"
+	IDS_HEX_GO		"انتقال"
+	IDS_MENU_MOUNT_DECOMP	"تركيب كقرص (مع فك الضغط)"
+	IDS_MENU_TEXT		"عرض كنص"
+	IDS_TEXT_TITLE		"عرض النص"
+	IDS_TEXT_ENCODING	"الترميز:"
+	IDS_TEXT_WRAP		"التفاف الأسطر"
+	IDS_TEXT_LINENUM	"أرقام الأسطر"
+	IDS_TEXT_FONT		"الخط"
+	IDS_TEXT_AUTO		"تلقائي"
+	IDS_TEXT_LOADING	"جارٍ التحميل..."
+	IDS_FMT_TEXT_INFO	"%s، الأسطر: %d"
+	IDS_FMT_TEXT_TRUNC	" (أول %s من %s)"
+	IDS_ASK_TEXT_BIG	"هذا الملف كبير (%s)؛ وقد يستغرق فتحه بعض الوقت. هل تريد فتحه على أي حال؟"
+	IDS_ASK_TEXT_BIN	"يبدو أن هذا الملف ثنائي. هل تريد فتحه على أي حال؟"
+	IDS_MENU_IMAGE		"عرض الصورة"
+	IDS_IMAGE_TITLE		"عرض الصورة"
+	IDS_IMAGE_BAD		"تعذّر فك ترميز هذه الصورة."
+	IDS_IMAGE_TOOBIG	"ملف الصورة هذا أكبر من أن يُفتح."
+	IDS_IMAGE_NO_D2D	"Direct2D غير متوفر على هذا النظام."
+	IDS_MENU_FILE		"ملف(&F)"
+	IDS_MENU_SELECTION	"تحديد(&S)"
+	IDS_MENU_SETTINGS	"إعدادات(&T)"
+	IDS_MENU_FS_ENCODING	"ترميز أسماء الملفات(&E)"
+	IDS_MENU_DOKAN		"تركيب(&M)"
+	IDS_MENU_HELP		"تعليمات(&H)"
+	IDS_MENU_SEL_ALL	"تحديد الكل(&A)\tCtrl+A"
+	IDS_MENU_SEL_INVERT	"عكس التحديد(&I)"
+	IDS_DOKAN_NONE		"لا توجد أحرف محركات أقراص مركّبة"
+	IDS_DOKAN_UNAVAILABLE	"برنامج تشغيل Dokan غير مثبّت"
+	IDS_MENU_SUPPORT	"الميزات المدعومة(&F)"
+	IDS_MENU_SHORTCUTS	"اختصارات لوحة المفاتيح(&K)"
+	IDS_KEY_LIST		"Alt+← — رجوع\r\nAlt+→ — تقدّم\r\nAlt+↑ — الصعود مستوى واحدًا\r\nCtrl+A — تحديد الكل\r\nEnter — الانتقال إلى المسار المكتوب في شريط العنوان"
+	IDS_MENU_ABOUT		"حول FsRover(&A)"
+	IDS_ABOUT_CREDITS	"بُني باستخدام هذه المشاريع مفتوحة المصدر:"
+	IDS_SUPPORT_FS		"أنظمة الملفات"
+	IDS_SUPPORT_PARTMAP	"جداول الأقسام"
+	IDS_SUPPORT_DISKFILTER	"مرشحات الأقراص"
+	IDS_SUPPORT_CRYPTODISK	"وحدات التخزين المشفرة"
+	IDS_SUPPORT_IOFILTER	"مرشحات الإدخال/الإخراج"
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_INSTALL	"تثبيت Dokan"
+	IDS_DOKAN_INSTALLING	"جارٍ تثبيت Dokan..."
+	IDS_DOKAN_INSTALL_OK	"تم تثبيت Dokan بنجاح."
+	IDS_FMT_DOKAN_INSTALL_FAIL	"تعذّر تثبيت Dokan: %s"
+#endif
+	IDS_DOKAN_LETTER	"حرف محرك الأقراص:"
+	IDS_DOKAN_OPEN_EXPLORER	"الفتح في المستكشف بعد التركيب"
+	IDS_DP_DEVICE		"الجهاز"
+	IDS_DP_FS		"نظام الملفات"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"تسمية وحدة التخزين"
+	IDS_DP_SIZE		"الحجم"
+	IDS_DP_LBA		"LBA البداية"
+	IDS_DP_SECTOR		"حجم القطاع"
+	IDS_DP_PARENT_FILE	"الملف المصدر"
+	IDS_DP_PARENTS		"الأجهزة الأعضاء"
+	IDS_DP_UNKNOWN		"غير معروف"
+	IDS_DP_COPY		"نسخ"
+	IDS_DP_PARENT_DEV	"الجهاز المصدر"
+	IDS_DP_TYPE		"النوع"
+	IDS_DP_COLON		":"
+	IDS_DP_FREE		"غير مخصص"
+	IDS_DP_T_DISK		"قرص محلي"
+	IDS_DP_T_PART		"قسم"
+	IDS_DP_T_IMAGE		"صورة قرص"
+	IDS_DP_T_VOLUME		"وحدة تخزين منطقية"
+	IDS_DP_T_CRYPTO		"وحدة تخزين مشفرة"
+	IDS_DP_T_PSEUDO		"جهاز زائف"
+	IDS_FMT_EXTRACT_LINKS	" (الارتباطات الرمزية المتخطاة: %llu)"
+	IDS_FMT_EXTRACT_ERRORS	" (الملفات التي فشلت: %llu؛ أولها: %s)"
+	IDS_MENU_TIMESTAMPS	"الاحتفاظ بالطوابع الزمنية(&T)"
+	IDS_BTN_BACK		"→"
+	IDS_BTN_FWD		"←"
+	IDS_MENU_EXPORT		"تصدير صورة خام"
+	IDS_PICK_IMAGE		"حفظ الصورة الخام"
+	IDS_FILTER_IMAGE	"صورة قرص خام (*.img)"
+	IDS_STATUS_EXPORTING	"جارٍ تصدير الصورة..."
+	IDS_FMT_EXPORT_PROG	"جارٍ تصدير %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"تم تصدير %s، %s"
+	IDS_MENU_OPEN_IMAGE	"فتح صورة(&O)..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"فتح صورة (مع فك الضغط)(&D)..."
+	IDS_PICK_OPEN_IMAGE	"حدد صورة القرص"
+	IDS_FILTER_OPEN_IMAGE	"صور الأقراص والأرشيفات"
+	IDS_FILTER_ALL		"كل الملفات (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_RUNAS		"تشغيل كمسؤول(&R)"
+	IDS_ELEVATE_FAILED	"تعذّرت إعادة التشغيل كمسؤول."
+#endif
+	IDS_BACKEND_START_FAILED	"تعذّر بدء العامل الخلفي."
+	IDS_BACKEND_STOP_FAILED	"لم يتوقف العامل الخلفي بشكل سليم."
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_NEED_ADMIN	"يتطلب Dokan صلاحيات المسؤول"
+	IDS_DOKAN_WOW64		"يتطلب تثبيت Dokan إصدار 64 بت من FsRover"
+#endif
+	IDS_FMT_MOUNT_BACKEND	"الواجهة الخلفية: %s"
+	IDS_MOUNT_UNAVAILABLE	"WinFsp وDokan غير متوفرين"
+	IDS_MENU_MARKDOWN	"معاينة Markdown"
+	IDS_MD_TITLE		"معاينة Markdown"
+	IDS_MD_ASK_LINK		"هل تريد فتح هذا الارتباط في المستعرض؟"
+	IDS_FMT_MD_TRUNC	"يُعرض فقط أول %s من %s."
+	IDS_CMDLINE_USAGE	"الاستخدام: FsRover.exe [خيارات]\n\n  -m, --minimize\t\tالبدء مصغّرًا.\n  -f, --file=FILE\t\tتركيب FILE كقرص ظاهري.\n  -d, --file-dec=FILE\t\tكذلك، مع فك ضغط الصورة أثناء القراءة.\n  -n, --no-times\t\tعدم الاحتفاظ بالطوابع الزمنية.\n  -c, --fs-encoding=ENC\tترميز أسماء الملفات: UTF-8 أو GBK أو Big5 أو Shift-JIS أو EUC-KR.\n  -h, --help\t\tعرض هذه الرسالة."
+	IDS_FMT_CMDLINE_ARG	"وسيطة غير متوقعة -- '%s'"
+	IDS_MENU_HELPDOC	"مستند التعليمات(&H)"
+	IDS_MENU_VERACRYPT	"إلغاء القفل كـ VeraCrypt"
+	IDS_FMT_VC_TITLE	"إلغاء قفل وحدة تخزين VeraCrypt - %s"
+	IDS_VC_BADKEY		"تعذّر إلغاء قفل وحدة التخزين. تحقق من كلمة المرور وملفات المفاتيح وPIM والتجزئة، ومما إذا كانت وحدة تخزين TrueCrypt أو مخفية."
+	IDS_VC_KEYFILES		"حدد ملفات المفاتيح"
+	IDS_VC_PRF_AUTO		"تجربة الكل (بطيء)"
+	IDS_VC_BADPIM		"يجب أن يكون PIM رقمًا بين 0 و2147468. اتركه فارغًا لاستخدام القيمة الافتراضية."
+	IDS_MENU_PLAINMOUNT	"تركيب كـ dm-crypt عادي"
+	IDS_FMT_PM_TITLE	"تركيب وحدة تخزين dm-crypt عادية - %s"
+	IDS_PM_FAILED		"تعذّر تعيين وحدة التخزين. تحقق من التشفير وحجم المفتاح وحجم القطاع."
+	IDS_PM_KEYFILE		"حدد ملف مفتاح"
+	IDS_PM_BADPARAM		"أدخل تشفيرًا بالصيغة cipher-mode-iv وحجم مفتاح بالبت من مضاعفات 8."
+	IDS_PM_HASH_NONE	"بلا"
+	IDS_PROPS_NO_INODE	"لا يوفره نظام الملفات هذا"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_SMART		"عرض S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"الحالة الصحية"
+	IDS_SM_TEMPERATURE	"درجة الحرارة"
+	IDS_SM_GOOD		"جيدة"
+	IDS_SM_CAUTION		"تحذير"
+	IDS_SM_BAD		"سيئة"
+	IDS_SM_UNKNOWN		"غير معروفة"
+	IDS_SM_FIRMWARE		"البرنامج الثابت"
+	IDS_SM_SERIAL		"الرقم التسلسلي"
+	IDS_SM_INTERFACE	"الواجهة"
+	IDS_SM_MODE		"وضع النقل"
+	IDS_SM_DRIVE		"أحرف محركات الأقراص"
+	IDS_SM_STANDARD		"المعيار"
+	IDS_SM_FEATURES		"الميزات"
+	IDS_SM_READS		"إجمالي قراءات المضيف"
+	IDS_SM_WRITES		"إجمالي كتابات المضيف"
+	IDS_SM_NAND		"إجمالي كتابات NAND"
+	IDS_SM_BUFFER		"حجم المخزن المؤقت"
+	IDS_SM_RPM		"سرعة الدوران"
+	IDS_SM_POWER_COUNT	"عدد مرات التشغيل"
+	IDS_SM_POWER_HOURS	"ساعات التشغيل"
+	IDS_SM_ATTR		"السمة"
+	IDS_SM_NO_DATA		"لا تتوفر معلومات S.M.A.R.T. لهذا القرص."
+	IDS_SM_HEX		"HEX"
+#endif
+END
+
+// Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "إلغاء قفل وحدة تخزين مشفرة"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"عبارة المرور:", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"استخدام ملف مفتاح بدلاً من ذلك", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"استعراض", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"موافق", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"إلغاء", IDCANCEL, 183, 100, 50, 14
+END
+
+// VeraCrypt/TrueCrypt unlock.  Nothing about such a volume is plaintext, so
+// besides the secret this collects the parameters it does not store.
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "إلغاء قفل وحدة تخزين VeraCrypt"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"كلمة المرور:", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"ملفات المفاتيح:", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 79, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"إضافة", IDC_VC_BROWSE, 152, 39, 40, 14
+	PUSHBUTTON	"مسح", IDC_VC_CLEARKEYS, 193, 39, 40, 14, WS_DISABLED
+	LTEXT		"PIM:", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"التجزئة:", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"وحدة تخزين TrueCrypt", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"وحدة تخزين مخفية", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"استخدام الترويسة الاحتياطية", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"موافق", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"إلغاء", IDCANCEL, 183, 138, 50, 14
+END
+
+// Plain dm-crypt mount.  Such a volume has no header, so every parameter is
+// entered here and a wrong one silently produces garbage.
+IDD_PLAINMOUNT DIALOGEX 0, 0, 240, 186
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "تركيب وحدة تخزين dm-crypt عادية"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_PM_INFO, 7, 7, 226, 10
+	LTEXT		"التشفير:", IDC_STATIC, 7, 24, 60, 8
+	COMBOBOX	IDC_PM_CIPHER, 70, 22, 163, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"المفتاح (بت):", IDC_STATIC, 7, 42, 60, 8
+	COMBOBOX	IDC_PM_KEYBITS, 70, 40, 50, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"القطاع:", IDC_STATIC, 130, 42, 28, 8
+	COMBOBOX	IDC_PM_SECTOR, 162, 40, 71, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"التجزئة:", IDC_STATIC, 7, 60, 60, 8
+	COMBOBOX	IDC_PM_HASH, 70, 58, 163, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"الإزاحة (قطاع):", IDC_STATIC, 7, 80, 60, 8
+	EDITTEXT	IDC_PM_OFFSET, 70, 78, 50, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"تخطي IV:", IDC_STATIC, 130, 80, 30, 8
+	EDITTEXT	IDC_PM_SKIP, 162, 78, 71, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"عبارة المرور:", IDC_STATIC, 7, 98, 60, 8
+	EDITTEXT	IDC_PM_PASS, 70, 96, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"استخدام ملف مفتاح بدلاً من ذلك", IDC_PM_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 114, 226, 10
+	EDITTEXT	IDC_PM_KEYFILE, 7, 128, 180, 12, ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"استعراض", IDC_PM_BROWSE, 191, 127, 42, 14, WS_DISABLED
+	LTEXT		"إزاحة الملف:", IDC_STATIC, 7, 148, 60, 8
+	EDITTEXT	IDC_PM_KEYOFFSET, 70, 146, 60, 12, ES_NUMBER | ES_AUTOHSCROLL | WS_DISABLED
+	DEFPUSHBUTTON	"موافق", IDOK, 128, 164, 50, 14
+	PUSHBUTTON	"إلغاء", IDCANCEL, 183, 164, 50, 14
+END
+
+// File properties: libmagic description on top, hash calculator below
+// (layout borrowed from FileXRay's property page).
+IDD_PROPS DIALOGEX 0, 0, 227, 257
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "خصائص"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"الملف", IDC_STATIC, 7, 7, 213, 50
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+	LTEXT		"Inode:", IDC_STATIC, 17, 44, 55, 8
+	LTEXT		"", IDC_PROPS_INODE, 74, 44, 140, 8
+
+	GROUPBOX	"التجزئة", IDC_STATIC, 7, 62, 213, 188
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 79, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 79, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 79, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 93, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 93, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 93, 62, 10
+	CONTROL		"BLAKE2sp", IDC_PROPS_BLAKE2SP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 107, 58, 10
+	CONTROL		"BLAKE3", IDC_PROPS_BLAKE3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 107, 52, 10
+	PUSHBUTTON	"حساب", IDC_PROPS_CALC, 17, 123, 60, 14
+	PUSHBUTTON	"نسخ", IDC_PROPS_COPY, 154, 123, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 143, 197, 10
+	LTEXT		"جاهز.", IDC_PROPS_STATUS, 17, 157, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 169, 197, 74, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END

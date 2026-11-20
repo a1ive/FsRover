@@ -302,5 +302,20 @@
     <None Include="locale\ko-KR.rc2">
       <Filter>RC</Filter>
     </None>
+    <None Include="locale\es-ES.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\fr-FR.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\pt-BR.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\ru-RU.rc2">
+      <Filter>RC</Filter>
+    </None>
+    <None Include="locale\ar-SA.rc2">
+      <Filter>RC</Filter>
+    </None>
   </ItemGroup>
 </Project>

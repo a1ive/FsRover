@@ -235,3 +235,8 @@ END
 #include "locale/zh-TW.rc2"
 #include "locale/ja-JP.rc2"
 #include "locale/ko-KR.rc2"
+#include "locale/es-ES.rc2"
+#include "locale/fr-FR.rc2"
+#include "locale/pt-BR.rc2"
+#include "locale/ru-RU.rc2"
+#include "locale/ar-SA.rc2"

@@ -1,0 +1,362 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+/////////////////////////////////////////////////////////////////////////////
+// Spanish
+
+LANGUAGE LANG_SPANISH, SUBLANG_SPANISH_MODERN
+
+STRINGTABLE
+BEGIN
+	IDS_APP_TITLE		"FsRover"
+	IDS_BTN_REFRESH		"Actualizar"
+	IDS_BTN_EXTRACT		"Extraer"
+	IDS_BTN_UP		"↑"
+	IDS_BTN_CANCEL		"Cancelar"
+	IDS_COL_NAME		"Nombre"
+	IDS_COL_SIZE		"Tamaño"
+	IDS_COL_MODIFIED	"Modificado"
+	IDS_MENU_EXTRACT	"Extraer"
+	IDS_MENU_MOUNT		"Montar como disco"
+	IDS_MENU_UNMOUNT	"Desmontar"
+	IDS_STATUS_STARTING	"Iniciando el motor..."
+	IDS_STATUS_LISTING	"Listando..."
+	IDS_STATUS_ENUM		"Enumerando discos..."
+	IDS_STATUS_EXTRACTING	"Extrayendo..."
+	IDS_STATUS_CANCELLING	"Cancelando..."
+	IDS_STATUS_NOTHING	"No hay nada que extraer"
+	IDS_STATUS_MOUNTING	"Montando..."
+	IDS_STATUS_UNMOUNTING	"Desmontando..."
+	IDS_FMT_DEVICES		"%d dispositivo(s)"
+	IDS_FMT_ITEMS		"%d elemento(s)"
+	IDS_FMT_EXTRACT_DONE	"%llu archivo(s) extraído(s), %s"
+	IDS_FMT_EXTRACT_PROG	"Extrayendo (%llu/%llu) %s -- %d%%"
+	IDS_FMT_MOUNTED		"Montado como %s"
+	IDS_FMT_UNMOUNTED	"%s desmontado"
+	IDS_PICK_FOLDER		"Seleccione la carpeta de destino"
+	IDS_MENU_DOKAN_MOUNT	"Montar en una letra de unidad"
+	IDS_MENU_DOKAN_UNMOUNT	"Desmontar la letra de unidad"
+	IDS_FMT_DOKAN_MOUNTED	"%s montado en %s"
+	IDS_FMT_TRAY_UNMOUNT	"Desmontar %s (%s)"
+	IDS_ASK_UNMOUNT_ALL	"Todavía hay unidades montadas. ¿Desmontarlas todas y salir?"
+	IDS_TRAY_OPEN		"Abrir FsRover"
+	IDS_TRAY_EXIT		"Salir"
+	IDS_MENU_PROPS		"Propiedades"
+	IDS_MAP_TITLE	"Mapa de almacenamiento del archivo"
+	IDS_MAP_LOADING	"Leyendo metadatos..."
+	IDS_MAP_PARTIAL	"Resultado parcial (cancelado o límite de 100.000 filas)"
+	IDS_MAP_COPY	"Copiar selección"
+	IDS_MAP_GROUP	"Grupo"
+	IDS_MAP_LOGICAL	"Desplazamiento en el archivo"
+	IDS_MAP_LENGTH	"Longitud en el archivo"
+	IDS_MAP_TYPE	"Tipo"
+	IDS_MAP_DEVICE	"Volumen"
+	IDS_MAP_SPACE	"Espacio de direcciones"
+	IDS_MAP_OFFSET	"Desplazamiento de almacenamiento"
+	IDS_MAP_STORED	"Longitud de almacenamiento"
+	IDS_MAP_ENCODING	"Codificación"
+	IDS_MAP_DECODED_OFFSET	"Desplazamiento decodificado"
+	IDS_MAP_DECODED_LENGTH	"Longitud decodificada"
+	IDS_MAP_CLOSE	"Cerrar"
+	IDS_MAP_DETAILS	"Mostrar detalles (bytes)"
+	IDS_MAP_SUM_SIZE	"Tamaño %s"
+	IDS_MAP_SUM_EXTENTS	"%s extensiones"
+	IDS_MAP_SUM_FRAGMENTS	"%s fragmentos en el disco"
+	IDS_MAP_COL_RANGE	"Rango del archivo"
+	IDS_MAP_COL_SIZE	"Tamaño"
+	IDS_MAP_COL_STATUS	"Estado"
+	IDS_MAP_COL_LOCATION	"Ubicación en el disco"
+	IDS_MAP_FS_LOGICAL	"Lógico del SA %s"
+	IDS_MAP_SHARED	" (compartido)"
+	IDS_MAP_CAT_DATA	"Datos"
+	IDS_MAP_CAT_UNWRITTEN	"No escrito (se lee como ceros)"
+	IDS_MAP_CAT_HOLE	"Hueco disperso"
+	IDS_MAP_CAT_ZERO	"Relleno de ceros"
+	IDS_MAP_CAT_INLINE	"Incrustado en los metadatos"
+	IDS_MAP_CAT_ENCODED	"Comprimido/codificado"
+	IDS_MAP_CAT_UNKNOWN	"No mapeable"
+	IDS_LOST_MENU	"Buscar particiones perdidas"
+	IDS_LOST_TITLE	"Búsqueda de particiones perdidas"
+	IDS_LOST_NOTE	"Busca volúmenes NTFS, FAT, exFAT, ext2/3/4, XFS, Btrfs, HFS/HFS+, APFS, ReFS y F2FS, así como entradas GPT/EBR perdidas. Se omiten las particiones cuyo sistema de archivos se puede leer."
+	IDS_LOST_EXT_BACKUP	"Comprobar también los superbloques de respaldo ext en el grupo de bloques 3 (más lento)"
+	IDS_LOST_SEARCH	"Buscar de nuevo"
+	IDS_LOST_STOP	"Detener"
+	IDS_LOST_OPEN	"Abrir selección"
+	IDS_LOST_CLOSE	"Cerrar"
+	IDS_LOST_FMT_SCANNING	"Buscando... %d%% - %d encontradas"
+	IDS_LOST_FMT_DONE	"Búsqueda completada - %d encontradas"
+	IDS_LOST_FMT_STOPPED	"Búsqueda detenida - %d encontradas"
+	IDS_LOST_FMT_OPENED	"Abierta como (%s)"
+	IDS_LOST_COL_OFFSET	"Desplazamiento (bytes)"
+	IDS_LOST_COL_SIZE	"Tamaño"
+	IDS_LOST_COL_TYPE	"Tipo"
+	IDS_LOST_COL_FS	"Sistema de archivos"
+	IDS_LOST_COL_LABEL	"Etiqueta"
+	IDS_LOST_COL_FLAGS	"Estado"
+	IDS_LOST_COL_UUID	"UUID"
+	IDS_LOST_F_VERIFIED	"legible"
+	IDS_LOST_F_BACKUP	"vía respaldo"
+	IDS_LOST_F_TABLE	"entrada de tabla perdida"
+	IDS_LOST_F_EXISTING	"tiene entrada en la tabla"
+	IDS_LOST_F_OVERLAP	"se solapa"
+	IDS_LOST_F_TRUNCATED	"truncada"
+	IDS_LOST_DEEP	"Búsqueda profunda: examinar cada sector, también dentro de los volúmenes encontrados (mucho más lento)"
+
+	IDS_PROPS_CALCULATING	"Calculando..."
+	IDS_PROPS_COMPLETE	"Completado."
+	IDS_PROPS_SELECT_ONE	"Seleccione al menos un algoritmo de hash."
+	IDS_MENU_HEX		"Ver en hexadecimal"
+	IDS_HEX_TITLE		"Vista hexadecimal"
+	IDS_HEX_OFFSET		"Despl.(h)"
+	IDS_HEX_TEXT		"Texto"
+	IDS_SIZE_SYMLINK	"ENLACE SIMB."
+	IDS_FMT_CRYPTO_TITLE	"Desbloquear %s"
+	IDS_CRYPTO_BADKEY	"No se pudo desbloquear el volumen. Compruebe la frase de contraseña o el archivo de clave e inténtelo de nuevo."
+	IDS_CRYPTO_KEYFILE	"Seleccione el archivo de clave"
+	IDS_MENU_COPY_NAME	"Copiar nombre de archivo"
+	IDS_MENU_COPY_PATH	"Copiar ruta"
+	IDS_HEX_GO		"Ir"
+	IDS_MENU_MOUNT_DECOMP	"Montar como disco (descomprimir)"
+	IDS_MENU_TEXT		"Ver como texto"
+	IDS_TEXT_TITLE		"Vista de texto"
+	IDS_TEXT_ENCODING	"Codificación:"
+	IDS_TEXT_WRAP		"Ajuste de línea"
+	IDS_TEXT_LINENUM	"Números de línea"
+	IDS_TEXT_FONT		"Fuente"
+	IDS_TEXT_AUTO		"Automática"
+	IDS_TEXT_LOADING	"Cargando..."
+	IDS_FMT_TEXT_INFO	"%s, %d línea(s)"
+	IDS_FMT_TEXT_TRUNC	" (primeros %s de %s)"
+	IDS_ASK_TEXT_BIG	"Este archivo es grande (%s); abrirlo puede tardar un rato. ¿Abrirlo de todos modos?"
+	IDS_ASK_TEXT_BIN	"Este archivo parece binario. ¿Abrirlo de todos modos?"
+	IDS_MENU_IMAGE		"Ver imagen"
+	IDS_IMAGE_TITLE		"Vista de imagen"
+	IDS_IMAGE_BAD		"No se puede decodificar esta imagen."
+	IDS_IMAGE_TOOBIG	"Este archivo de imagen es demasiado grande para abrirlo."
+	IDS_IMAGE_NO_D2D	"Direct2D no está disponible en este sistema."
+	IDS_MENU_FILE		"&Archivo"
+	IDS_MENU_SELECTION	"&Selección"
+	IDS_MENU_SETTINGS	"&Configuración"
+	IDS_MENU_FS_ENCODING	"&Codificación de nombres de archivo"
+	IDS_MENU_DOKAN		"&Montar"
+	IDS_MENU_HELP		"A&yuda"
+	IDS_MENU_SEL_ALL	"Seleccionar &todo\tCtrl+A"
+	IDS_MENU_SEL_INVERT	"&Invertir selección"
+	IDS_DOKAN_NONE		"No hay letras de unidad montadas"
+	IDS_DOKAN_UNAVAILABLE	"El controlador Dokan no está instalado"
+	IDS_MENU_SUPPORT	"&Funciones compatibles"
+	IDS_MENU_SHORTCUTS	"Métodos abreviados de &teclado"
+	IDS_KEY_LIST		"Alt+← — Atrás\r\nAlt+→ — Adelante\r\nAlt+↑ — Subir un nivel\r\nCtrl+A — Seleccionar todo\r\nEnter — Ir a la ruta escrita en la barra de direcciones"
+	IDS_MENU_ABOUT		"&Acerca de FsRover"
+	IDS_ABOUT_CREDITS	"Creado con estos proyectos de código abierto:"
+	IDS_SUPPORT_FS		"Sistemas de archivos"
+	IDS_SUPPORT_PARTMAP	"Tablas de particiones"
+	IDS_SUPPORT_DISKFILTER	"Filtros de disco"
+	IDS_SUPPORT_CRYPTODISK	"Volúmenes cifrados"
+	IDS_SUPPORT_IOFILTER	"Filtros de E/S"
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_INSTALL	"Instalar Dokan"
+	IDS_DOKAN_INSTALLING	"Instalando Dokan..."
+	IDS_DOKAN_INSTALL_OK	"Dokan se instaló correctamente."
+	IDS_FMT_DOKAN_INSTALL_FAIL	"No se pudo instalar Dokan: %s"
+#endif
+	IDS_DOKAN_LETTER	"Letra de unidad:"
+	IDS_DOKAN_OPEN_EXPLORER	"Abrir en el Explorador después de montar"
+	IDS_DP_DEVICE		"Dispositivo"
+	IDS_DP_FS		"Sistema de archivos"
+	IDS_DP_UUID		"UUID"
+	IDS_DP_LABEL		"Etiqueta del volumen"
+	IDS_DP_SIZE		"Tamaño"
+	IDS_DP_LBA		"LBA inicial"
+	IDS_DP_SECTOR		"Tamaño de sector"
+	IDS_DP_PARENT_FILE	"Archivo de respaldo"
+	IDS_DP_PARENTS		"Dispositivos miembro"
+	IDS_DP_UNKNOWN		"No reconocido"
+	IDS_DP_COPY		"Copiar"
+	IDS_DP_PARENT_DEV	"Dispositivo de origen"
+	IDS_DP_TYPE		"Tipo"
+	IDS_DP_COLON		":"
+	IDS_DP_FREE		"Sin asignar"
+	IDS_DP_T_DISK		"Disco local"
+	IDS_DP_T_PART		"Partición"
+	IDS_DP_T_IMAGE		"Imagen de disco"
+	IDS_DP_T_VOLUME		"Volumen lógico"
+	IDS_DP_T_CRYPTO		"Volumen cifrado"
+	IDS_DP_T_PSEUDO		"Pseudodispositivo"
+	IDS_FMT_EXTRACT_LINKS	" (%llu enlace(s) simbólico(s) omitido(s))"
+	IDS_FMT_EXTRACT_ERRORS	" (%llu archivo(s) con error; el primero: %s)"
+	IDS_MENU_TIMESTAMPS	"Conservar &marcas de tiempo"
+	IDS_BTN_BACK		"←"
+	IDS_BTN_FWD		"→"
+	IDS_MENU_EXPORT		"Exportar imagen sin formato"
+	IDS_PICK_IMAGE		"Guardar imagen sin formato"
+	IDS_FILTER_IMAGE	"Imagen de disco sin formato (*.img)"
+	IDS_STATUS_EXPORTING	"Exportando imagen..."
+	IDS_FMT_EXPORT_PROG	"Exportando %s -- %d%%"
+	IDS_FMT_EXPORT_DONE	"%s exportado, %s"
+	IDS_MENU_OPEN_IMAGE	"Abrir &imagen..."
+	IDS_MENU_OPEN_IMAGE_DECOMP	"Abrir imagen (&descomprimir)..."
+	IDS_PICK_OPEN_IMAGE	"Seleccione la imagen de disco"
+	IDS_FILTER_OPEN_IMAGE	"Imágenes de disco y archivos comprimidos"
+	IDS_FILTER_ALL		"Todos los archivos (*.*)"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_RUNAS		"Ejecutar como ad&ministrador"
+	IDS_ELEVATE_FAILED	"No se pudo reiniciar como administrador."
+#endif
+	IDS_BACKEND_START_FAILED	"No se pudo iniciar el proceso de trabajo del motor."
+	IDS_BACKEND_STOP_FAILED	"El proceso de trabajo del motor no se detuvo correctamente."
+#if FSROVER_EMBED_DOKAN
+	IDS_DOKAN_NEED_ADMIN	"Dokan requiere derechos de administrador"
+	IDS_DOKAN_WOW64		"Para instalar Dokan se necesita la versión de 64 bits de FsRover"
+#endif
+	IDS_FMT_MOUNT_BACKEND	"Motor: %s"
+	IDS_MOUNT_UNAVAILABLE	"WinFsp y Dokan no están disponibles"
+	IDS_MENU_MARKDOWN	"Vista previa de Markdown"
+	IDS_MD_TITLE		"Vista previa de Markdown"
+	IDS_MD_ASK_LINK		"¿Abrir este vínculo en el navegador?"
+	IDS_FMT_MD_TRUNC	"Solo se muestran los primeros %s de %s."
+	IDS_CMDLINE_USAGE	"Uso: FsRover.exe [opciones]\n\n  -m, --minimize\t\tIniciar minimizado.\n  -f, --file=FILE\t\tMontar FILE como disco virtual.\n  -d, --file-dec=FILE\t\tIgual, descomprimiendo la imagen sobre la marcha.\n  -n, --no-times\t\tNo conservar las marcas de tiempo.\n  -c, --fs-encoding=ENC\tCodificación de nombres de archivo: UTF-8, GBK, Big5, Shift-JIS o EUC-KR.\n  -h, --help\t\tMostrar este mensaje."
+	IDS_FMT_CMDLINE_ARG	"Argumento inesperado -- '%s'"
+	IDS_MENU_HELPDOC	"&Documento de ayuda"
+	IDS_MENU_VERACRYPT	"Desbloquear como VeraCrypt"
+	IDS_FMT_VC_TITLE	"Desbloquear volumen VeraCrypt - %s"
+	IDS_VC_BADKEY		"No se pudo desbloquear el volumen. Compruebe la contraseña, los archivos de clave, el PIM y el hash, y si se trata de un volumen TrueCrypt u oculto."
+	IDS_VC_KEYFILES		"Seleccione los archivos de clave"
+	IDS_VC_PRF_AUTO		"Probar todos (lento)"
+	IDS_VC_BADPIM		"El PIM debe ser un número entre 0 y 2147468. Déjelo vacío para usar el valor predeterminado."
+	IDS_MENU_PLAINMOUNT	"Montar como dm-crypt plain"
+	IDS_FMT_PM_TITLE	"Montar volumen dm-crypt plain - %s"
+	IDS_PM_FAILED		"No se pudo mapear el volumen. Compruebe el cifrado, el tamaño de clave y el tamaño de sector."
+	IDS_PM_KEYFILE		"Seleccione un archivo de clave"
+	IDS_PM_BADPARAM		"Introduzca un cifrado con el formato cifrado-modo-iv y un tamaño de clave en bits que sea múltiplo de 8."
+	IDS_PM_HASH_NONE	"ninguno"
+	IDS_PROPS_NO_INODE	"este sistema de archivos no lo indica"
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	IDS_MENU_SMART		"Ver S.M.A.R.T."
+	IDS_SM_TITLE		"S.M.A.R.T."
+	IDS_SM_HEALTH		"Estado de salud"
+	IDS_SM_TEMPERATURE	"Temperatura"
+	IDS_SM_GOOD		"Bueno"
+	IDS_SM_CAUTION		"Precaución"
+	IDS_SM_BAD		"Malo"
+	IDS_SM_UNKNOWN		"Desconocido"
+	IDS_SM_FIRMWARE		"Firmware"
+	IDS_SM_SERIAL		"Número de serie"
+	IDS_SM_INTERFACE	"Interfaz"
+	IDS_SM_MODE		"Modo de transferencia"
+	IDS_SM_DRIVE		"Letras de unidad"
+	IDS_SM_STANDARD		"Estándar"
+	IDS_SM_FEATURES		"Características"
+	IDS_SM_READS		"Lecturas totales del host"
+	IDS_SM_WRITES		"Escrituras totales del host"
+	IDS_SM_NAND		"Escrituras NAND totales"
+	IDS_SM_BUFFER		"Tamaño del búfer"
+	IDS_SM_RPM		"Velocidad de rotación"
+	IDS_SM_POWER_COUNT	"Número de encendidos"
+	IDS_SM_POWER_HOURS	"Horas de encendido"
+	IDS_SM_ATTR		"Atributo"
+	IDS_SM_NO_DATA		"No hay información S.M.A.R.T. disponible para este disco."
+	IDS_SM_HEX		"HEX"
+#endif
+END
+
+// Cryptodisk unlock: passphrase (or a key file) for a LUKS/LUKS2 volume.
+IDD_CRYPTO DIALOGEX 0, 0, 240, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Desbloquear volumen cifrado"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_CRYPTO_INFO, 7, 7, 226, 16
+	LTEXT		"Contraseña:", IDC_STATIC, 7, 28, 60, 8
+	EDITTEXT	IDC_CRYPTO_PASS, 70, 26, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"Usar un archivo de clave en su lugar", IDC_CRYPTO_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 46, 160, 10
+	EDITTEXT	IDC_CRYPTO_KEYFILE, 7, 60, 176, 12, ES_READONLY | ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"Examinar", IDC_CRYPTO_BROWSE, 187, 59, 46, 14, WS_DISABLED
+	CONTROL		"", IDC_CRYPTO_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 80, 226, 8
+	DEFPUSHBUTTON	"Aceptar", IDOK, 128, 100, 50, 14
+	PUSHBUTTON	"Cancelar", IDCANCEL, 183, 100, 50, 14
+END
+
+// VeraCrypt/TrueCrypt unlock.  Nothing about such a volume is plaintext, so
+// besides the secret this collects the parameters it does not store.
+IDD_VERACRYPT DIALOGEX 0, 0, 240, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Desbloquear volumen VeraCrypt"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_VC_INFO, 7, 7, 226, 10
+	LTEXT		"Contraseña:", IDC_STATIC, 7, 24, 60, 8
+	EDITTEXT	IDC_VC_PASS, 70, 22, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	LTEXT		"Archivos de clave:", IDC_STATIC, 7, 42, 60, 8
+	EDITTEXT	IDC_VC_KEYFILES, 70, 40, 79, 12, ES_READONLY | ES_AUTOHSCROLL
+	PUSHBUTTON	"Añadir", IDC_VC_BROWSE, 152, 39, 40, 14
+	PUSHBUTTON	"Borrar", IDC_VC_CLEARKEYS, 193, 39, 40, 14, WS_DISABLED
+	LTEXT		"PIM:", IDC_STATIC, 7, 60, 60, 8
+	EDITTEXT	IDC_VC_PIM, 70, 58, 38, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Hash:", IDC_STATIC, 118, 60, 30, 8
+	COMBOBOX	IDC_VC_PRF, 150, 58, 83, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL		"Volumen TrueCrypt", IDC_VC_TRUECRYPT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 78, 226, 10
+	CONTROL		"Volumen oculto", IDC_VC_HIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 91, 226, 10
+	CONTROL		"Usar la cabecera de respaldo", IDC_VC_BACKUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 104, 226, 10
+	CONTROL		"", IDC_VC_PROGRESS, "msctls_progress32", WS_BORDER | NOT WS_VISIBLE, 7, 122, 226, 8
+	DEFPUSHBUTTON	"Aceptar", IDOK, 128, 138, 50, 14
+	PUSHBUTTON	"Cancelar", IDCANCEL, 183, 138, 50, 14
+END
+
+// Plain dm-crypt mount.  Such a volume has no header, so every parameter is
+// entered here and a wrong one silently produces garbage.
+IDD_PLAINMOUNT DIALOGEX 0, 0, 240, 186
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Montar volumen dm-crypt plain"
+FONT 9, "Segoe UI"
+BEGIN
+	LTEXT		"", IDC_PM_INFO, 7, 7, 226, 10
+	LTEXT		"Cifrado:", IDC_STATIC, 7, 24, 60, 8
+	COMBOBOX	IDC_PM_CIPHER, 70, 22, 163, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Clave (bits):", IDC_STATIC, 7, 42, 60, 8
+	COMBOBOX	IDC_PM_KEYBITS, 70, 40, 50, 90, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Sector:", IDC_STATIC, 130, 42, 28, 8
+	COMBOBOX	IDC_PM_SECTOR, 162, 40, 71, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Hash:", IDC_STATIC, 7, 60, 60, 8
+	COMBOBOX	IDC_PM_HASH, 70, 58, 163, 90, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	LTEXT		"Despl. (sect.):", IDC_STATIC, 7, 80, 60, 8
+	EDITTEXT	IDC_PM_OFFSET, 70, 78, 50, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Salto IV:", IDC_STATIC, 130, 80, 30, 8
+	EDITTEXT	IDC_PM_SKIP, 162, 78, 71, 12, ES_NUMBER | ES_AUTOHSCROLL
+	LTEXT		"Contraseña:", IDC_STATIC, 7, 98, 60, 8
+	EDITTEXT	IDC_PM_PASS, 70, 96, 163, 12, ES_PASSWORD | ES_AUTOHSCROLL
+	CONTROL		"Usar un archivo de clave en su lugar", IDC_PM_USEKEYFILE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 114, 226, 10
+	EDITTEXT	IDC_PM_KEYFILE, 7, 128, 180, 12, ES_AUTOHSCROLL | WS_DISABLED
+	PUSHBUTTON	"Examinar", IDC_PM_BROWSE, 191, 127, 42, 14, WS_DISABLED
+	LTEXT		"Despl. archivo:", IDC_STATIC, 7, 148, 60, 8
+	EDITTEXT	IDC_PM_KEYOFFSET, 70, 146, 60, 12, ES_NUMBER | ES_AUTOHSCROLL | WS_DISABLED
+	DEFPUSHBUTTON	"Aceptar", IDOK, 128, 164, 50, 14
+	PUSHBUTTON	"Cancelar", IDCANCEL, 183, 164, 50, 14
+END
+
+// File properties: libmagic description on top, hash calculator below
+// (layout borrowed from FileXRay's property page).
+IDD_PROPS DIALOGEX 0, 0, 227, 257
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Propiedades"
+FONT 9, "Segoe UI"
+BEGIN
+	GROUPBOX	"Archivo", IDC_STATIC, 7, 7, 213, 50
+	EDITTEXT	IDC_PROPS_TYPE, 17, 20, 197, 21, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP
+	LTEXT		"Inodo:", IDC_STATIC, 17, 44, 55, 8
+	LTEXT		"", IDC_PROPS_INODE, 74, 44, 140, 8
+
+	GROUPBOX	"Hash", IDC_STATIC, 7, 62, 213, 188
+	CONTROL		"MD5", IDC_PROPS_MD5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 79, 42, 10
+	CONTROL		"SHA1", IDC_PROPS_SHA1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 79, 45, 10
+	CONTROL		"CRC32", IDC_PROPS_CRC32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 79, 52, 10
+	CONTROL		"CRC64", IDC_PROPS_CRC64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 93, 52, 10
+	CONTROL		"SHA256", IDC_PROPS_SHA256, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 93, 62, 10
+	CONTROL		"SHA512", IDC_PROPS_SHA512, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 147, 93, 62, 10
+	CONTROL		"BLAKE2sp", IDC_PROPS_BLAKE2SP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 17, 107, 58, 10
+	CONTROL		"BLAKE3", IDC_PROPS_BLAKE3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 82, 107, 52, 10
+	PUSHBUTTON	"Calcular", IDC_PROPS_CALC, 17, 123, 60, 14
+	PUSHBUTTON	"Copiar", IDC_PROPS_COPY, 154, 123, 60, 14
+	CONTROL		"", IDC_PROPS_PROGRESS, "msctls_progress32", WS_BORDER, 17, 143, 197, 10
+	LTEXT		"Listo.", IDC_PROPS_STATUS, 17, 157, 197, 8
+	EDITTEXT	IDC_PROPS_RESULT, 17, 169, 197, 74, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | ES_AUTOVSCROLL | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+END

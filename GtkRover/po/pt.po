@@ -1,0 +1,1218 @@
+# Portuguese translation of FsRover (GTK).
+# Copyright (C) 2026 A1ive
+# This file is distributed under the same license as FsRover.
+msgid ""
+msgstr ""
+"Project-Id-Version: fsrover\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-11-19 12:00+0900\n"
+"Last-Translator: FsRover contributors\n"
+"Language-Team: Portuguese\n"
+"Language: pt\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: cryptodlg.cpp:95
+#, c-format
+msgid "Unlocking (%s)…"
+msgstr "Desbloqueando (%s)…"
+
+#: cryptodlg.cpp:97
+msgid "Another operation is still running."
+msgstr "Outra operação ainda está em andamento."
+
+#: cryptodlg.cpp:114
+#, c-format
+msgid "Unlock (%s) failed"
+msgstr "Falha ao desbloquear (%s)"
+
+#: cryptodlg.cpp:118
+#, c-format
+msgid "Unlocked (%s) as (%s)"
+msgstr "(%s) desbloqueado como (%s)"
+
+#: cryptodlg.cpp:152 mount.cpp:430
+msgid "_Cancel"
+msgstr "_Cancelar"
+
+#: cryptodlg.cpp:164
+msgid "_Unlock"
+msgstr "_Desbloquear"
+
+#: cryptodlg.cpp:186
+msgid "Passphrase"
+msgstr "Frase secreta"
+
+#: cryptodlg.cpp:265
+msgid "Choose Key File"
+msgstr "Escolher arquivo de chave"
+
+#: cryptodlg.cpp:275 mount.cpp:429
+msgid "Browse…"
+msgstr "Procurar…"
+
+#: cryptodlg.cpp:323
+#, c-format
+msgid "Unlock (%s)"
+msgstr "Desbloquear (%s)"
+
+#: cryptodlg.cpp:324
+msgid "Encrypted volume."
+msgstr "Volume criptografado."
+
+#: cryptodlg.cpp:325
+#, c-format
+msgid "%s volume%s. Enter its passphrase or choose a key file."
+msgstr "Volume %s%s. Digite a frase secreta ou escolha um arquivo de chave."
+
+#: cryptodlg.cpp:333
+msgid "Use a _key file"
+msgstr "Usar um arquivo de _chave"
+
+#: cryptodlg.cpp:339
+msgid "Unlock Volume"
+msgstr "Desbloquear volume"
+
+#: cryptodlg.cpp:365
+msgid "Enter a passphrase or choose a non-empty key file."
+msgstr "Digite uma frase secreta ou escolha um arquivo de chave não vazio."
+
+#: cryptodlg.cpp:447
+msgid "No key files"
+msgstr "Nenhum arquivo de chave"
+
+#: cryptodlg.cpp:477
+msgid "Add Key Files"
+msgstr "Adicionar arquivos de chave"
+
+#: cryptodlg.cpp:498
+msgid "Autodetect (slow)"
+msgstr "Detecção automática (lenta)"
+
+#: cryptodlg.cpp:506
+#, c-format
+msgid "Unlock VeraCrypt volume (%s)"
+msgstr "Desbloquear volume VeraCrypt (%s)"
+
+#: cryptodlg.cpp:510
+msgid "Personal Iterations Multiplier; 0 uses the volume's default"
+msgstr "Multiplicador de iterações pessoais; 0 usa o padrão do volume"
+
+#: cryptodlg.cpp:512
+msgid "_Password:"
+msgstr "_Senha:"
+
+#: cryptodlg.cpp:513
+msgid "P_IM:"
+msgstr "P_IM:"
+
+#: cryptodlg.cpp:514 cryptodlg.cpp:701
+msgid "_Hash:"
+msgstr "_Hash:"
+
+#: cryptodlg.cpp:516
+msgid "_TrueCrypt volume"
+msgstr "Volume _TrueCrypt"
+
+#: cryptodlg.cpp:517
+msgid "Open the hi_dden volume"
+msgstr "Abrir o volume _oculto"
+
+#: cryptodlg.cpp:518
+msgid "Use the _backup headers"
+msgstr "Usar os cabeçalhos de _backup"
+
+#: cryptodlg.cpp:524
+msgid "Add _Key Files…"
+msgstr "Adicionar arquivos de _chave…"
+
+#: cryptodlg.cpp:525
+msgid "Clear"
+msgstr "Limpar"
+
+#: cryptodlg.cpp:537
+msgid "Unlock VeraCrypt / TrueCrypt"
+msgstr "Desbloquear VeraCrypt / TrueCrypt"
+
+#: cryptodlg.cpp:559
+#, c-format
+msgid "Cannot use key file %s"
+msgstr "Não é possível usar o arquivo de chave %s"
+
+#: cryptodlg.cpp:571
+msgid "Enter a password or add key files."
+msgstr "Digite uma senha ou adicione arquivos de chave."
+
+#: cryptodlg.cpp:581
+msgid "Trying every hash; this can take a while…"
+msgstr "Testando todos os hashes; isso pode demorar…"
+
+#: cryptodlg.cpp:609
+msgid "None (use as is)"
+msgstr "Nenhum (usar como está)"
+
+#: cryptodlg.cpp:678
+#, c-format
+msgid "Open plain dm-crypt volume (%s)"
+msgstr "Abrir volume dm-crypt plain (%s)"
+
+#: cryptodlg.cpp:680
+msgid ""
+"A plain volume has no header: wrong parameters are not detected and simply "
+"show garbage."
+msgstr "Um volume plain não tem cabeçalho: parâmetros errados não são detectados e apenas exibem dados sem sentido."
+
+#: cryptodlg.cpp:699
+msgid "_Cipher:"
+msgstr "_Cifra:"
+
+#: cryptodlg.cpp:700
+msgid "P_resets:"
+msgstr "P_redefinições:"
+
+#: cryptodlg.cpp:702
+msgid "_Key size (bits):"
+msgstr "Tamanho da _chave (bits):"
+
+#: cryptodlg.cpp:703
+msgid "_Sector size:"
+msgstr "Tamanho do _setor:"
+
+#: cryptodlg.cpp:704
+msgid "_Offset (512-byte sectors):"
+msgstr "_Deslocamento (setores de 512 bytes):"
+
+#: cryptodlg.cpp:705
+msgid "S_kip (IV sectors):"
+msgstr "P_ular (setores IV):"
+
+#: cryptodlg.cpp:706
+msgid "_Passphrase:"
+msgstr "_Frase secreta:"
+
+#: cryptodlg.cpp:708
+msgid "Use a key _file as the volume key"
+msgstr "Usar um _arquivo como chave do volume"
+
+#: cryptodlg.cpp:713
+msgid "Key _file:"
+msgstr "Arquivo de c_have:"
+
+#: cryptodlg.cpp:714
+msgid "Key file o_ffset (bytes):"
+msgstr "Desl_ocamento no arquivo de chave (bytes):"
+
+#: cryptodlg.cpp:719
+msgid "Open Plain dm-crypt"
+msgstr "Abrir dm-crypt plain"
+
+#: cryptodlg.cpp:739
+msgid "The cipher must name a mode, e.g. aes-xts-plain64."
+msgstr "A cifra deve indicar um modo, por exemplo aes-xts-plain64."
+
+#: cryptodlg.cpp:754
+msgid "The key file is too short for this key size."
+msgstr "O arquivo de chave é curto demais para este tamanho de chave."
+
+#: cryptodlg.cpp:769
+msgid "Enter a passphrase or choose a key file."
+msgstr "Digite uma frase secreta ou escolha um arquivo de chave."
+
+#: hexview.cpp:80
+#, c-format
+msgid "Offset 0x%llX of %s"
+msgstr "Deslocamento 0x%llX de %s"
+
+#: hexview.cpp:289
+#, c-format
+msgid "%s — Hex"
+msgstr "%s — Hex"
+
+#: hexview.cpp:301 imageview.cpp:194 mdview.cpp:559 textview.cpp:289
+msgid "Reading…"
+msgstr "Lendo…"
+
+#: hexview.cpp:303
+msgid "Go to offset (0x… or decimal)"
+msgstr "Ir para o deslocamento (0x… ou decimal)"
+
+#: hostdisk.cpp:295
+#, c-format
+msgid "The helper failed (pkexec exit status %d)."
+msgstr "O auxiliar falhou (código de saída do pkexec %d)."
+
+#: hostdisk.cpp:328
+#, c-format
+msgid "Access granted to %zu disk"
+msgid_plural "Access granted to %zu disks"
+msgstr[0] "Acesso concedido a %zu disco"
+msgstr[1] "Acesso concedido a %zu discos"
+
+#: hostdisk.cpp:331
+msgid "No access to the physical disks"
+msgstr "Sem acesso aos discos físicos"
+
+#: hostdisk.cpp:333
+msgid "No physical disk could be opened"
+msgstr "Nenhum disco físico pôde ser aberto"
+
+#: hostdisk.cpp:375
+msgid "All physical disks are already readable"
+msgstr "Todos os discos físicos já podem ser lidos"
+
+#: hostdisk.cpp:381
+msgid "Waiting for authorization…"
+msgstr "Aguardando autorização…"
+
+#: imageview.cpp:90 imageview.cpp:95
+msgid "Unrecognized image format"
+msgstr "Formato de imagem não reconhecido"
+
+#: imageview.cpp:184
+#, c-format
+msgid "%s — Image"
+msgstr "%s — Imagem"
+
+#: imageview.cpp:197
+msgid "_Fit"
+msgstr "_Ajustar"
+
+#: imageview.cpp:206
+msgid "Zoom out"
+msgstr "Reduzir zoom"
+
+#: imageview.cpp:208
+msgid "Actual size"
+msgstr "Tamanho real"
+
+#: imageview.cpp:210
+msgid "Zoom in"
+msgstr "Ampliar zoom"
+
+#: imageview.cpp:231
+#, c-format
+msgid "The image is larger than %s"
+msgstr "A imagem é maior que %s"
+
+#: lostdlg.cpp:160
+#, c-format
+msgid "%s of %s"
+msgstr "%s de %s"
+
+#: lostdlg.cpp:166
+#, c-format
+msgid "Searching… %zu found"
+msgid_plural "Searching… %zu found"
+msgstr[0] "Procurando… %zu encontrada"
+msgstr[1] "Procurando… %zu encontradas"
+
+#: lostdlg.cpp:173
+msgid "Stopped."
+msgstr "Interrompida."
+
+#: lostdlg.cpp:174
+msgid "Search complete."
+msgstr "Busca concluída."
+
+#: lostdlg.cpp:175
+#, c-format
+msgid "%zu partition found."
+msgid_plural "%zu partitions found."
+msgstr[0] "%zu partição encontrada."
+msgstr[1] "%zu partições encontradas."
+
+#: lostdlg.cpp:178 lostdlg.cpp:344
+msgid "_Search"
+msgstr "_Procurar"
+
+#: lostdlg.cpp:202
+msgid "Stopping…"
+msgstr "Parando…"
+
+#: lostdlg.cpp:211
+msgid "_Stop"
+msgstr "_Parar"
+
+#: lostdlg.cpp:215
+msgid "Searching…"
+msgstr "Procurando…"
+
+#: lostdlg.cpp:261
+msgid "Cannot open the lost partition"
+msgstr "Não é possível abrir a partição perdida"
+
+#: lostdlg.cpp:328
+msgid "Offset"
+msgstr "Deslocamento"
+
+#: lostdlg.cpp:328 window.cpp:2116
+msgid "Size"
+msgstr "Tamanho"
+
+#: lostdlg.cpp:328 mapview.cpp:40 window.cpp:2118
+msgid "Type"
+msgstr "Tipo"
+
+#: lostdlg.cpp:328
+msgid "Filesystem"
+msgstr "Sistema de arquivos"
+
+#: lostdlg.cpp:328
+msgid "Label"
+msgstr "Rótulo"
+
+#: lostdlg.cpp:328
+msgid "Flags"
+msgstr "Sinalizadores"
+
+#: lostdlg.cpp:330
+#, c-format
+msgid "Lost Partitions on (%s)"
+msgstr "Partições perdidas em (%s)"
+
+#: lostdlg.cpp:334 mapview.cpp:222 propsdlg.cpp:114
+msgid "_Close"
+msgstr "_Fechar"
+
+#: lostdlg.cpp:342
+msgid "Also look for _ext backup superblocks"
+msgstr "Procurar também superblocos de backup _ext"
+
+#: lostdlg.cpp:343
+msgid "_Deep search (every sector, much slower)"
+msgstr "Busca _profunda (cada setor, muito mais lenta)"
+
+#: lostdlg.cpp:346
+msgid "_Open"
+msgstr "_Abrir"
+
+#: lostdlg.cpp:351
+msgid ""
+"Searches the device for filesystems that no partition table entry points at."
+msgstr "Procura no dispositivo sistemas de arquivos para os quais nenhuma entrada da tabela de partições aponta."
+
+#: mapview.cpp:40
+msgid "Extent"
+msgstr "Extensão"
+
+#: mapview.cpp:40
+msgid "Logical offset"
+msgstr "Deslocamento lógico"
+
+#: mapview.cpp:40
+msgid "Length"
+msgstr "Comprimento"
+
+#: mapview.cpp:40 propsdlg.cpp:498
+msgid "Device"
+msgstr "Dispositivo"
+
+#: mapview.cpp:41
+msgid "Address space"
+msgstr "Espaço de endereçamento"
+
+#: mapview.cpp:41
+msgid "Storage offset"
+msgstr "Deslocamento de armazenamento"
+
+#: mapview.cpp:41
+msgid "Storage length"
+msgstr "Comprimento de armazenamento"
+
+#: mapview.cpp:41
+msgid "Encoding"
+msgstr "Codificação"
+
+#: mapview.cpp:42
+msgid "Decoded offset"
+msgstr "Deslocamento decodificado"
+
+#: mapview.cpp:42
+msgid "Decoded length"
+msgstr "Comprimento decodificado"
+
+#: mapview.cpp:165 propsdlg.cpp:92
+msgid "Copied to the clipboard"
+msgstr "Copiado para a área de transferência"
+
+#: mapview.cpp:180
+msgid "Cannot save the file map"
+msgstr "Não é possível salvar o mapa do arquivo"
+
+#: mapview.cpp:191
+msgid "Save File Map"
+msgstr "Salvar mapa do arquivo"
+
+#: mapview.cpp:216
+#, c-format
+msgid "%s — File Map"
+msgstr "%s — Mapa do arquivo"
+
+#: mapview.cpp:220
+msgid "_Copy as TSV"
+msgstr "_Copiar como TSV"
+
+#: mapview.cpp:221
+msgid "_Save as TSV…"
+msgstr "_Salvar como TSV…"
+
+#: mapview.cpp:226
+msgid "Mapping…"
+msgstr "Mapeando…"
+
+#: mapview.cpp:282
+#, c-format
+msgid "%u extent"
+msgid_plural "%u extents"
+msgstr[0] "%u extensão"
+msgstr[1] "%u extensões"
+
+#: mapview.cpp:285
+#, c-format
+msgid "stopped after %zu rows"
+msgstr "interrompido após %zu linhas"
+
+#: mdview.cpp:579
+#, c-format
+msgid "%s — Markdown"
+msgstr "%s — Markdown"
+
+#: mdview.cpp:593
+#, c-format
+msgid "%s, showing the first %s"
+msgstr "%s, exibindo os primeiros %s"
+
+#: mdview.cpp:607
+msgid "FsRover Help"
+msgstr "Ajuda do FsRover"
+
+#: mdview.cpp:612
+msgid "The help text is missing."
+msgstr "O texto de ajuda está ausente."
+
+#: mount.cpp:260
+#, c-format
+msgid "(%s) was unmounted"
+msgstr "(%s) foi desmontado"
+
+#: mount.cpp:307 window.cpp:1093
+#, c-format
+msgid "Cannot create %s: %s"
+msgstr "Não é possível criar %s: %s"
+
+#: mount.cpp:314
+#, c-format
+msgid "%s is not a folder"
+msgstr "%s não é uma pasta"
+
+#: mount.cpp:319
+#, c-format
+msgid "%s is not empty"
+msgstr "%s não está vazia"
+
+#: mount.cpp:329
+#, c-format
+msgid "FUSE could not mount %s. Is fusermount3 installed and /dev/fuse usable?"
+msgstr "O FUSE não conseguiu montar %s. O fusermount3 está instalado e /dev/fuse pode ser usado?"
+
+#: mount.cpp:386
+msgid "Choose an Empty Folder"
+msgstr "Escolher uma pasta vazia"
+
+#: mount.cpp:401
+msgid "Enter an absolute folder path."
+msgstr "Digite o caminho absoluto de uma pasta."
+
+#: mount.cpp:410
+#, c-format
+msgid "Mounted (%s) at %s"
+msgstr "(%s) montado em %s"
+
+#: mount.cpp:426
+#, c-format
+msgid "Mount (%s)"
+msgstr "Montar (%s)"
+
+#: mount.cpp:431
+msgid "_Mount"
+msgstr "_Montar"
+
+#: mount.cpp:437
+#, c-format
+msgid "Mount (%s) read-only"
+msgstr "Montar (%s) somente leitura"
+
+#: mount.cpp:438
+msgid ""
+"The volume appears as a folder that every program can read. It stays mounted "
+"until you unmount it or quit FsRover."
+msgstr "O volume aparece como uma pasta que qualquer programa pode ler. Ele permanece montado até que você o desmonte ou saia do FsRover."
+
+#: mount.cpp:451
+msgid "_Open the folder after mounting"
+msgstr "_Abrir a pasta após montar"
+
+#: mount.cpp:503
+#, c-format
+msgid "Unmounted (%s)"
+msgstr "(%s) desmontado"
+
+#: propsdlg.cpp:98
+msgid "C_opy"
+msgstr "C_opiar"
+
+#: propsdlg.cpp:273 window.cpp:945 window.cpp:1130 window.cpp:1169
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: propsdlg.cpp:338
+msgid "Calculating…"
+msgstr "Calculando…"
+
+#: propsdlg.cpp:376
+msgid "Name:"
+msgstr "Nome:"
+
+#: propsdlg.cpp:377
+msgid "Location:"
+msgstr "Local:"
+
+#: propsdlg.cpp:379
+msgid "Error:"
+msgstr "Erro:"
+
+#: propsdlg.cpp:392 propsdlg.cpp:501
+msgid "Type:"
+msgstr "Tipo:"
+
+#: propsdlg.cpp:395
+msgid "Link target:"
+msgstr "Destino do link:"
+
+#: propsdlg.cpp:397
+msgid "Contents:"
+msgstr "Conteúdo:"
+
+#: propsdlg.cpp:399 propsdlg.cpp:503
+msgid "Size:"
+msgstr "Tamanho:"
+
+#: propsdlg.cpp:401
+msgid "Modified:"
+msgstr "Modificado:"
+
+#: propsdlg.cpp:402
+msgid "Inode:"
+msgstr "Inode:"
+
+#: propsdlg.cpp:403
+msgid "not reported by this filesystem"
+msgstr "não informado por este sistema de arquivos"
+
+#: propsdlg.cpp:409
+msgid "Checksums"
+msgstr "Somas de verificação"
+
+#: propsdlg.cpp:429
+msgid "C_alculate"
+msgstr "C_alcular"
+
+#: propsdlg.cpp:453
+#, c-format
+msgid "%s Properties"
+msgstr "Propriedades de %s"
+
+#: propsdlg.cpp:476
+#, c-format
+msgid "(%s) Properties"
+msgstr "Propriedades de (%s)"
+
+#: propsdlg.cpp:482
+msgid "Unlocked encrypted volume"
+msgstr "Volume criptografado desbloqueado"
+
+#: propsdlg.cpp:484
+msgid "Partition"
+msgstr "Partição"
+
+#: propsdlg.cpp:486
+msgid "Disk image file"
+msgstr "Arquivo de imagem de disco"
+
+#: propsdlg.cpp:488
+msgid "Disk image inside a filesystem"
+msgstr "Imagem de disco dentro de um sistema de arquivos"
+
+#: propsdlg.cpp:490
+msgid "Lost partition window"
+msgstr "Janela de partição perdida"
+
+#: propsdlg.cpp:492
+msgid "Volume (LVM, RAID or LDM)"
+msgstr "Volume (LVM, RAID ou LDM)"
+
+#: propsdlg.cpp:494
+msgid "Optical drive"
+msgstr "Unidade óptica"
+
+#: propsdlg.cpp:496
+msgid "Physical disk"
+msgstr "Disco físico"
+
+#: propsdlg.cpp:500
+msgid "Device:"
+msgstr "Dispositivo:"
+
+#: propsdlg.cpp:505
+msgid "Sector size:"
+msgstr "Tamanho do setor:"
+
+#: propsdlg.cpp:507
+msgid "Start:"
+msgstr "Início:"
+
+#: propsdlg.cpp:507
+#, c-format
+msgid "sector %llu (byte offset %llu)"
+msgstr "setor %llu (deslocamento em bytes %llu)"
+
+#: propsdlg.cpp:509
+msgid "Filesystem:"
+msgstr "Sistema de arquivos:"
+
+#: propsdlg.cpp:509
+msgid "none recognized"
+msgstr "nenhum reconhecido"
+
+#: propsdlg.cpp:511
+msgid "Label:"
+msgstr "Rótulo:"
+
+#: propsdlg.cpp:513
+msgid "UUID:"
+msgstr "UUID:"
+
+#: propsdlg.cpp:515
+msgid "Encryption:"
+msgstr "Criptografia:"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", locked"
+msgstr ", bloqueado"
+
+#: propsdlg.cpp:515 row.cpp:81
+msgid ", unlocked"
+msgstr ", desbloqueado"
+
+#: propsdlg.cpp:517
+msgid "Encryption UUID:"
+msgstr "UUID da criptografia:"
+
+#: propsdlg.cpp:519
+msgid "Read from:"
+msgstr "Lido de:"
+
+#: propsdlg.cpp:521
+msgid "Backing file:"
+msgstr "Arquivo de suporte:"
+
+#: propsdlg.cpp:523
+msgid "Members:"
+msgstr "Membros:"
+
+#: propsdlg.cpp:525
+msgid "Mounted at:"
+msgstr "Montado em:"
+
+#: row.cpp:83
+msgid "no filesystem"
+msgstr "nenhum sistema de arquivos"
+
+#: row.cpp:89
+msgid "mounted"
+msgstr "montado"
+
+#: textview.cpp:40
+msgid "Automatic"
+msgstr "Automática"
+
+#: textview.cpp:189
+#, c-format
+msgid "%s, %s"
+msgstr "%s, %s"
+
+#: textview.cpp:191
+#, c-format
+msgid "showing the first %s"
+msgstr "exibindo os primeiros %s"
+
+#: textview.cpp:270
+#, c-format
+msgid "%s — Text"
+msgstr "%s — Texto"
+
+#: textview.cpp:274
+msgid "_Wrap lines"
+msgstr "_Quebrar linhas"
+
+#: textview.cpp:294
+msgid "Find (Ctrl+F)"
+msgstr "Localizar (Ctrl+F)"
+
+#: window.cpp:52
+msgid "unknown error"
+msgstr "erro desconhecido"
+
+#: window.cpp:130
+#, c-format
+msgid "%s byte"
+msgid_plural "%s bytes"
+msgstr[0] "%s byte"
+msgstr[1] "%s bytes"
+
+#: window.cpp:345
+msgid "Another operation is still running"
+msgstr "Outra operação ainda está em andamento"
+
+#: window.cpp:525
+msgid "encrypted"
+msgstr "criptografado"
+
+#: window.cpp:677 window.cpp:705
+#, c-format
+msgid "(%s) has no filesystem GRUB can read"
+msgstr "(%s) não tem nenhum sistema de arquivos que o GRUB consiga ler"
+
+#: window.cpp:722 window.cpp:739 window.cpp:740
+#, c-format
+msgid "Cannot open %s"
+msgstr "Não é possível abrir %s"
+
+#: window.cpp:723
+msgid ""
+"This file is inside a volume FsRover itself has mounted. Browse to it in "
+"FsRover and use \"Open as Disk Image\" instead."
+msgstr "Este arquivo está dentro de um volume que o próprio FsRover montou. Navegue até ele no FsRover e use \"Abrir como imagem de disco\"."
+
+#: window.cpp:729 window.cpp:1039
+#, c-format
+msgid "Opening %s…"
+msgstr "Abrindo %s…"
+
+#: window.cpp:786 window.cpp:2331
+msgid "Ready"
+msgstr "Pronto"
+
+#: window.cpp:861
+msgid "Empty folder"
+msgstr "Pasta vazia"
+
+#: window.cpp:863
+#, c-format
+msgid "%zu folders, %zu files"
+msgstr "%zu pastas, %zu arquivos"
+
+#: window.cpp:886
+#, c-format
+msgid "Loading %s…"
+msgstr "Carregando %s…"
+
+#: window.cpp:940
+#, c-format
+msgid "Extracting %s"
+msgstr "Extraindo %s"
+
+#: window.cpp:947
+#, c-format
+msgid "Failed: %s"
+msgstr "Falha: %s"
+
+#: window.cpp:949
+#, c-format
+msgid "%llu file, %s"
+msgid_plural "%llu files, %s"
+msgstr[0] "%llu arquivo, %s"
+msgstr[1] "%llu arquivos, %s"
+
+#: window.cpp:952
+#, c-format
+msgid "(%zu error)"
+msgid_plural "(%zu errors)"
+msgstr[0] "(%zu erro)"
+msgstr[1] "(%zu erros)"
+
+#: window.cpp:971
+#, c-format
+msgid "File dialog failed: %s"
+msgstr "Falha na caixa de diálogo de arquivos: %s"
+
+#: window.cpp:985
+msgid "Not a local path"
+msgstr "Não é um caminho local"
+
+#: window.cpp:985
+msgid "Choose a file or folder on this computer."
+msgstr "Escolha um arquivo ou uma pasta deste computador."
+
+#: window.cpp:1004
+#, c-format
+msgid "Extracting to %s…"
+msgstr "Extraindo para %s…"
+
+#: window.cpp:1008
+#, c-format
+msgid "Extract to %s: %s"
+msgstr "Extrair para %s: %s"
+
+#: window.cpp:1020
+#, c-format
+msgid "Cannot open: %s"
+msgstr "Não é possível abrir: %s"
+
+#: window.cpp:1036
+#, c-format
+msgid "Cannot create a temporary directory in %s"
+msgstr "Não é possível criar um diretório temporário em %s"
+
+#: window.cpp:1043
+#, c-format
+msgid "Opened %s"
+msgstr "%s aberto"
+
+#: window.cpp:1044
+#, c-format
+msgid "Open %s: %s"
+msgstr "Abrir %s: %s"
+
+#: window.cpp:1107
+msgid "The device ended before its reported size"
+msgstr "O dispositivo terminou antes do tamanho informado"
+
+#: window.cpp:1117
+#, c-format
+msgid "Write failed: %s"
+msgstr "Falha na gravação: %s"
+
+#: window.cpp:1126
+#, c-format
+msgid "Exporting (%s): %s of %s"
+msgstr "Exportando (%s): %s de %s"
+
+#: window.cpp:1132
+#, c-format
+msgid "Cannot flush %s: %s"
+msgstr "Não é possível descarregar %s: %s"
+
+#: window.cpp:1134
+#, c-format
+msgid "Cannot close %s: %s"
+msgstr "Não é possível fechar %s: %s"
+
+#: window.cpp:1136
+#, c-format
+msgid "Cannot replace %s: %s"
+msgstr "Não é possível substituir %s: %s"
+
+#: window.cpp:1158
+#, c-format
+msgid "Exporting (%s)…"
+msgstr "Exportando (%s)…"
+
+#: window.cpp:1164
+#, c-format
+msgid "Exported (%s) to %s, %s"
+msgstr "(%s) exportado para %s, %s"
+
+#: window.cpp:1168
+#, c-format
+msgid "Export of (%s) failed"
+msgstr "Falha ao exportar (%s)"
+
+#: window.cpp:1170
+#, c-format
+msgid "Cannot export (%s)"
+msgstr "Não é possível exportar (%s)"
+
+#: window.cpp:1198
+msgid "Open Compressed Disk Image"
+msgstr "Abrir imagem de disco compactada"
+
+#: window.cpp:1199
+msgid "Open Disk Image"
+msgstr "Abrir imagem de disco"
+
+#: window.cpp:1268
+msgid "Extract To"
+msgstr "Extrair para"
+
+#: window.cpp:1305
+#, c-format
+msgid "Cannot open %s as a disk image"
+msgstr "Não é possível abrir %s como imagem de disco"
+
+#: window.cpp:1502
+#, c-format
+msgid "Export (%s) as Raw Image"
+msgstr "Exportar (%s) como imagem bruta"
+
+#: window.cpp:1535
+msgid "Only attached images and lost partitions can be detached"
+msgstr "Somente imagens anexadas e partições perdidas podem ser desanexadas"
+
+#: window.cpp:1543 window.cpp:1562
+#, c-format
+msgid "Cannot detach (%s)"
+msgstr "Não é possível desanexar (%s)"
+
+#: window.cpp:1543
+msgid "Unmount it first."
+msgstr "Desmonte-o primeiro."
+
+#: window.cpp:1564
+#, c-format
+msgid "Detached (%s)"
+msgstr "(%s) desanexado"
+
+#: window.cpp:1623
+msgid "Navigation"
+msgstr "Navegação"
+
+#: window.cpp:1623
+msgid "Back"
+msgstr "Voltar"
+
+#: window.cpp:1623
+msgid "Forward"
+msgstr "Avançar"
+
+#: window.cpp:1623
+msgid "Up one level"
+msgstr "Subir um nível"
+
+#: window.cpp:1623
+msgid "Edit the path"
+msgstr "Editar o caminho"
+
+#: window.cpp:1624 window.cpp:2013
+msgid "Refresh"
+msgstr "Atualizar"
+
+#: window.cpp:1624
+msgid "Files"
+msgstr "Arquivos"
+
+#: window.cpp:1624
+msgid "Open a disk image"
+msgstr "Abrir uma imagem de disco"
+
+#: window.cpp:1624
+msgid "Extract the selection"
+msgstr "Extrair a seleção"
+
+#: window.cpp:1625
+msgid "Select all"
+msgstr "Selecionar tudo"
+
+#: window.cpp:1625 window.cpp:2053 window.cpp:2073
+msgid "Properties"
+msgstr "Propriedades"
+
+#: window.cpp:1625
+msgid "View as text"
+msgstr "Ver como texto"
+
+#: window.cpp:1625
+msgid "View as hex"
+msgstr "Ver em hexadecimal"
+
+#: window.cpp:1642
+msgid "Read-only filesystem browser built on GRUB drivers."
+msgstr "Navegador de sistemas de arquivos somente leitura baseado nos drivers do GRUB."
+
+#: window.cpp:1646
+msgid "translator-credits"
+msgstr "Colaboradores do FsRover"
+
+#: window.cpp:1962
+msgid "Cancelling…"
+msgstr "Cancelando…"
+
+#: window.cpp:2010
+msgid "Open Disk Image…"
+msgstr "Abrir imagem de disco…"
+
+#: window.cpp:2011
+msgid "Open Compressed Disk Image…"
+msgstr "Abrir imagem de disco compactada…"
+
+#: window.cpp:2012
+msgid "Access Physical Disks…"
+msgstr "Acessar discos físicos…"
+
+#: window.cpp:2014
+msgid "Select All"
+msgstr "Selecionar tudo"
+
+#: window.cpp:2015
+msgid "Invert Selection"
+msgstr "Inverter seleção"
+
+#: window.cpp:2020
+msgid "Help"
+msgstr "Ajuda"
+
+#: window.cpp:2021
+msgid "Keyboard Shortcuts"
+msgstr "Atalhos de teclado"
+
+#: window.cpp:2022
+msgid "About FsRover"
+msgstr "Sobre o FsRover"
+
+#: window.cpp:2030
+msgid "Filename Encoding"
+msgstr "Codificação de nomes de arquivo"
+
+#: window.cpp:2031
+msgid "Preserve Timestamps When Extracting"
+msgstr "Preservar carimbos de data/hora ao extrair"
+
+#: window.cpp:2044
+msgid "Open"
+msgstr "Abrir"
+
+#: window.cpp:2045
+msgid "Extract To…"
+msgstr "Extrair para…"
+
+#: window.cpp:2046
+msgid "View as Text"
+msgstr "Ver como texto"
+
+#: window.cpp:2047 window.cpp:2069
+msgid "View as Hex"
+msgstr "Ver em hexadecimal"
+
+#: window.cpp:2048
+msgid "View as Image"
+msgstr "Ver como imagem"
+
+#: window.cpp:2049
+msgid "View as Markdown"
+msgstr "Ver como Markdown"
+
+#: window.cpp:2050
+msgid "Open as Disk Image"
+msgstr "Abrir como imagem de disco"
+
+#: window.cpp:2051
+msgid "Open as Compressed Disk Image"
+msgstr "Abrir como imagem de disco compactada"
+
+#: window.cpp:2052
+msgid "File Map"
+msgstr "Mapa do arquivo"
+
+#: window.cpp:2054
+msgid "Copy Name"
+msgstr "Copiar nome"
+
+#: window.cpp:2055
+msgid "Copy Path"
+msgstr "Copiar caminho"
+
+#: window.cpp:2063
+msgid "Browse"
+msgstr "Procurar"
+
+#: window.cpp:2064
+msgid "Mount…"
+msgstr "Montar…"
+
+#: window.cpp:2065
+msgid "Unmount"
+msgstr "Desmontar"
+
+#: window.cpp:2066
+msgid "Unlock…"
+msgstr "Desbloquear…"
+
+#: window.cpp:2067
+msgid "Unlock VeraCrypt / TrueCrypt…"
+msgstr "Desbloquear VeraCrypt / TrueCrypt…"
+
+#: window.cpp:2068
+msgid "Open Plain dm-crypt…"
+msgstr "Abrir dm-crypt plain…"
+
+#: window.cpp:2070
+msgid "Export Raw Image…"
+msgstr "Exportar imagem bruta…"
+
+#: window.cpp:2071
+msgid "Search for Lost Partitions…"
+msgstr "Procurar partições perdidas…"
+
+#: window.cpp:2072
+msgid "Detach"
+msgstr "Desanexar"
+
+#: window.cpp:2115
+msgid "Name"
+msgstr "Nome"
+
+#: window.cpp:2117
+msgid "Modified"
+msgstr "Modificado"
+
+#: window.cpp:2145
+msgid "Pick a volume on the left, or open a disk image (Ctrl+O)."
+msgstr "Escolha um volume à esquerda ou abra uma imagem de disco (Ctrl+O)."
+
+#: window.cpp:2151
+msgid "_Access Physical Disks…"
+msgstr "_Acessar discos físicos…"
+
+#: window.cpp:2154
+msgid ""
+"Some disks need administrator permission to be read. FsRover asks for it "
+"without running as root."
+msgstr "Alguns discos precisam de permissão de administrador para serem lidos. O FsRover a solicita sem ser executado como root."
+
+#: window.cpp:2178
+msgid "_Extract…"
+msgstr "_Extrair…"
+
+#: window.cpp:2183
+msgid "Extract the selection (Ctrl+E)"
+msgstr "Extrair a seleção (Ctrl+E)"
+
+#: window.cpp:2190
+msgid "(device)/path"
+msgstr "(dispositivo)/caminho"
+
+#: window.cpp:2196
+msgid "Back (Alt+Left)"
+msgstr "Voltar (Alt+Esquerda)"
+
+#: window.cpp:2198
+msgid "Forward (Alt+Right)"
+msgstr "Avançar (Alt+Direita)"
+
+#: window.cpp:2200
+msgid "Up (Alt+Up)"
+msgstr "Subir (Alt+Cima)"
+
+#: window.cpp:2202
+msgid "Open Disk Image (Ctrl+O)"
+msgstr "Abrir imagem de disco (Ctrl+O)"
+
+#: window.cpp:2214
+msgid "Starting…"
+msgstr "Iniciando…"
+
+#: window.cpp:2222
+msgid "Cancel"
+msgstr "Cancelar"
