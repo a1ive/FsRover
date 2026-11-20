@@ -44,6 +44,9 @@
 #pragma warning(disable: 4334)
 /* "function must return a value" (noreturn is expanded away) */
 #pragma warning(disable: 4716)
+/* "zero-sized array in stack object will have no elements" (on-disk
+   superblocks ending in a flexible array are read into stack locals) */
+#pragma warning(disable: 4815)
 
 /*
  * grub_log2ull() (include/grub/misc.h) uses __builtin_clzll, which MSVC
