@@ -49,23 +49,38 @@ on_shutdown (GApplication *, gpointer)
 	rover_window_shutdown ();
 }
 
-/* Translations live in "locale" next to an uninstalled binary, otherwise
-   under the install prefix.  */
-static void
-setup_i18n ()
+std::string
+exe_relative (const char *rel)
 {
 	char *self = g_file_read_link ("/proc/self/exe", nullptr);
 	char *dir = self ? g_path_get_dirname (self) : nullptr;
-	char *local = dir ? g_build_filename (dir, "locale", nullptr) : nullptr;
+	char *path = dir ? g_build_filename (dir, rel, nullptr) : nullptr;
+	std::string out = path ? path : "";
 
-	setlocale (LC_ALL, "");
-	bindtextdomain (GETTEXT_PACKAGE, local && g_file_test (local, G_FILE_TEST_IS_DIR)
-		? local : ROVER_LOCALEDIR);
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-	textdomain (GETTEXT_PACKAGE);
-	g_free (local);
+	g_free (path);
 	g_free (dir);
 	g_free (self);
+	return out;
+}
+
+/* Translations live in "locale" next to an uninstalled binary, then at the
+   install layout's place relative to the binary (a relocated tree such as
+   an AppImage), and last under the configured prefix.  */
+static void
+setup_i18n ()
+{
+	std::string local = exe_relative ("locale");
+	std::string relocated = exe_relative (ROVER_LOCALEDIR_REL);
+	const char *dir = ROVER_LOCALEDIR;
+
+	if (g_file_test (local.c_str (), G_FILE_TEST_IS_DIR))
+		dir = local.c_str ();
+	else if (g_file_test (relocated.c_str (), G_FILE_TEST_IS_DIR))
+		dir = relocated.c_str ();
+	setlocale (LC_ALL, "");
+	bindtextdomain (GETTEXT_PACKAGE, dir);
+	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+	textdomain (GETTEXT_PACKAGE);
 }
 
 int

@@ -152,9 +152,16 @@ describe (const std::vector<unsigned char> &data)
 
 	if (!tried)
 	{
+		/* A relocated tree (AppImage) carries the database matching its
+		   libmagic; the compiled-in default would be the host's.  MAGIC
+		   still overrides both.  */
+		std::string db = exe_relative (ROVER_DATADIR_REL "/fsrover/magic.mgc");
+		const char *file = !g_getenv ("MAGIC")
+			&& g_file_test (db.c_str (), G_FILE_TEST_IS_REGULAR) ? db.c_str () : nullptr;
+
 		tried = true;
 		cookie = magic_open (MAGIC_NONE);
-		if (cookie && magic_load (cookie, nullptr) != 0)
+		if (cookie && magic_load (cookie, file) != 0)
 		{
 			magic_close (cookie);
 			cookie = nullptr;

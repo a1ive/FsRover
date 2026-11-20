@@ -2,5 +2,7 @@
 <gresources>
   <gresource prefix="/io/github/a1ive/FsRover">
     <file alias="help.md">FsRover/help.md</file>
+    <!-- GtkApplication adds <base path>/icons to the icon theme.  -->
+    <file alias="icons/256x256/apps/io.github.a1ive.FsRover.png">GtkRover/io.github.a1ive.FsRover.png</file>
   </gresource>
 </gresources>

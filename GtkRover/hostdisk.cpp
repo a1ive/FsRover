@@ -36,8 +36,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <linux/magic.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 #include <gio/gunixfdlist.h>
@@ -226,6 +228,33 @@ next_udisks (access_request *r)
 		G_MAXINT, nullptr, nullptr, on_opened, r);
 }
 
+/* What pkexec should run as root.  Normally this binary.  Inside a mounted
+   AppImage root cannot enter the user's FUSE mount, so run the image file
+   itself: root mounts it anew and AppRun sets up the bundled libraries,
+   which pkexec's cleared environment would lose anyway.  APPIMAGE and
+   APPDIR leak into unrelated children, so they count only when this binary
+   lies under APPDIR; an extracted AppDir (no FUSE) is reachable as is.  */
+char *
+helper_program ()
+{
+	char *self = g_file_read_link ("/proc/self/exe", nullptr);
+	const char *image = g_getenv ("APPIMAGE");
+	const char *appdir = g_getenv ("APPDIR");
+	struct statfs fs;
+
+	if (!self || !image || !appdir || !g_path_is_absolute (image) || !*appdir)
+		return self;
+	size_t len = strlen (appdir);
+	while (len > 1 && appdir[len - 1] == '/')
+		len--;
+	if (strncmp (self, appdir, len) != 0 || self[len] != '/'
+		|| statfs (self, &fs) != 0 || fs.f_type != FUSE_SUPER_MAGIC
+		|| !g_file_test (image, G_FILE_TEST_IS_REGULAR))
+		return self;
+	g_free (self);
+	return g_strdup (image);
+}
+
 struct helper_result
 {
 	std::vector<std::pair<std::string, int>> fds;
@@ -237,7 +266,7 @@ helper_result
 run_helper (const std::vector<std::string> &paths)
 {
 	helper_result out;
-	char *self = g_file_read_link ("/proc/self/exe", nullptr);
+	char *self = helper_program ();
 	int pair[2];
 
 	if (!self || socketpair (AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair) != 0)

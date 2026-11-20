@@ -143,15 +143,28 @@ target_link_libraries(LinuxRover PRIVATE rover-grub PkgConfig::FUSE3 pthread)
 
 install(TARGETS LinuxRover RUNTIME DESTINATION bin)
 
-# GTK 4 GUI; skipped quietly where the development package is absent.
+# GTK 4 GUI; skipped quietly where the development package is absent,
+# unless ROVER_GTK_REQUIRED asks for a hard failure (CI, AppImage builds).
 option(ROVER_GTK "Build the GTK 4 GUI (GtkRover) when gtk4 is available" ON)
+option(ROVER_GTK_REQUIRED "Fail when GtkRover, libmagic or msgfmt is unavailable" OFF)
+if(ROVER_GTK_REQUIRED)
+	set(GTKROVER_REQUIRED REQUIRED)
+else()
+	set(GTKROVER_REQUIRED)
+endif()
 if(ROVER_GTK)
-	pkg_check_modules(GTK4 IMPORTED_TARGET gtk4>=4.12)
+	pkg_check_modules(GTK4 ${GTKROVER_REQUIRED} IMPORTED_TARGET gtk4>=4.12)
 	if(GTK4_FOUND)
 		include(GNUInstallDirs)
-		pkg_check_modules(LIBMAGIC IMPORTED_TARGET libmagic)
+		pkg_check_modules(LIBMAGIC ${GTKROVER_REQUIRED} IMPORTED_TARGET libmagic)
 		find_program(GLIB_COMPILE_RESOURCES glib-compile-resources REQUIRED)
-		find_program(MSGFMT msgfmt)
+		find_program(MSGFMT msgfmt ${GTKROVER_REQUIRED})
+		# Paths relative to the binary, so a relocated install (AppImage)
+		# finds its own data before the configured prefix.
+		file(RELATIVE_PATH GTKROVER_LOCALEDIR_REL "${CMAKE_INSTALL_FULL_BINDIR}"
+			"${CMAKE_INSTALL_FULL_LOCALEDIR}")
+		file(RELATIVE_PATH GTKROVER_DATADIR_REL "${CMAKE_INSTALL_FULL_BINDIR}"
+			"${CMAKE_INSTALL_FULL_DATADIR}")
 
 		# md4c is third-party C; build it without the project's -Werror.
 		add_library(rover-md4c STATIC FsRover/md4c/md4c.c FsRover/md4c/entity.c)
@@ -171,6 +184,7 @@ if(ROVER_GTK)
 				--target "${GTKROVER_RESOURCES}"
 				"${CMAKE_CURRENT_SOURCE_DIR}/GtkRover/gtkrover.gresource.xml"
 			DEPENDS GtkRover/gtkrover.gresource.xml FsRover/help.md
+				GtkRover/io.github.a1ive.FsRover.png
 			VERBATIM)
 
 		add_executable(GtkRover
@@ -198,6 +212,8 @@ if(ROVER_GTK)
 		target_compile_definitions(GtkRover PRIVATE
 			GETTEXT_PACKAGE="fsrover"
 			ROVER_LOCALEDIR="${CMAKE_INSTALL_FULL_LOCALEDIR}"
+			ROVER_LOCALEDIR_REL="${GTKROVER_LOCALEDIR_REL}"
+			ROVER_DATADIR_REL="${GTKROVER_DATADIR_REL}"
 			GDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_12
 			GDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_12)
 		set_source_files_properties("${GTKROVER_RESOURCES}" PROPERTIES COMPILE_OPTIONS -w)
@@ -213,6 +229,8 @@ if(ROVER_GTK)
 		install(TARGETS GtkRover RUNTIME DESTINATION bin)
 		install(FILES GtkRover/io.github.a1ive.FsRover.desktop
 			DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+		install(FILES GtkRover/io.github.a1ive.FsRover.png
+			DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps")
 
 		# Translations: po/<lang>.po -> locale/<lang>/LC_MESSAGES/fsrover.mo next
 		# to the binary (found there when run uninstalled) and installed.

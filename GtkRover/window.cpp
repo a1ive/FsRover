@@ -2276,7 +2276,7 @@ build_window (GtkApplication *app)
 	S.app = app;
 	S.window = GTK_WINDOW (window);
 	gtk_window_set_title (S.window, "FsRover");
-	gtk_window_set_icon_name (S.window, "drive-harddisk");
+	gtk_window_set_icon_name (S.window, "io.github.a1ive.FsRover");
 	gtk_window_set_default_size (S.window, 1100, 700);
 	g_action_map_add_action_entries (G_ACTION_MAP (window), window_actions,
 		G_N_ELEMENTS (window_actions), nullptr);

@@ -17,7 +17,9 @@ permissions:
 jobs:
   build:
     name: Build Linux x64
-    runs-on: ubuntu-latest
+    # The AppImage needs a glibc at least as new as the build host's;
+    # 24.04 is the oldest Ubuntu with GTK >= 4.12, so pin it.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Check out repository
@@ -29,7 +31,11 @@ jobs:
           sudo apt-get install --no-install-recommends --yes \
             cmake \
             g++ \
+            gettext \
             libfuse3-dev \
+            libgtk-4-dev \
+            libmagic-dev \
+            librsvg2-common \
             pkg-config
 
       - name: Set up Python
@@ -38,16 +44,40 @@ jobs:
           python-version: '3.12'
 
       - name: Configure
-        run: cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=/usr -DROVER_GTK_REQUIRED=ON
 
       - name: Build
         run: cmake --build build/linux --parallel
 
       - name: Smoke test
-        run: build/linux/LinuxRover --help
+        run: |
+          build/linux/LinuxRover --help
+          build/linux/GtkRover --help
 
       - name: Product regression
         run: ctest --test-dir build/linux --verbose
+
+      - name: Build AppImage
+        env:
+          LINUXDEPLOY_OUTPUT_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
+        run: sh scripts/build-appimage.sh build/linux build/appimage
+
+      - name: Smoke test AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: |
+          for image in build/appimage/*.AppImage; do
+            "$image" --help
+          done
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: FsRover-linux-x86_64-AppImage
+          path: build/appimage/*.AppImage
+          if-no-files-found: error
 
       - name: Upload failed product regression
         if: failure()

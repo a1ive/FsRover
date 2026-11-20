@@ -91,6 +91,18 @@ GtkRover never needs to run as root. **Access Physical Disks** asks udisks2 (or,
 where it is missing, `pkexec`) to open the disks read-only and hands only the
 descriptors to the program.
 
+To package GtkRover as an AppImage, configure with
+`-DROVER_GTK_REQUIRED=ON`, build, and run the packaging script; it fetches
+linuxdeploy and its GTK plugin. The image runs on distributions whose glibc is
+at least as new as the build host's (Ubuntu 24.04 in CI); FUSE mounts still use
+the host's `fusermount3`.
+
+```sh
+cmake -S . -B build/linux -DCMAKE_BUILD_TYPE=Release -DROVER_GTK_REQUIRED=ON
+cmake --build build/linux --parallel
+sh scripts/build-appimage.sh build/linux build/appimage
+```
+
 ## Credits
 
 - [GNU GRUB](https://www.gnu.org/software/grub/)

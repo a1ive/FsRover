@@ -90,6 +90,10 @@ std::string format_size (unsigned long long size);
 std::string format_exact (unsigned long long size);
 std::string format_time (long long seconds);
 
+/* main.cpp: <directory of the running binary>/<rel>; empty when
+   /proc/self/exe cannot be read.  Any thread.  */
+std::string exe_relative (const char *rel);
+
 void set_status (const std::string &text);
 void show_error (const std::string &title, const std::string &detail);
 void copy_text (const std::string &text);

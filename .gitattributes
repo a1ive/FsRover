@@ -1,3 +1,4 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 GtkRover/*.desktop text eol=lf
+*.sh text eol=lf
