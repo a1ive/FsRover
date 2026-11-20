@@ -41,32 +41,80 @@ constexpr int GAME_W = 320;
 constexpr int GAME_H = 180;
 constexpr int GROUND_Y = 145;
 constexpr int ROVER_X = 48;
-constexpr double METRES_PER_SECOND = 6.0;
+/* The rover speeds up linearly over the first SPEED_RAMP_METRES.  */
+constexpr double BASE_METRES_PER_SECOND = 6.0;
+constexpr double MAX_METRES_PER_SECOND = 10.0;
+constexpr double SPEED_RAMP_METRES = 4000.0;
 constexpr double PIXELS_PER_METRE = 24.0;
 constexpr double JUMP_VELOCITY = 205.0;
 constexpr double JUMP_GRAVITY = 330.0;
 constexpr double FAST_FALL_GRAVITY = 850.0;
+/* Releasing the jump key while rising caps the upward speed: a tap
+   still clears a rock (about 18 px apex from the ground) and holding
+   gives the full 64 px arc.  A press up to JUMP_BUFFER_SECONDS before
+   touchdown is kept and fires on landing.  */
+constexpr double JUMP_CUT_VELOCITY = 110.0;
+constexpr double JUMP_BUFFER_SECONDS = 0.12;
 constexpr int SATELLITE_HEIGHT_ABOVE_GROUND = 65;
 constexpr int INGENUITY_HEIGHT_ABOVE_GROUND = 40;
+constexpr int DUST_DEVIL_HEIGHT = 40;
 constexpr int UFO_MIN_HEIGHT_ABOVE_GROUND = 5;
 constexpr int UFO_MAX_HEIGHT_ABOVE_GROUND = 80;
 
-constexpr unsigned ROCK_SPAWN_PERCENT = 45;
-constexpr unsigned TRENCH_SPAWN_PERCENT = 45;
+constexpr unsigned ROCK_SPAWN_PERCENT = 42;
+constexpr unsigned TRENCH_SPAWN_PERCENT = 41;
 constexpr unsigned SATELLITE_SPAWN_PERCENT = 9;
+constexpr unsigned SAMPLE_SPAWN_PERCENT = 5;
+constexpr unsigned DUST_DEVIL_SPAWN_PERCENT = 2;
 constexpr unsigned UFO_SPAWN_PERCENT = 1;
 constexpr unsigned RANDOM_SPAWN_PERCENT_TOTAL = 100;
 constexpr double ROCK_SPEED_METRES_PER_SECOND = 0.0;
 constexpr double TRENCH_SPEED_METRES_PER_SECOND = 0.0;
 constexpr double SATELLITE_SPEED_METRES_PER_SECOND = -4.0;
 constexpr double UFO_SPEED_METRES_PER_SECOND = 2.0;
+constexpr double DUST_DEVIL_SPEED_METRES_PER_SECOND = -1.0;
 constexpr double ACTIVE_ROVER_SPEED_METRES_PER_SECOND = 1.0;
 constexpr double FIRST_RANDOM_OBSTACLE_METRES = 22.0;
-constexpr double RANDOM_OBSTACLE_MIN_SPACING_METRES = 6.0;
-constexpr double RANDOM_OBSTACLE_MAX_SPACING_METRES = 16.0;
+constexpr double LOOKAHEAD_METRES = (GAME_W - ROVER_X) / PIXELS_PER_METRE + 3.0;
+
+/* Random obstacles are spaced by the time at which each one reaches
+   the rover, not by where it lies: satellites and UFOs move on their
+   own and would otherwise drift onto a neighbour, and a metre spacing
+   would shrink in time as the rover speeds up.  The largest gap
+   narrows as the speed ramps up; the smallest one never does.  */
+constexpr double OBSTACLE_MIN_GAP_SECONDS = 1.4;
+constexpr double OBSTACLE_MAX_GAP_START_SECONDS = 2.6;
+constexpr double OBSTACLE_MAX_GAP_END_SECONDS = 1.8;
 
 static_assert (ROCK_SPAWN_PERCENT + TRENCH_SPAWN_PERCENT
-	+ SATELLITE_SPAWN_PERCENT + UFO_SPAWN_PERCENT == RANDOM_SPAWN_PERCENT_TOTAL);
+	+ SATELLITE_SPAWN_PERCENT + SAMPLE_SPAWN_PERCENT + DUST_DEVIL_SPAWN_PERCENT + UFO_SPAWN_PERCENT
+	== RANDOM_SPAWN_PERCENT_TOTAL);
+/* Solvability: any full jump over one obstacle lands before the next
+   one must be jumped, with time to react, so neighbours never demand
+   overlapping jumps and no gap needs the fast fall.  The air time is
+   1.24 s; the hitbox lead times differ by under 0.05 s between kinds.  */
+static_assert (OBSTACLE_MIN_GAP_SECONDS >= 2.0 * JUMP_VELOCITY / JUMP_GRAVITY + 0.15);
+static_assert (OBSTACLE_MIN_GAP_SECONDS <= OBSTACLE_MAX_GAP_END_SECONDS
+	&& OBSTACLE_MAX_GAP_END_SECONDS <= OBSTACLE_MAX_GAP_START_SECONDS);
+/* Now and then a satellite passes over the rover just after it clears a
+   rock.  Rover top = lift + 12 px; the satellite's underside sways from
+   63 to 67 px, so the rover must stay under about 51 px.  Arriving
+   CEILING_SATELLITE_DELAY_SECONDS after the rock puts the satellite
+   where a full jump at the usual timing is near its apex; only a jump
+   pressed some 0.65 s or more early has already come down.  The lowest
+   hop still clears the 12 px rock, and any tap released within about
+   0.19 s peaks under 51 px.  */
+constexpr double CEILING_ROCK_CHANCE = 0.15;
+constexpr double CEILING_MIN_METRES = 200.0;
+constexpr double CEILING_SATELLITE_DELAY_SECONDS = 0.3;
+static_assert (CEILING_SATELLITE_DELAY_SECONDS + 0.2 < OBSTACLE_MIN_GAP_SECONDS);
+constexpr double JUMP_CUT_APEX = JUMP_CUT_VELOCITY * JUMP_CUT_VELOCITY / (2.0 * JUMP_GRAVITY);
+static_assert (JUMP_CUT_APEX > 12.0 + 4.0);
+static_assert (JUMP_CUT_APEX + 12.0 < SATELLITE_HEIGHT_ABOVE_GROUND - 2.0);
+
+/* Every random obstacle must close in on the rover.  */
+static_assert (BASE_METRES_PER_SECOND > UFO_SPEED_METRES_PER_SECOND
+	&& BASE_METRES_PER_SECOND > ACTIVE_ROVER_SPEED_METRES_PER_SECOND);
 
 constexpr double BATTERY_CAPACITY = 1000.0;
 constexpr double SOLAR_CLEAR_CHARGE_PER_SECOND = 5.0;
@@ -75,9 +123,29 @@ constexpr double SOLAR_SNOW_CHARGE_PER_SECOND = 1.0;
 constexpr double SYSTEM_DRAIN_PER_SECOND = 1.0;
 constexpr double HEATER_DRAIN_PER_SECOND = 1.0;
 constexpr double STORM_DRAG_DRAIN_PER_SECOND = 4.0;
+constexpr double STORM_NIGHT_DRAIN_PER_SECOND = 10.0;
+/* Dust settling on the solar panels scales every daytime charge rate.
+   Only driving (not jumping) through a dust devil blows them clean,
+   as happened to Spirit and Opportunity.  */
+constexpr double PANEL_DUST_HAZE_PER_SECOND = 0.002;
+constexpr double PANEL_DUST_STORM_PER_SECOND = 0.01;
+constexpr double PANEL_MIN_EFFICIENCY = 0.3;
+/* Science: hematite spherules ("blueberries", after Opportunity) are
+   picked up by driving over them into a small store.  Files reach Earth
+   only when the rover passes under an orbiter after dark, at a battery
+   cost per file; whatever is still on board at a crash is lost.  */
+constexpr int DATA_CAPACITY = 4;
+constexpr double UPLINK_BATTERY_COST_PER_FILE = 20.0;
+constexpr double UPLINK_LINK_SECONDS = 0.6;
+constexpr double NOTICE_SECONDS = 1.5;
+constexpr double LANDING_SQUASH_SECONDS = 0.08;
+constexpr double DUST_PARTICLE_SECONDS = 0.35;
+constexpr double DUST_PARTICLE_GRAVITY = 160.0;
 constexpr double TRENCH_BATTERY_COST = 10.0;
 constexpr double UFO_BATTERY_CHARGE = 100.0;
 constexpr double JUMP_BATTERY_COST = 1.0;
+constexpr double BATTERY_FLASH_SECONDS = 0.5;
+constexpr double RETRY_LOCK_SECONDS = 0.6;
 
 static_assert (UFO_MIN_HEIGHT_ABOVE_GROUND <= UFO_MAX_HEIGHT_ABOVE_GROUND);
 
@@ -177,6 +245,7 @@ constexpr glyph k_font[] =
 	{ '%', { 17, 2, 4, 8, 16, 17, 0 } },
 	{ '.', { 0, 0, 0, 0, 0, 12, 12 } },
 	{ '-', { 0, 0, 0, 31, 0, 0, 0 } },
+	{ '+', { 0, 4, 4, 31, 4, 4, 0 } },
 	{ ':', { 0, 12, 12, 0, 12, 12, 0 } },
 	{ '/', { 1, 2, 2, 4, 8, 8, 16 } },
 	{ '?', { 14, 17, 1, 2, 4, 0, 4 } }
@@ -232,15 +301,15 @@ constexpr const char *k_rover_0[] =
 	"..O....BBBBBBBBBBBBBBBB......",
 	"BBBBBBBBBBBBBBBBBBBBBBBBBB...",
 	".....GGGGGGGGGGGGGGGGGG......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	".....YYOOYYYYYYYYYYYYYYY......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	".......D....D....D............",
-	"....DDDDD.DDDDD.DDDDD.........",
-	"...DWWWWWDWWWWWDWWWWWD........",
-	"...DWCCWWDWCCWWDWCCWWD........",
-	"...DWWWWWDWWWWWDWWWWWD........",
-	"....DDDDD.DDDDD.DDDDD........."
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	".....YYOOYYYYYYYYYYYYYYY.....",
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	".......D....D....D...........",
+	"....DDDDD.DDDDD.DDDDD........",
+	"...DWWWWWDWWWWWDWWWWWD.......",
+	"...DWCCWWDWCCWWDWCCWWD.......",
+	"...DWWWWWDWWWWWDWWWWWD.......",
+	"....DDDDD.DDDDD.DDDDD........"
 };
 
 constexpr const char *k_rover_1[] =
@@ -252,15 +321,15 @@ constexpr const char *k_rover_1[] =
 	"..O....BBBBBBBBBBBBBBBB......",
 	"BBBBBBBBBBBBBBBBBBBBBBBBBB...",
 	".....GGGGGGGGGGGGGGGGGG......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	".....YYOOYYYYYYYYYYYYYYY......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	".......D....D....D............",
-	"....DDDDD.DDDDD.DDDDD.........",
-	"...DWWWWWDWWWWWDWWWWWD........",
-	"...DWCWWWDWCWWWDWCWWWD........",
-	"...DWWWWWDWWWWWDWWWWWD........",
-	"....DDDDD.DDDDD.DDDDD........."
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	".....YYOOYYYYYYYYYYYYYYY.....",
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	".......D....D....D...........",
+	"....DDDDD.DDDDD.DDDDD........",
+	"...DWWWWWDWWWWWDWWWWWD.......",
+	"...DWCWWWDWCWWWDWCWWWD.......",
+	"...DWWWWWDWWWWWDWWWWWD.......",
+	"....DDDDD.DDDDD.DDDDD........"
 };
 
 constexpr const char *k_rover_crouch[] =
@@ -270,13 +339,13 @@ constexpr const char *k_rover_crouch[] =
 	"..O....BBBBBBBBBBBBBBBB......",
 	"BBBBBBBBBBBBBBBBBBBBBBBBBB...",
 	".....GGGGGGGGGGGGGGGGGG......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	".....YYOOYYYYYYYYYYYYYYY......",
-	".....YYYYYYYYYYYYYYYYYYY......",
-	"....DDDDD.DDDDD.DDDDD.........",
-	"...DWWWWWDWWWWWDWWWWWD........",
-	"...DWCCWWDWCCWWDWCCWWD........",
-	"....DDDDD.DDDDD.DDDDD........."
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	".....YYOOYYYYYYYYYYYYYYY.....",
+	".....YYYYYYYYYYYYYYYYYYY.....",
+	"....DDDDD.DDDDD.DDDDD........",
+	"...DWWWWWDWWWWWDWWWWWD.......",
+	"...DWCCWWDWCCWWDWCCWWD.......",
+	"....DDDDD.DDDDD.DDDDD........"
 };
 
 constexpr const char *k_ufo[] =
@@ -287,7 +356,7 @@ constexpr const char *k_ufo[] =
 	"..UUUUUUUUUUUUUU..",
 	"UUUUUUUUUUUUUUUUUU",
 	"..u..u..u..u..u...",
-	".....UUUUUUUU......"
+	".....UUUUUUUU....."
 };
 
 constexpr const char *k_satellite[] =
@@ -315,7 +384,7 @@ constexpr const char *k_other_rover[] =
 	".DWWD.DWWD..DWWD.DW",
 	"DWWWWDWWWWDDWWWWDWW",
 	".DWWD.DWWD..DWWD.DW",
-	"..DD...DD....DD...D."
+	"..DD...DD....DD...D"
 };
 
 constexpr const char *k_mars3[] =
@@ -346,6 +415,40 @@ constexpr const char *k_helicopter[] =
 	".......DD..........",
 	".....DDDDDD........"
 };
+
+template <size_t N>
+constexpr int
+sprite_width (const char *const (&rows)[N])
+{
+	int width = 0;
+	while (rows[0][width] != 0)
+		width++;
+	return width;
+}
+
+template <size_t N>
+constexpr bool
+sprite_is_rectangular (const char *const (&rows)[N])
+{
+	for (size_t y = 0; y < N; y++)
+	{
+		int width = 0;
+		while (rows[y][width] != 0)
+			width++;
+		if (width != sprite_width (rows))
+			return false;
+	}
+	return true;
+}
+
+static_assert (sprite_is_rectangular (k_rover_0));
+static_assert (sprite_is_rectangular (k_rover_1));
+static_assert (sprite_is_rectangular (k_rover_crouch));
+static_assert (sprite_is_rectangular (k_ufo));
+static_assert (sprite_is_rectangular (k_satellite));
+static_assert (sprite_is_rectangular (k_other_rover));
+static_assert (sprite_is_rectangular (k_mars3));
+static_assert (sprite_is_rectangular (k_helicopter));
 
 pixel_t
 sprite_color (char p, pixel_t accent)
@@ -397,6 +500,8 @@ enum class entity_kind
 	trench,
 	ufo,
 	satellite,
+	sample,
+	dust_devil,
 	mars2,
 	mars3,
 	sojourner,
@@ -424,6 +529,15 @@ struct entity
 	bool rewarded;
 	double phase;
 	int height_above_ground;
+};
+
+struct particle
+{
+	double x;
+	double y;
+	double vx;
+	double vy;
+	double life;
 };
 
 struct special_info
@@ -466,6 +580,7 @@ struct game_state
 {
 	canvas screen;
 	std::vector<entity> entities;
+	std::vector<particle> particles;
 	std::array<bool, std::size (k_specials)> special_spawned = {};
 	std::uint32_t random = 1;
 	double elapsed = 0.0;
@@ -473,25 +588,37 @@ struct game_state
 	double battery = BATTERY_CAPACITY;
 	double jump_height = 0.0;
 	double jump_velocity = 0.0;
-	double next_spawn = FIRST_RANDOM_OBSTACLE_METRES;
+	double jump_buffer = 0.0;
+	double land_squash = 0.0;
+	double panel_efficiency = 1.0;
+	double notice_left = 0.0;
+	char notice[32] = {};
+	double rover_flash_left = 0.0;
+	char rover_flash[16] = {};
+	pixel_t rover_flash_color = 0;
+	int files = 0;
+	int files_sent = 0;
+	double uplink_left = 0.0;
+	bool uplink_hint_seen = false;
+	double next_arrival = 0.0;
+	entity_kind next_kind = entity_kind::rock;
+	bool next_ceiling = false;
+	bool ceiling_seen = false;
 	double storm_pending = -1.0;
 	double storm_left = 0.0;
 	double storm_cooldown = 0.0;
-	double trench_flash = 0.0;
+	double retry_lock = 0.0;
 	int weather_period = -1;
 	weather current_weather = weather::clear;
 	failure stopped = failure::none;
 	bool down = false;
+	bool jump_held = false;
 	bool started = false;
 	bool active = true;
+	bool dirty = false;
 	UINT dpi = 96;
 	LARGE_INTEGER counter = {};
 	LARGE_INTEGER frequency = {};
-	HDC back_dc = nullptr;
-	HBITMAP back_bitmap = nullptr;
-	HGDIOBJ back_old = nullptr;
-	int back_width = 0;
-	int back_height = 0;
 };
 
 std::uint32_t
@@ -527,6 +654,46 @@ make_entity (game_state &g, entity_kind kind, double position)
 }
 
 void
+show_notice (game_state &g, const char *text)
+{
+	strcpy_s (g.notice, text);
+	g.notice_left = NOTICE_SECONDS;
+}
+
+bool
+is_daylight (double elapsed)
+{
+	return std::fmod (elapsed, 60.0) < 30.0;
+}
+
+/* Dust devils are raised by a sun-warmed surface, so one due to reach
+   the rover after dark is rerolled.  */
+entity_kind
+random_obstacle_kind (game_state &g, double arrival)
+{
+	for (;;)
+	{
+		unsigned roll = random_u32 (g) % RANDOM_SPAWN_PERCENT_TOTAL;
+		if (roll < ROCK_SPAWN_PERCENT)
+			return entity_kind::rock;
+		roll -= ROCK_SPAWN_PERCENT;
+		if (roll < TRENCH_SPAWN_PERCENT)
+			return entity_kind::trench;
+		roll -= TRENCH_SPAWN_PERCENT;
+		if (roll < SATELLITE_SPAWN_PERCENT)
+			return entity_kind::satellite;
+		roll -= SATELLITE_SPAWN_PERCENT;
+		if (roll < SAMPLE_SPAWN_PERCENT)
+			return entity_kind::sample;
+		roll -= SAMPLE_SPAWN_PERCENT;
+		if (roll >= DUST_DEVIL_SPAWN_PERCENT)
+			return entity_kind::ufo;
+		if (is_daylight (arrival))
+			return entity_kind::dust_devil;
+	}
+}
+
+void
 choose_weather (game_state &g)
 {
 	double roll = random_unit (g);
@@ -550,68 +717,35 @@ void
 reset_game (game_state &g)
 {
 	g.entities.clear ();
+	g.particles.clear ();
 	g.special_spawned.fill (false);
 	g.elapsed = 0.0;
 	g.distance = 0.0;
 	g.battery = BATTERY_CAPACITY;
 	g.jump_height = 0.0;
 	g.jump_velocity = 0.0;
-	g.next_spawn = FIRST_RANDOM_OBSTACLE_METRES;
+	g.jump_buffer = 0.0;
+	g.land_squash = 0.0;
+	g.jump_held = false;
+	g.next_ceiling = false;
+	g.ceiling_seen = false;
+	g.panel_efficiency = 1.0;
+	g.notice_left = 0.0;
+	g.rover_flash_left = 0.0;
+	g.files = 0;
+	g.files_sent = 0;
+	g.uplink_left = 0.0;
+	g.next_arrival = FIRST_RANDOM_OBSTACLE_METRES / BASE_METRES_PER_SECOND;
+	g.next_kind = random_obstacle_kind (g, g.next_arrival);
 	g.storm_pending = -1.0;
 	g.storm_left = 0.0;
 	g.storm_cooldown = 0.0;
-	g.trench_flash = 0.0;
+	g.retry_lock = 0.0;
 	g.weather_period = -1;
 	g.current_weather = weather::clear;
 	g.stopped = failure::none;
 	g.down = false;
 	QueryPerformanceCounter (&g.counter);
-}
-
-bool
-near_special (double position)
-{
-	for (const special_info &s : k_specials)
-		if (std::abs (position - s.position) < 5.0)
-			return true;
-	return false;
-}
-
-void
-spawn_entities (game_state &g)
-{
-	constexpr double lookahead = (GAME_W - ROVER_X) / PIXELS_PER_METRE + 3.0;
-
-	for (size_t i = 0; i < std::size (k_specials); i++)
-	{
-		const special_info &s = k_specials[i];
-		if (!g.special_spawned[i] && g.distance + lookahead >= s.position)
-		{
-			g.entities.push_back (make_entity (g, s.kind, s.position));
-			g.special_spawned[i] = true;
-		}
-	}
-
-	while (g.distance + lookahead >= g.next_spawn)
-	{
-		if (!near_special (g.next_spawn))
-		{
-			unsigned roll = random_u32 (g) % RANDOM_SPAWN_PERCENT_TOTAL;
-			entity_kind kind;
-			if (roll < ROCK_SPAWN_PERCENT)
-				kind = entity_kind::rock;
-			else if (roll < ROCK_SPAWN_PERCENT + TRENCH_SPAWN_PERCENT)
-				kind = entity_kind::trench;
-			else if (roll < ROCK_SPAWN_PERCENT + TRENCH_SPAWN_PERCENT
-			    + SATELLITE_SPAWN_PERCENT)
-				kind = entity_kind::satellite;
-			else
-				kind = entity_kind::ufo;
-			g.entities.push_back (make_entity (g, kind, g.next_spawn));
-		}
-		g.next_spawn += RANDOM_OBSTACLE_MIN_SPACING_METRES + random_unit (g)
-			* (RANDOM_OBSTACLE_MAX_SPACING_METRES - RANDOM_OBSTACLE_MIN_SPACING_METRES);
-	}
 }
 
 const special_info *
@@ -632,9 +766,135 @@ entity_speed (entity_kind kind)
 	case entity_kind::trench: return TRENCH_SPEED_METRES_PER_SECOND;
 	case entity_kind::satellite: return SATELLITE_SPEED_METRES_PER_SECOND;
 	case entity_kind::ufo: return UFO_SPEED_METRES_PER_SECOND;
+	case entity_kind::dust_devil: return DUST_DEVIL_SPEED_METRES_PER_SECOND;
 	default:
 		const special_info *special = special_for (kind);
 		return special && special->moving ? ACTIVE_ROVER_SPEED_METRES_PER_SECOND : 0.0;
+	}
+}
+
+/* 0 at the start, 1 once the speed ramp is complete.  */
+double
+difficulty (const game_state &g)
+{
+	return (std::min) (1.0, g.distance / SPEED_RAMP_METRES);
+}
+
+double
+rover_speed (const game_state &g)
+{
+	return BASE_METRES_PER_SECOND
+		+ (MAX_METRES_PER_SECOND - BASE_METRES_PER_SECOND) * difficulty (g);
+}
+
+/* Puff dust from under the wheels.  It is thrown back at half the
+   ground's scroll speed, so it trails the rover.  */
+void
+kick_dust (game_state &g, int count)
+{
+	double drift = -rover_speed (g) * PIXELS_PER_METRE * 0.5;
+	for (int i = 0; i < count; i++)
+	{
+		particle p;
+		p.x = ROVER_X + 2 + random_unit (g) * 22.0;
+		p.y = GROUND_Y - 2;
+		p.vx = drift + (random_unit (g) - 0.5) * 60.0;
+		p.vy = -(35.0 + random_unit (g) * 45.0);
+		p.life = DUST_PARTICLE_SECONDS * (0.6 + 0.4 * random_unit (g));
+		g.particles.push_back (p);
+	}
+}
+
+void
+update_particles (game_state &g, double dt)
+{
+	for (particle &p : g.particles)
+	{
+		p.vy += DUST_PARTICLE_GRAVITY * dt;
+		p.x += p.vx * dt;
+		p.y += p.vy * dt;
+		p.life -= dt;
+	}
+	g.particles.erase (std::remove_if (g.particles.begin (), g.particles.end (),
+		[] (const particle &p) { return p.life <= 0.0 || p.y >= GROUND_Y; }),
+		g.particles.end ());
+}
+
+/* Where the rover will meet a landmark.  A driving rover starts moving
+   when it is spawned at the lookahead edge, so it is met beyond its
+   landing site.  */
+double
+special_meeting_distance (const special_info &s, double speed)
+{
+	double own = s.moving ? ACTIVE_ROVER_SPEED_METRES_PER_SECOND : 0.0;
+	return s.position + LOOKAHEAD_METRES * own / (speed - own);
+}
+
+/* Keep a full obstacle gap clear around every landmark, which has to
+   be jumped like a rock.  */
+bool
+near_special (double distance, double speed)
+{
+	for (const special_info &s : k_specials)
+		if (std::abs (distance - special_meeting_distance (s, speed))
+		    < speed * OBSTACLE_MIN_GAP_SECONDS)
+			return true;
+	return false;
+}
+
+void
+schedule_obstacle (game_state &g, double arrival)
+{
+	double max_gap = OBSTACLE_MAX_GAP_START_SECONDS
+		+ (OBSTACLE_MAX_GAP_END_SECONDS - OBSTACLE_MAX_GAP_START_SECONDS) * difficulty (g);
+	g.next_arrival = arrival + OBSTACLE_MIN_GAP_SECONDS
+		+ random_unit (g) * (max_gap - OBSTACLE_MIN_GAP_SECONDS);
+	g.next_kind = random_obstacle_kind (g, g.next_arrival);
+	g.next_ceiling = g.next_kind == entity_kind::rock && g.distance >= CEILING_MIN_METRES
+		&& random_unit (g) < CEILING_ROCK_CHANCE;
+}
+
+void
+spawn_entities (game_state &g)
+{
+	for (size_t i = 0; i < std::size (k_specials); i++)
+	{
+		const special_info &s = k_specials[i];
+		if (!g.special_spawned[i] && g.distance + LOOKAHEAD_METRES >= s.position)
+		{
+			g.entities.push_back (make_entity (g, s.kind, s.position));
+			g.special_spawned[i] = true;
+		}
+	}
+
+	/* Each obstacle enters at the lookahead edge just in time to reach
+	   the rover at its scheduled moment.  The speed ramp is slow enough
+	   that the speed can be taken as constant over that lead time.  */
+	double speed = rover_speed (g);
+	for (;;)
+	{
+		double closing = speed - entity_speed (g.next_kind);
+		double lead = g.next_arrival - g.elapsed;
+		if (lead * closing > LOOKAHEAD_METRES)
+			break;
+		if (!near_special (g.distance + speed * lead, speed))
+		{
+			g.entities.push_back (make_entity (g, g.next_kind, g.distance + closing * lead));
+			/* The satellite enters further out, as it closes faster, and
+			   meets the rover just after the rock.  */
+			if (g.next_ceiling)
+			{
+				double satellite_closing = speed - SATELLITE_SPEED_METRES_PER_SECOND;
+				g.entities.push_back (make_entity (g, entity_kind::satellite, g.distance
+					+ satellite_closing * (lead + CEILING_SATELLITE_DELAY_SECONDS)));
+				if (!g.ceiling_seen)
+				{
+					g.ceiling_seen = true;
+					show_notice (g, "LOW ORBIT - TAP TO HOP");
+				}
+			}
+		}
+		schedule_obstacle (g, g.next_arrival);
 	}
 }
 
@@ -645,11 +905,14 @@ entity_width (entity_kind kind)
 	{
 	case entity_kind::rock: return 20;
 	case entity_kind::trench: return 28;
-	case entity_kind::ufo: return 20;
-	case entity_kind::satellite: return 19;
-	case entity_kind::mars3: return 14;
-	case entity_kind::ingenuity: return 21;
-	default: return 22;
+	case entity_kind::dust_devil: return 20;
+	case entity_kind::sample: return 9;
+	case entity_kind::ufo: return sprite_width (k_ufo);
+	case entity_kind::satellite: return sprite_width (k_satellite);
+	case entity_kind::mars2:
+	case entity_kind::mars3: return sprite_width (k_mars3);
+	case entity_kind::ingenuity: return sprite_width (k_helicopter);
+	default: return sprite_width (k_other_rover);
 	}
 }
 
@@ -675,12 +938,15 @@ entity_rect (const entity &e, int x, int bob)
 	{
 	case entity_kind::rock: return { x + 2, GROUND_Y - 12, x + 18, GROUND_Y };
 	case entity_kind::trench: return { x, GROUND_Y - 1, x + 28, GROUND_Y + 2 };
+	case entity_kind::dust_devil: return { x + 6, GROUND_Y - DUST_DEVIL_HEIGHT, x + 14, GROUND_Y };
+	case entity_kind::sample: return { x, GROUND_Y - 4, x + 9, GROUND_Y };
 	case entity_kind::ufo: return { x + 3, air_obstacle_bottom (e) - 7 + bob,
 			x + 17, air_obstacle_bottom (e) + bob };
 	case entity_kind::satellite: return { x + 3, air_obstacle_bottom (e) - 9 + bob,
 			x + 16, air_obstacle_bottom (e) + bob };
 	case entity_kind::ingenuity: return { x + 4, air_obstacle_bottom (e) - 10 + bob,
 			x + 17, air_obstacle_bottom (e) + bob };
+	case entity_kind::mars2:
 	case entity_kind::mars3: return { x + 2, GROUND_Y - 11, x + 12, GROUND_Y };
 	case entity_kind::curiosity:
 	case entity_kind::perseverance:
@@ -692,16 +958,90 @@ entity_rect (const entity &e, int x, int bob)
 void
 end_game (game_state &g, failure why)
 {
-	if (g.stopped == failure::none)
-		g.stopped = why;
+	if (g.stopped != failure::none)
+		return;
+	g.stopped = why;
+	/* A jump pressed at the moment of impact must not dismiss the
+	   game-over screen before it has been seen.  */
+	g.retry_lock = RETRY_LOCK_SECONDS;
+}
+
+/* A short label floating above the rover.  */
+void
+flash_rover (game_state &g, const char *text, pixel_t color)
+{
+	strcpy_s (g.rover_flash, text);
+	g.rover_flash_color = color;
+	g.rover_flash_left = BATTERY_FLASH_SECONDS;
+}
+
+/* Shown in percent, the unit of the HUD gauge.  */
+void
+flash_battery_change (game_state &g, double delta)
+{
+	char text[16];
+	sprintf_s (text, "%+.15g%%", delta * 100.0 / BATTERY_CAPACITY);
+	flash_rover (g, text, delta < 0.0 ? rgb (255, 213, 90) : rgb (130, 230, 150));
+}
+
+/* The orbiter's pass is the uplink window: everything on board is sent,
+   each file costing battery.  */
+void
+uplink_files (game_state &g)
+{
+	char text[32];
+	sprintf_s (text, "UPLINK %d FILE%s", g.files, g.files == 1 ? "" : "S");
+	show_notice (g, text);
+	g.battery = (std::max) (0.0, g.battery - UPLINK_BATTERY_COST_PER_FILE * g.files);
+	g.files_sent += g.files;
+	g.files = 0;
+	g.uplink_left = UPLINK_LINK_SECONDS;
+}
+
+void
+collect_sample (game_state &g, entity &e)
+{
+	if (g.files >= DATA_CAPACITY)
+	{
+		show_notice (g, "DISK FULL");
+		return;
+	}
+	e.rewarded = true;
+	g.files++;
+	flash_rover (g, "+DATA", rgb (150, 180, 235));
+	if (!g.uplink_hint_seen)
+	{
+		g.uplink_hint_seen = true;
+		show_notice (g, "UPLINK AT NIGHT UNDER ORBITERS");
+	}
+}
+
+
+/* A buffered press whose key is already up fires as a short hop.  */
+void
+start_jump (game_state &g)
+{
+	g.jump_buffer = 0.0;
+	g.battery = (std::max) (0.0, g.battery - JUMP_BATTERY_COST);
+	if (g.battery <= 0.0)
+	{
+		end_game (g, failure::power);
+		return;
+	}
+	g.down = false;
+	g.jump_velocity = g.jump_held ? JUMP_VELOCITY : JUMP_CUT_VELOCITY;
+	kick_dust (g, 3);
 }
 
 void
 update_entities (game_state &g, double dt)
 {
+	/* Round the lift exactly as draw_rover() does, so the hitbox never
+	   sits a pixel away from the sprite.  */
+	int lift = (int) std::lround (g.jump_height);
 	int rover_h = g.down && g.jump_height <= 0.0 ? 9 : 13;
-	rect_i rover = { ROVER_X + 6, GROUND_Y - rover_h - (int) g.jump_height + 1,
-		ROVER_X + 24, GROUND_Y - (int) g.jump_height };
+	rect_i rover = { ROVER_X + 6, GROUND_Y - rover_h - lift + 1,
+		ROVER_X + 24, GROUND_Y - lift };
 
 	for (entity &e : g.entities)
 	{
@@ -719,10 +1059,44 @@ update_entities (game_state &g, double dt)
 				if (g.jump_height < 5.0)
 				{
 					g.battery = (std::max) (0.0, g.battery - TRENCH_BATTERY_COST);
-					g.trench_flash = 0.35;
+					flash_battery_change (g, -TRENCH_BATTERY_COST);
 				}
 			}
 			continue;
+		}
+
+		/* Dust devils are harmless; they clean the panels only for a
+		   rover that drives through instead of jumping.  */
+		if (e.kind == entity_kind::dust_devil)
+		{
+			if (!e.handled && g.jump_height < 3.0 && intersects (rover, obstacle))
+			{
+				e.handled = true;
+				g.panel_efficiency = 1.0;
+				show_notice (g, "PANELS CLEAN");
+			}
+			continue;
+		}
+
+		/* Samples are picked up only by driving over them.  */
+		if (e.kind == entity_kind::sample)
+		{
+			if (!e.handled && g.jump_height < 3.0 && intersects (rover, obstacle))
+			{
+				e.handled = true;
+				collect_sample (g, e);
+			}
+			continue;
+		}
+
+		/* An orbiter overhead after dark takes the files on board, at
+		   any height: touching it is fatal anyway.  */
+		if (e.kind == entity_kind::satellite && !e.rewarded && g.files > 0
+		    && !is_daylight (g.elapsed)
+		    && rover.right > obstacle.left && rover.left < obstacle.right)
+		{
+			e.rewarded = true;
+			uplink_files (g);
 		}
 
 		if (e.kind == entity_kind::ufo && !e.rewarded
@@ -731,6 +1105,7 @@ update_entities (game_state &g, double dt)
 		{
 			e.rewarded = true;
 			g.battery = (std::min) (BATTERY_CAPACITY, g.battery + UFO_BATTERY_CHARGE);
+			flash_battery_change (g, UFO_BATTERY_CHARGE);
 		}
 
 		if (intersects (rover, obstacle))
@@ -748,13 +1123,20 @@ void
 update_game (game_state &g, double dt)
 {
 	if (g.stopped != failure::none)
+	{
+		g.retry_lock = (std::max) (0.0, g.retry_lock - dt);
 		return;
+	}
 
 	g.elapsed += dt;
-	g.distance += METRES_PER_SECOND * dt;
-	g.trench_flash = (std::max) (0.0, g.trench_flash - dt);
+	g.distance += rover_speed (g) * dt;
+	g.rover_flash_left = (std::max) (0.0, g.rover_flash_left - dt);
+	g.notice_left = (std::max) (0.0, g.notice_left - dt);
+	g.uplink_left = (std::max) (0.0, g.uplink_left - dt);
+	g.land_squash = (std::max) (0.0, g.land_squash - dt);
 
-	if (g.down && g.jump_height > 0.0)
+	bool airborne = g.jump_height > 0.0;
+	if (g.down && airborne)
 		g.jump_velocity -= FAST_FALL_GRAVITY * dt;
 	g.jump_velocity -= JUMP_GRAVITY * dt;
 	g.jump_height += g.jump_velocity * dt;
@@ -762,6 +1144,19 @@ update_game (game_state &g, double dt)
 	{
 		g.jump_height = 0.0;
 		g.jump_velocity = 0.0;
+		if (airborne)
+		{
+			g.land_squash = LANDING_SQUASH_SECONDS;
+			kick_dust (g, 10);
+		}
+	}
+	update_particles (g, dt);
+	if (g.jump_buffer > 0.0)
+	{
+		if (g.jump_height <= 0.0)
+			start_jump (g);
+		else
+			g.jump_buffer = (std::max) (0.0, g.jump_buffer - dt);
 	}
 
 	int period = (int) (g.elapsed / 30.0);
@@ -792,21 +1187,28 @@ update_game (game_state &g, double dt)
 		}
 	}
 
-	double cycle = std::fmod (g.elapsed, 60.0);
-	bool daylight = cycle < 30.0;
+	double dust = g.storm_left > 0.0 ? PANEL_DUST_STORM_PER_SECOND
+		: (g.current_weather == weather::haze ? PANEL_DUST_HAZE_PER_SECOND : 0.0);
+	g.panel_efficiency = (std::max) (PANEL_MIN_EFFICIENCY, g.panel_efficiency - dust * dt);
+
+	bool daylight = is_daylight (g.elapsed);
 	double power = -SYSTEM_DRAIN_PER_SECOND;
 	if (!daylight)
 		power -= HEATER_DRAIN_PER_SECOND;
 	if (g.storm_left > 0.0)
+	{
 		power -= STORM_DRAG_DRAIN_PER_SECOND;
+		/* A storm after dark is the real threat: the heaters fight the
+		   wind chill on top of the drag, at 16 per second in all.  */
+		if (!daylight)
+			power -= STORM_NIGHT_DRAIN_PER_SECOND;
+	}
 	else if (daylight)
 	{
-		if (g.current_weather == weather::clear)
-			power += SOLAR_CLEAR_CHARGE_PER_SECOND;
-		else if (g.current_weather == weather::haze)
-			power += SOLAR_HAZE_CHARGE_PER_SECOND;
-		else
-			power += SOLAR_SNOW_CHARGE_PER_SECOND;
+		double solar = g.current_weather == weather::clear ? SOLAR_CLEAR_CHARGE_PER_SECOND
+			: (g.current_weather == weather::haze ? SOLAR_HAZE_CHARGE_PER_SECOND
+			: SOLAR_SNOW_CHARGE_PER_SECOND);
+		power += solar * g.panel_efficiency;
 	}
 	g.battery = std::clamp (g.battery + power * dt, 0.0, BATTERY_CAPACITY);
 	if (g.battery <= 0.0)
@@ -892,7 +1294,7 @@ draw_background (game_state &g)
 			: 8 + (int) std::lround (daylight_pos * 20.0);
 		int sy = cycle < 30.0 ? 77 - (int) (std::sin (daylight_pos * 3.141592654) * 55.0)
 			: 100 - (int) std::lround (daylight_pos * 23.0);
-		if (cycle >= 24.0 || cycle >= 54.0)
+		if (cycle >= 24.0)
 			draw_disc (g.screen, sx, sy, 11, rgb (91, 105, 113));
 		draw_disc (g.screen, sx, sy, 6, rgb (238, 188, 85));
 	}
@@ -970,6 +1372,69 @@ draw_rock_rise (canvas &c, int x)
 	c.rect (x + 10, GROUND_Y - 2, 3, 1, shade);
 }
 
+/* A translucent funnel, narrow at the ground and swaying as it widens,
+   with a dithered swirl that climbs over time.  */
+void
+draw_dust_devil (canvas &c, int x, double t)
+{
+	constexpr pixel_t dust = rgb (226, 176, 120);
+	int tick = (int) (t * 20.0);
+
+	for (int r = 0; r < DUST_DEVIL_HEIGHT; r++)
+	{
+		int y = GROUND_Y - 1 - r;
+		int half = 2 + r / 5;
+		int cx = x + 10 + (int) std::lround (std::sin (t * 4.0 + r * 0.15) * (1.0 + r / 12.0));
+		unsigned amount = (unsigned) (190 - r * 2);
+		for (int dx = -half; dx <= half; dx++)
+			if (((dx + r * 2 + tick) & 3) != 0)
+				c.blend (cx + dx, y, dust, amount);
+	}
+}
+
+/* Three hematite spherules with a glint, and a twinkle above so they
+   are spotted in time to decide against jumping.  */
+void
+draw_sample (canvas &c, int x, double t)
+{
+	constexpr pixel_t body = rgb (66, 74, 102);
+	constexpr pixel_t glint = rgb (176, 192, 226);
+	struct { int cx, cy; } balls[] = { { x + 2, GROUND_Y - 2 }, { x + 6, GROUND_Y - 2 },
+		{ x + 4, GROUND_Y - 5 } };
+
+	for (const auto &b : balls)
+	{
+		c.rect (b.cx - 1, b.cy - 1, 3, 3, body);
+		c.put (b.cx - 1, b.cy - 1, glint);
+	}
+	if (std::sin (t * 6.0) > 0.2)
+	{
+		constexpr pixel_t star = rgb (224, 236, 255);
+		int sy = GROUND_Y - 10;
+		c.put (x + 4, sy, star);
+		c.put (x + 3, sy, star);
+		c.put (x + 5, sy, star);
+		c.put (x + 4, sy - 1, star);
+		c.put (x + 4, sy + 1, star);
+	}
+}
+
+/* Dotted radio link from the rover's mast to an orbiter, fading out.  */
+void
+draw_uplink (game_state &g, int sat_x, int sat_y)
+{
+	int x0 = ROVER_X + 14;
+	int y0 = GROUND_Y - 16 - (int) std::lround (g.jump_height);
+	int n = (std::max) (std::abs (sat_x - x0), std::abs (sat_y - y0));
+	unsigned amount = (unsigned) (220.0 * g.uplink_left / UPLINK_LINK_SECONDS);
+	int phase = (int) (g.elapsed * 30.0);
+
+	for (int i = 0; i <= n; i++)
+		if (((i + phase) & 3) < 2)
+			g.screen.blend (x0 + (sat_x - x0) * i / (std::max) (n, 1),
+				y0 + (sat_y - y0) * i / (std::max) (n, 1), rgb (130, 204, 198), amount);
+}
+
 pixel_t
 special_accent (entity_kind kind)
 {
@@ -999,25 +1464,35 @@ draw_entity (game_state &g, const entity &e)
 	case entity_kind::trench:
 		draw_trench (g.screen, x);
 		break;
+	case entity_kind::dust_devil:
+		draw_dust_devil (g.screen, x, g.elapsed + e.phase);
+		break;
 	case entity_kind::ufo:
 	{
 		int y = air_obstacle_bottom (e) - 7 + bob;
-		if (!e.rewarded && std::abs ((x + 10) - (ROVER_X + 12)) < 15)
+		int beam_x = x + entity_width (e.kind) / 2;
+		if (!e.rewarded && std::abs (beam_x - (ROVER_X + 12)) < 15)
 		{
 			for (int by = y + 7; by < GROUND_Y; by++)
 			{
 				int half = 2 + (by - (y + 7)) / 5;
 				for (int bx = -half; bx <= half; bx++)
 					if (((bx + by) & 1) == 0)
-						g.screen.blend (x + 10 + bx, by, rgb (125, 235, 220), 150);
+						g.screen.blend (beam_x + bx, by, rgb (125, 235, 220), 150);
 			}
 		}
 		draw_sprite (g.screen, x, y, k_ufo, rgb (160, 160, 160));
 		break;
 	}
 	case entity_kind::satellite:
+		if (e.rewarded && g.uplink_left > 0.0)
+			draw_uplink (g, x + entity_width (e.kind) / 2, air_obstacle_bottom (e) + bob);
 		draw_sprite (g.screen, x, air_obstacle_bottom (e) - 9 + bob,
 			k_satellite, rgb (150, 150, 150));
+		break;
+	case entity_kind::sample:
+		if (!e.rewarded)
+			draw_sample (g.screen, x, g.elapsed + e.phase);
 		break;
 	case entity_kind::mars2:
 	case entity_kind::mars3:
@@ -1044,10 +1519,27 @@ draw_entity (game_state &g, const entity &e)
 }
 
 void
+draw_particles (game_state &g)
+{
+	/* 2 x 2 puffs in pale dust, so they read against the dark ridges.  */
+	for (const particle &p : g.particles)
+	{
+		int x = (int) std::lround (p.x);
+		int y = (int) std::lround (p.y);
+		unsigned amount = (unsigned) (230.0 * (std::min) (1.0, 2.0 * p.life / DUST_PARTICLE_SECONDS));
+		for (int dy = 0; dy < 2; dy++)
+			for (int dx = 0; dx < 2; dx++)
+				g.screen.blend (x + dx, y + dy, rgb (232, 190, 140), amount);
+	}
+}
+
+void
 draw_rover (game_state &g)
 {
 	int y;
-	if (g.down && g.jump_height <= 0.0)
+	/* The crouch frame doubles as a brief squash on touchdown; the
+	   hitbox follows only the duck key.  */
+	if ((g.down || g.land_squash > 0.0) && g.jump_height <= 0.0)
 	{
 		y = GROUND_Y - 12;
 		draw_sprite (g.screen, ROVER_X, y, k_rover_crouch, rgb (177, 100, 51));
@@ -1061,12 +1553,8 @@ draw_rover (game_state &g)
 			draw_sprite (g.screen, ROVER_X, y, k_rover_1, rgb (177, 100, 51));
 	}
 
-	if (g.trench_flash > 0.0)
-	{
-		char cost[32];
-		sprintf_s (cost, "-%.15g", TRENCH_BATTERY_COST);
-		draw_text (g.screen, ROVER_X + 5, y - 10, cost, rgb (255, 213, 90));
-	}
+	if (g.rover_flash_left > 0.0)
+		draw_text (g.screen, ROVER_X + 5, y - 10, g.rover_flash, g.rover_flash_color);
 }
 
 void
@@ -1113,6 +1601,28 @@ draw_weather (game_state &g)
 	}
 }
 
+/* The first landmark still ahead of the rover, following a driving
+   rover once it has been spawned and set off.  */
+const special_info *
+next_landmark (const game_state &g, double &remaining)
+{
+	for (size_t i = 0; i < std::size (k_specials); i++)
+	{
+		const special_info &s = k_specials[i];
+		double position = s.position;
+		if (g.special_spawned[i])
+			for (const entity &e : g.entities)
+				if (e.kind == s.kind)
+					position = e.position;
+		if (position > g.distance)
+		{
+			remaining = position - g.distance;
+			return &s;
+		}
+	}
+	return nullptr;
+}
+
 void
 draw_hud (game_state &g)
 {
@@ -1127,9 +1637,35 @@ draw_hud (game_state &g)
 	draw_text (g.screen, 7, 7, distance, shadow);
 	draw_text (g.screen, 6, 6, distance, ink);
 
-	int pct_w = text_width (percent, 1);
-	int battery_x = GAME_W - 7 - pct_w - 35;
-	int battery_y = 6;
+	double remaining;
+	const special_info *next = next_landmark (g, remaining);
+	if (next)
+	{
+		char target[48];
+		if (remaining >= 1000.0)
+			sprintf_s (target, "%s %.1fKM", next->name, remaining / 1000.0);
+		else
+			sprintf_s (target, "%s %dM", next->name, (int) std::ceil (remaining));
+		draw_text (g.screen, 7, 17, target, shadow);
+		draw_text (g.screen, 6, 16, target, rgb (194, 172, 136));
+	}
+
+	/* Science store, once there is anything to report.  */
+	if (g.files > 0 || g.files_sent > 0)
+	{
+		char data[32];
+		sprintf_s (data, "DATA %d/%d  SENT %d", g.files, DATA_CAPACITY, g.files_sent);
+		draw_text (g.screen, 7, 27, data, shadow);
+		draw_text (g.screen, 6, 26, data,
+			g.files >= DATA_CAPACITY ? rgb (224, 120, 90) : rgb (150, 180, 235));
+	}
+
+	/* The icon is pinned to the right margin and the percentage is
+	   right-aligned against it, so a change in digit count moves only
+	   the text's left edge.  The 9 px icon is centred on the 7 px text.  */
+	int battery_x = GAME_W - 6 - 32;
+	int battery_y = 5;
+	int pct_x = battery_x - 4 - text_width (percent, 1);
 	g.screen.rect (battery_x, battery_y, 30, 9, ink);
 	g.screen.rect (battery_x + 1, battery_y + 1, 28, 7, shadow);
 	g.screen.rect (battery_x + 30, battery_y + 2, 2, 5, ink);
@@ -1137,11 +1673,30 @@ draw_hud (game_state &g)
 	pixel_t charge = battery_percent <= 20 ? rgb (224, 71, 53) : rgb (113, 205, 100);
 	if (filled > 0)
 		g.screen.rect (battery_x + 1, battery_y + 1, filled, 7, charge);
-	draw_text (g.screen, GAME_W - 6 - pct_w, 7, percent, shadow);
-	draw_text (g.screen, GAME_W - 7 - pct_w, 6, percent, ink);
+	draw_text (g.screen, pct_x + 1, 7, percent, shadow);
+	draw_text (g.screen, pct_x, 6, percent, ink);
 
-	if (g.started && g.elapsed < 4.0 && g.stopped == failure::none)
-		draw_text_center (g.screen, 116, "SPACE/UP JUMP  DOWN DUCK", ink);
+	/* Solar panel efficiency, right-aligned under the battery.  */
+	char solar[16];
+	int solar_percent = (int) std::lround (g.panel_efficiency * 100.0);
+	sprintf_s (solar, "SOLAR %d%%", solar_percent);
+	int solar_x = battery_x + 32 - text_width (solar, 1);
+	draw_text (g.screen, solar_x + 1, 17, solar, shadow);
+	draw_text (g.screen, solar_x, 16, solar,
+		solar_percent < 50 ? rgb (224, 120, 90) : rgb (194, 172, 136));
+
+	/* Below the three HUD lines on the left.  */
+	if (g.notice_left > 0.0)
+	{
+		draw_text_center (g.screen, 41, g.notice, shadow);
+		draw_text_center (g.screen, 40, g.notice, rgb (130, 204, 198));
+	}
+
+	if (g.started && g.elapsed < 5.0 && g.stopped == failure::none)
+	{
+		draw_text_center (g.screen, 108, "SPACE/UP JUMP  HOLD FOR HIGHER", ink);
+		draw_text_center (g.screen, 118, "DOWN DUCK", ink);
+	}
 }
 
 void
@@ -1160,12 +1715,20 @@ draw_game_over (game_state &g)
 	draw_text_center (g.screen, 56, "ROVER OFFLINE", rgb (237, 190, 92), 2);
 	const char *reason = g.stopped == failure::io_error ? "I/O ERROR"
 		: (g.stopped == failure::unknown_device ? "UNKNOWN DEVICE" : "POWER FAILURE");
-	draw_text_center (g.screen, 77, reason, rgb (235, 226, 194));
+	draw_text_center (g.screen, 75, reason, rgb (235, 226, 194));
 
 	char score[48];
 	sprintf_s (score, "DISTANCE %lluM", (unsigned long long) std::floor (g.distance));
-	draw_text_center (g.screen, 91, score, rgb (235, 226, 194));
-	draw_text_center (g.screen, 109, "PRESS SPACE TO RETRY", rgb (130, 204, 198));
+	draw_text_center (g.screen, 87, score, rgb (235, 226, 194));
+	/* Files still on board at the crash never reach Earth.  */
+	if (g.files > 0)
+		sprintf_s (score, "SCIENCE %d  LOST %d", g.files_sent, g.files);
+	else
+		sprintf_s (score, "SCIENCE %d", g.files_sent);
+	draw_text_center (g.screen, 97, score,
+		g.files > 0 ? rgb (224, 150, 110) : rgb (150, 180, 235));
+	if (g.retry_lock <= 0.0)
+		draw_text_center (g.screen, 112, "PRESS SPACE TO RETRY", rgb (130, 204, 198));
 }
 
 void
@@ -1183,50 +1746,36 @@ render_game (game_state &g)
 	for (const entity &e : g.entities)
 		draw_entity (g, e);
 	draw_rover (g);
+	draw_particles (g);
 	draw_weather (g);
 	draw_hud (g);
 	draw_start_prompt (g);
 	draw_game_over (g);
 }
 
-void
-destroy_backbuffer (game_state &g)
+/* The largest whole multiple of the framebuffer that fits, so every
+   game pixel is the same size under nearest-neighbour scaling.  */
+int
+integer_scale (int client_w, int client_h)
 {
-	if (!g.back_dc)
-		return;
-	SelectObject (g.back_dc, g.back_old);
-	DeleteObject (g.back_bitmap);
-	DeleteDC (g.back_dc);
-	g.back_dc = nullptr;
-	g.back_bitmap = nullptr;
-	g.back_old = nullptr;
-	g.back_width = 0;
-	g.back_height = 0;
+	return (std::min) (client_w / GAME_W, client_h / GAME_H);
 }
 
-bool
-ensure_backbuffer (game_state &g, HDC target, int width, int height)
+/* Snap the client area to a whole multiple of the framebuffer so the
+   default window has no letterbox.  */
+void
+fit_window_to_scale (HWND dlg)
 {
-	if (g.back_dc && g.back_width == width && g.back_height == height)
-		return true;
-	destroy_backbuffer (g);
-
-	HDC dc = CreateCompatibleDC (target);
-	if (!dc)
-		return false;
-	HBITMAP bitmap = CreateCompatibleBitmap (target, width, height);
-	if (!bitmap)
-	{
-		DeleteDC (dc);
-		return false;
-	}
-
-	g.back_old = SelectObject (dc, bitmap);
-	g.back_dc = dc;
-	g.back_bitmap = bitmap;
-	g.back_width = width;
-	g.back_height = height;
-	return true;
+	RECT client;
+	RECT window;
+	GetClientRect (dlg, &client);
+	GetWindowRect (dlg, &window);
+	int scale = (std::max) (1, integer_scale (client.right, client.bottom));
+	int dw = GAME_W * scale - client.right;
+	int dh = GAME_H * scale - client.bottom;
+	SetWindowPos (dlg, nullptr, window.left - dw / 2, window.top - dh / 2,
+		window.right - window.left + dw, window.bottom - window.top + dh,
+		SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void
@@ -1243,23 +1792,28 @@ paint_game (HWND dlg, game_state &g)
 		EndPaint (dlg, &ps);
 		return;
 	}
-	int draw_w = client_w;
-	int draw_h = draw_w * GAME_H / GAME_W;
-	if (draw_h > client_h)
+	int draw_w;
+	int draw_h;
+	int scale = integer_scale (client_w, client_h);
+	if (scale >= 1)
 	{
-		draw_h = client_h;
-		draw_w = draw_h * GAME_W / GAME_H;
+		draw_w = GAME_W * scale;
+		draw_h = GAME_H * scale;
+	}
+	else
+	{
+		/* Below 1:1 only a fractional fit is possible.  */
+		draw_w = client_w;
+		draw_h = draw_w * GAME_H / GAME_W;
+		if (draw_h > client_h)
+		{
+			draw_h = client_h;
+			draw_w = draw_h * GAME_W / GAME_H;
+		}
 	}
 	int draw_x = (client_w - draw_w) / 2;
 	int draw_y = (client_h - draw_h) / 2;
 
-	/* Compose the black letterbox and scaled framebuffer off-screen,
-	   then present it in one blit.  Drawing the two layers directly to
-	   the window made the intermediate black frame visible on some
-	   desktop-compositor timings.  */
-	HDC frame = ensure_backbuffer (g, dc, client_w, client_h) ? g.back_dc : dc;
-	HBRUSH black = (HBRUSH) GetStockObject (BLACK_BRUSH);
-	FillRect (frame, &rc, black);
 	BITMAPINFO bmi = {};
 	bmi.bmiHeader.biSize = sizeof (bmi.bmiHeader);
 	bmi.bmiHeader.biWidth = GAME_W;
@@ -1267,33 +1821,40 @@ paint_game (HWND dlg, game_state &g)
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
-	SetStretchBltMode (frame, COLORONCOLOR);
-	StretchDIBits (frame, draw_x, draw_y, draw_w, draw_h, 0, 0, GAME_W, GAME_H,
+	SetStretchBltMode (dc, COLORONCOLOR);
+	StretchDIBits (dc, draw_x, draw_y, draw_w, draw_h, 0, 0, GAME_W, GAME_H,
 		g.screen.pixels.data (), &bmi, DIB_RGB_COLORS, SRCCOPY);
-	if (frame != dc)
-		BitBlt (dc, 0, 0, client_w, client_h, frame, 0, 0, SRCCOPY);
+
+	/* Paint the letterbox around the image, never under it: with no
+	   pixel drawn twice there is no intermediate black frame for the
+	   compositor to catch, so no back buffer is needed.  */
+	ExcludeClipRect (dc, draw_x, draw_y, draw_x + draw_w, draw_y + draw_h);
+	FillRect (dc, &rc, (HBRUSH) GetStockObject (BLACK_BRUSH));
 	EndPaint (dlg, &ps);
 }
 
 void
-jump (game_state &g)
+press_jump (game_state &g)
 {
 	if (g.stopped != failure::none)
 	{
-		reset_game (g);
+		if (g.retry_lock <= 0.0)
+			reset_game (g);
 		return;
 	}
+	g.jump_held = true;
 	if (g.jump_height <= 0.0)
-	{
-		g.battery = (std::max) (0.0, g.battery - JUMP_BATTERY_COST);
-		if (g.battery <= 0.0)
-		{
-			end_game (g, failure::power);
-			return;
-		}
-		g.down = false;
-		g.jump_velocity = JUMP_VELOCITY;
-	}
+		start_jump (g);
+	else
+		g.jump_buffer = JUMP_BUFFER_SECONDS;
+}
+
+void
+release_jump (game_state &g)
+{
+	g.jump_held = false;
+	if (g.jump_velocity > JUMP_CUT_VELOCITY)
+		g.jump_velocity = JUMP_CUT_VELOCITY;
 }
 
 game_state *
@@ -1324,6 +1885,7 @@ game_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		render_game (*g);
 		SetWindowTextW (dlg, L"FSROVER : MARS RUNNER");
 		center_on_owner (dlg, dpi_scale (g->dpi, 660), dpi_scale (g->dpi, 400));
+		fit_window_to_scale (dlg);
 		SetTimer (dlg, GAME_TIMER, 16, nullptr);
 		SetFocus (dlg);
 		return FALSE;
@@ -1335,10 +1897,20 @@ game_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 			QueryPerformanceCounter (&now);
 			double dt = (double) (now.QuadPart - g->counter.QuadPart) / (double) g->frequency.QuadPart;
 			g->counter = now;
-			if (g->active && g->started)
+			/* Paused, waiting to start and a settled game-over screen
+			   are still frames: redraw only when something moved.  */
+			if (g->active && g->started
+			    && (g->stopped == failure::none || g->retry_lock > 0.0))
+			{
 				update_game (*g, (std::min) (dt, 0.05));
-			render_game (*g);
-			InvalidateRect (dlg, nullptr, FALSE);
+				g->dirty = true;
+			}
+			if (g->dirty)
+			{
+				g->dirty = false;
+				render_game (*g);
+				InvalidateRect (dlg, nullptr, FALSE);
+			}
 		}
 		return TRUE;
 	case WM_KEYDOWN:
@@ -1350,14 +1922,20 @@ game_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 				QueryPerformanceCounter (&g->counter);
 			}
 			if ((wp == VK_SPACE || wp == VK_UP) && !(lp & (1LL << 30)))
-				jump (*g);
+				press_jump (*g);
 			else if (wp == VK_DOWN)
 				g->down = true;
+			g->dirty = true;
 		}
 		return TRUE;
 	case WM_KEYUP:
 		if (g && wp == VK_DOWN)
+		{
 			g->down = false;
+			g->dirty = true;
+		}
+		else if (g && (wp == VK_SPACE || wp == VK_UP))
+			release_jump (*g);
 		return TRUE;
 	case WM_GETDLGCODE:
 		/* DialogBox treats arrow keys as focus navigation unless the focused
@@ -1370,8 +1948,13 @@ game_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		{
 			g->active = LOWORD (wp) != WA_INACTIVE;
 			QueryPerformanceCounter (&g->counter);
+			/* Key-up messages go to the newly active window.  */
 			if (!g->active)
+			{
 				g->down = false;
+				g->jump_buffer = 0.0;
+				release_jump (*g);
+			}
 		}
 		return TRUE;
 	case WM_PAINT:
@@ -1406,7 +1989,6 @@ game_dlg_proc (HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 		return TRUE;
 	case WM_DESTROY:
 		KillTimer (dlg, GAME_TIMER);
-		destroy_backbuffer (*g);
 		delete g;
 		SetWindowLongPtrW (dlg, DWLP_USER, 0);
 		return TRUE;
