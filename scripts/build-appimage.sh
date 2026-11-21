@@ -87,6 +87,20 @@ if [ -f "$hook" ]; then
 	sed -i 's/^export GDK_BACKEND=x11.*$/: # GDK_BACKEND left to GTK and the user/' "$hook"
 fi
 
+# The host's GIO modules (gvfs, ...) are built against its own, possibly
+# newer GLib and fail to load into the bundled one ("undefined symbol").
+# Load modules only from the AppDir, with the build host's dconf backend
+# so that GSettings still persists.
+modules="$appdir/usr/lib/gio/modules"
+mkdir -p "$modules"
+dconf=$(pkg-config --variable=giomoduledir gio-2.0)/libdconfsettings.so
+if [ -f "$dconf" ]; then
+	cp -L "$dconf" "$modules/"
+fi
+cat >> "$hook" <<'EOF'
+export GIO_MODULE_DIR="$APPDIR/usr/lib/gio/modules"
+EOF
+
 # Pass 2: pack.
 mkdir -p "$out"
 cd "$out"
