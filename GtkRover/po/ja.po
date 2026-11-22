@@ -1200,3 +1200,21 @@ msgstr "起動しています…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "キャンセル"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "%u / %u 個の項目"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "このフォルダー内の名前で絞り込み"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "フィルター"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "このフォルダー内の名前で絞り込み (Ctrl+F)"

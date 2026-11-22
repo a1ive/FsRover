@@ -1216,3 +1216,22 @@ msgstr "Iniciando…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "Cancelar"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "%u de %u item"
+msgstr[1] "%u de %u itens"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "Filtrar os nomes desta pasta"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "Filtrar"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "Filtrar os nomes desta pasta (Ctrl+F)"

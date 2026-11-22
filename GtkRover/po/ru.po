@@ -1223,3 +1223,23 @@ msgstr "Запуск…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "Отмена"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "%u из %u элемента"
+msgstr[1] "%u из %u элементов"
+msgstr[2] "%u из %u элементов"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "Фильтр имён в этой папке"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "Фильтр"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "Фильтр имён в этой папке (Ctrl+F)"

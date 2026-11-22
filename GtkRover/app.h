@@ -48,6 +48,9 @@ struct app_state
 	GtkSingleSelection *disk_sel = nullptr;
 	GtkListView *disk_view = nullptr;
 	GListStore *entries = nullptr;
+	GtkFilter *name_filter = nullptr;	/* the filter box, on top of the sort */
+	GtkFilterListModel *shown = nullptr;	/* what entry_sel and the view see */
+	GtkSearchEntry *filter_entry = nullptr;
 	GtkMultiSelection *entry_sel = nullptr;
 	GtkColumnView *entry_view = nullptr;
 	GtkStack *stack = nullptr;

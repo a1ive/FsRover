@@ -1200,3 +1200,21 @@ msgstr "正在啟動…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "取消"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "%u / %u 個項目"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "篩選此資料夾中的名稱"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "篩選"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "篩選此資料夾中的名稱（Ctrl+F）"

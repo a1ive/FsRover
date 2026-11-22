@@ -1244,3 +1244,26 @@ msgstr "جارٍ البدء…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "إلغاء"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "العناصر: %u من %u"
+msgstr[1] "العناصر: %u من %u"
+msgstr[2] "العناصر: %u من %u"
+msgstr[3] "العناصر: %u من %u"
+msgstr[4] "العناصر: %u من %u"
+msgstr[5] "العناصر: %u من %u"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "تصفية الأسماء في هذا المجلد"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "تصفية"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "تصفية الأسماء في هذا المجلد (Ctrl+F)"

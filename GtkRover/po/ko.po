@@ -1209,3 +1209,21 @@ msgstr "시작하는 중…"
 #: window.cpp:2222
 msgid "Cancel"
 msgstr "취소"
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] "항목 %u/%u개"
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr "이 폴더의 이름 필터"
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr "필터"
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr "이 폴더의 이름 필터 (Ctrl+F)"

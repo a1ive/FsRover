@@ -261,6 +261,122 @@ selected_paths ()
 	return paths;
 }
 
+/* ---- name filter ---------------------------------------------------- */
+
+/* The filter box narrows the listing already in memory; nothing goes to
+   the grub thread.  It sits between the sort and the selection, so the
+   selection model follows its items-changed and stays on the same
+   entries while the text changes.  */
+struct name_filter
+{
+	std::string text;	/* as typed; empty shows everything */
+	std::string folded;	/* g_utf8_casefold (text) */
+	GPatternSpec *pattern = nullptr;	/* text has '*' or '?' */
+};
+
+name_filter F;
+
+/* Explorer's rule: a plain word matches anywhere in the name, a pattern
+   with wildcards must match the whole name.  Neither looks at case.  A
+   name that is not valid UTF-8 (a wrong file name encoding) is matched
+   byte for byte instead.  */
+gboolean
+filter_match (gpointer item, gpointer)
+{
+	if (F.text.empty ())
+		return TRUE;
+
+	const std::string &name = rover_row_get (ROVER_ROW (item)).name;
+	if (!g_utf8_validate (name.c_str (), (gssize) name.size (), nullptr))
+		return F.pattern ? g_pattern_spec_match_string (F.pattern, name.c_str ())
+			: strstr (name.c_str (), F.text.c_str ()) != nullptr;
+
+	char *folded = g_utf8_casefold (name.c_str (), (gssize) name.size ());
+	gboolean hit = F.pattern ? g_pattern_spec_match_string (F.pattern, folded)
+		: strstr (folded, F.folded.c_str ()) != nullptr;
+	g_free (folded);
+	return hit;
+}
+
+bool
+filter_active ()
+{
+	return !S.cur_path.empty () && !F.text.empty ();
+}
+
+/* With a filter up, Extract and friends act on exactly what it shows
+   when nothing is selected.  */
+std::vector<std::string>
+shown_paths ()
+{
+	GListModel *model = G_LIST_MODEL (S.shown);
+	guint n = g_list_model_get_n_items (model);
+	std::vector<std::string> paths;
+
+	for (guint i = 0; i < n; i++)
+	{
+		RoverRow *row = ROVER_ROW (g_list_model_get_item (model, i));
+		paths.push_back (join_path (S.cur_path, rover_row_get (row).name));
+		g_object_unref (row);
+	}
+	return paths;
+}
+
+void
+show_count ()
+{
+	GListModel *all = G_LIST_MODEL (S.entries);
+	guint total = g_list_model_get_n_items (all);
+	size_t dirs = 0;
+
+	if (!F.text.empty ())
+	{
+		guint shown = g_list_model_get_n_items (G_LIST_MODEL (S.shown));
+		set_status (fmt (g_dngettext (nullptr, "%u of %u item", "%u of %u items", total),
+			shown, total));
+		return;
+	}
+	if (!total)
+	{
+		set_status (_("Empty folder"));
+		return;
+	}
+	for (guint i = 0; i < total; i++)
+	{
+		RoverRow *row = ROVER_ROW (g_list_model_get_item (all, i));
+		dirs += rover_row_get (row).is_dir;
+		g_object_unref (row);
+	}
+	set_status (fmt (_("%zu folders, %zu files"), dirs, (size_t) total - dirs));
+}
+
+/* Applies TEXT; returns false when it is already the filter.  */
+bool
+set_filter (const std::string &text)
+{
+	if (text == F.text)
+		return false;
+	F.text = text;
+	char *folded = g_utf8_casefold (text.c_str (), -1);
+	F.folded = folded;
+	g_free (folded);
+	if (F.pattern)
+		g_pattern_spec_free (F.pattern);
+	F.pattern = F.folded.find_first_of ("*?") != std::string::npos
+		? g_pattern_spec_new (F.folded.c_str ()) : nullptr;
+	gtk_filter_changed (S.name_filter, GTK_FILTER_CHANGE_DIFFERENT);
+	return true;
+}
+
+/* A filter is for the folder it was typed in.  Cleared here before the
+   box is, so the search-changed that follows finds nothing to do.  */
+void
+clear_filter ()
+{
+	set_filter ("");
+	gtk_editable_set_text (GTK_EDITABLE (S.filter_entry), "");
+}
+
 /* The one selected entry that is not a folder, if that is the selection.  */
 bool
 selected_file (std::string *path)
@@ -306,7 +422,9 @@ update_actions ()
 	enable_action ("back", !S.history.empty ());
 	enable_action ("forward", !S.forward.empty ());
 	enable_action ("up", !S.cur_path.empty ());
-	enable_action ("extract", !rows.empty () && !S.busy);
+	bool any_shown = filter_active ()
+		&& g_list_model_get_n_items (G_LIST_MODEL (S.shown)) > 0;
+	enable_action ("extract", (!rows.empty () || any_shown) && !S.busy);
 	enable_action ("open", rows.size () == 1 && !S.busy);
 	enable_action ("open-as-image", one_file);
 	enable_action ("open-as-image-dec", one_file);
@@ -779,6 +897,7 @@ show_home (bool push)
 	remember ("", push && !S.cur_path.empty ());
 	S.cur_path.clear ();
 	S.list_gen++;
+	clear_filter ();
 	g_list_store_remove_all (S.entries);
 	gtk_stack_set_visible_child_name (S.stack, "home");
 	gtk_editable_set_text (GTK_EDITABLE (S.path_entry), "");
@@ -839,15 +958,14 @@ void
 show_listing (const std::string &path, bool push, const std::vector<row_data> &rows)
 {
 	std::vector<gpointer> items;
-	size_t dirs = 0;
 
+	/* A refresh of the same folder keeps the filter.  */
+	if (path != S.cur_path)
+		clear_filter ();
 	remember (path, push);
 	S.cur_path = path;
 	for (const row_data &d : rows)
-	{
-		dirs += d.is_dir;
 		items.push_back (rover_row_new (d));
-	}
 	g_list_store_splice (S.entries, 0, g_list_model_get_n_items (G_LIST_MODEL (S.entries)),
 		items.data (), items.size ());
 	for (gpointer item : items)
@@ -857,10 +975,7 @@ show_listing (const std::string &path, bool push, const std::vector<row_data> &r
 	gtk_stack_set_visible_child_name (S.stack, "entries");
 	gtk_editable_set_text (GTK_EDITABLE (S.path_entry), path.c_str ());
 	sync_disk_selection ();
-	if (rows.empty ())
-		set_status (_("Empty folder"));
-	else
-		set_status (fmt (_("%zu folders, %zu files"), dirs, rows.size () - dirs));
+	show_count ();
 	update_actions ();
 }
 
@@ -1258,10 +1373,19 @@ act_focus_path (GSimpleAction *, GVariant *, gpointer)
 }
 
 void
+act_find (GSimpleAction *, GVariant *, gpointer)
+{
+	gtk_widget_grab_focus (GTK_WIDGET (S.filter_entry));
+	gtk_editable_select_region (GTK_EDITABLE (S.filter_entry), 0, -1);
+}
+
+void
 act_extract (GSimpleAction *, GVariant *, gpointer)
 {
 	std::vector<std::string> paths = selected_paths ();
 
+	if (paths.empty () && filter_active ())
+		paths = shown_paths ();
 	if (paths.empty ())
 		return;
 	GtkFileDialog *dialog = gtk_file_dialog_new ();
@@ -1612,6 +1736,7 @@ act_shortcuts (GSimpleAction *, GVariant *, gpointer)
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Control&gt;o</property><property name='title' translatable='yes'>Open a disk image</property></object></child>"
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Control&gt;e</property><property name='title' translatable='yes'>Extract the selection</property></object></child>"
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Control&gt;a</property><property name='title' translatable='yes'>Select all</property></object></child>"
+		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Control&gt;f</property><property name='title' translatable='yes'>Filter the names in this folder</property></object></child>"
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Alt&gt;Return</property><property name='title' translatable='yes'>Properties</property></object></child>"
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>F3</property><property name='title' translatable='yes'>View as text</property></object></child>"
 		"<child><object class='GtkShortcutsShortcut'><property name='accelerator'>&lt;Control&gt;h</property><property name='title' translatable='yes'>View as hex</property></object></child>"
@@ -1656,6 +1781,7 @@ const GActionEntry window_actions[] =
 	{ "forward", act_forward, nullptr, nullptr, nullptr, { 0 } },
 	{ "up", act_up, nullptr, nullptr, nullptr, { 0 } },
 	{ "focus-path", act_focus_path, nullptr, nullptr, nullptr, { 0 } },
+	{ "find", act_find, nullptr, nullptr, nullptr, { 0 } },
 	{ "extract", act_extract, nullptr, nullptr, nullptr, { 0 } },
 	{ "open", act_open, nullptr, nullptr, nullptr, { 0 } },
 	{ "open-as-image", act_open_as_image, nullptr, nullptr, nullptr, { 0 } },
@@ -1956,6 +2082,68 @@ on_path_activate (GtkEntry *entry, gpointer)
 }
 
 void
+on_filter_changed (GtkSearchEntry *entry, gpointer)
+{
+	if (!set_filter (gtk_editable_get_text (GTK_EDITABLE (entry))))
+		return;
+	/* A running job owns the status line, and with no folder open there
+	   is nothing to count.  The selection may have lost filtered-out
+	   entries without a selection-changed.  */
+	if (!S.busy && !S.cur_path.empty ())
+		show_count ();
+	update_actions ();
+}
+
+/* Hand the keyboard to the list with something focused in it, the way
+   Enter or Down leaves Explorer's search box.  */
+void
+focus_entry_list ()
+{
+	GtkSelectionModel *model = GTK_SELECTION_MODEL (S.entry_sel);
+	GtkBitset *set = gtk_selection_model_get_selection (model);
+	guint n = g_list_model_get_n_items (G_LIST_MODEL (model));
+
+	/* SCROLL_FOCUS only moves the focus within the view; the keyboard
+	   has to be taken from the search entry first.  */
+	gtk_widget_grab_focus (GTK_WIDGET (S.entry_view));
+	if (n)
+	{
+		bool none = gtk_bitset_is_empty (set);
+		guint pos = none ? 0 : gtk_bitset_get_minimum (set);
+		gtk_column_view_scroll_to (S.entry_view, pos, nullptr,
+			(GtkListScrollFlags) (GTK_LIST_SCROLL_FOCUS | (none ? GTK_LIST_SCROLL_SELECT : 0)),
+			nullptr);
+	}
+	gtk_bitset_unref (set);
+}
+
+void
+on_filter_activate (GtkSearchEntry *, gpointer)
+{
+	focus_entry_list ();
+}
+
+/* Esc clears the filter, and on an empty box returns to the list.  */
+void
+on_filter_stop (GtkSearchEntry *entry, gpointer)
+{
+	if (*gtk_editable_get_text (GTK_EDITABLE (entry)))
+		gtk_editable_set_text (GTK_EDITABLE (entry), "");
+	else
+		focus_entry_list ();
+}
+
+gboolean
+on_filter_key (GtkEventControllerKey *, guint keyval, guint, GdkModifierType state, gpointer)
+{
+	if (keyval != GDK_KEY_Down
+		|| (state & (GDK_SHIFT_MASK | GDK_CONTROL_MASK | GDK_ALT_MASK | GDK_SUPER_MASK)))
+		return FALSE;
+	focus_entry_list ();
+	return TRUE;
+}
+
+void
 on_cancel (GtkButton *, gpointer)
 {
 	S.cancel = true;
@@ -2124,7 +2312,10 @@ build_entry_view ()
 		gtk_column_view_get_sorter (S.entry_view))));
 	sorted = gtk_sort_list_model_new (G_LIST_MODEL (g_object_ref (S.entries)),
 		GTK_SORTER (sorter));
-	S.entry_sel = gtk_multi_selection_new (G_LIST_MODEL (sorted));
+	S.name_filter = GTK_FILTER (gtk_custom_filter_new (filter_match, nullptr, nullptr));
+	S.shown = gtk_filter_list_model_new (G_LIST_MODEL (sorted),
+		GTK_FILTER (g_object_ref (S.name_filter)));
+	S.entry_sel = gtk_multi_selection_new (G_LIST_MODEL (g_object_ref (S.shown)));
 	gtk_column_view_set_model (S.entry_view, GTK_SELECTION_MODEL (S.entry_sel));
 	gtk_column_view_sort_by_column (S.entry_view, name, GTK_SORT_ASCENDING);
 	g_signal_connect (S.entry_view, "activate", G_CALLBACK (on_entry_activate), nullptr);
@@ -2200,8 +2391,23 @@ build_header ()
 		icon_button ("go-up-symbolic", "win.up", _("Up (Alt+Up)")));
 	gtk_header_bar_pack_start (GTK_HEADER_BAR (header),
 		icon_button ("document-open-symbolic", "win.open-image", _("Open Disk Image (Ctrl+O)")));
+	S.filter_entry = GTK_SEARCH_ENTRY (gtk_search_entry_new ());
+	gtk_search_entry_set_placeholder_text (S.filter_entry, _("Filter"));
+	gtk_editable_set_width_chars (GTK_EDITABLE (S.filter_entry), 16);
+	gtk_widget_set_tooltip_text (GTK_WIDGET (S.filter_entry),
+		_("Filter the names in this folder (Ctrl+F)"));
+	g_signal_connect (S.filter_entry, "search-changed", G_CALLBACK (on_filter_changed), nullptr);
+	g_signal_connect (S.filter_entry, "activate", G_CALLBACK (on_filter_activate), nullptr);
+	g_signal_connect (S.filter_entry, "stop-search", G_CALLBACK (on_filter_stop), nullptr);
+	/* Capture phase: the text widget inside would take Down first.  */
+	GtkEventController *keys = gtk_event_controller_key_new ();
+	gtk_event_controller_set_propagation_phase (keys, GTK_PHASE_CAPTURE);
+	g_signal_connect (keys, "key-pressed", G_CALLBACK (on_filter_key), nullptr);
+	gtk_widget_add_controller (GTK_WIDGET (S.filter_entry), keys);
+
 	gtk_header_bar_set_title_widget (GTK_HEADER_BAR (header), GTK_WIDGET (S.path_entry));
 	gtk_header_bar_pack_end (GTK_HEADER_BAR (header), menu_button);
+	gtk_header_bar_pack_end (GTK_HEADER_BAR (header), GTK_WIDGET (S.filter_entry));
 	gtk_header_bar_pack_end (GTK_HEADER_BAR (header), extract);
 	return header;
 }
@@ -2253,6 +2459,7 @@ set_accels (GtkApplication *app)
 		{ "win.forward", { "<Alt>Right", nullptr, nullptr } },
 		{ "win.up", { "<Alt>Up", nullptr, nullptr } },
 		{ "win.focus-path", { "<Control>l", nullptr, nullptr } },
+		{ "win.find", { "<Control>f", nullptr, nullptr } },
 		{ "win.extract", { "<Control>e", nullptr, nullptr } },
 		{ "win.file-props", { "<Alt>Return", nullptr, nullptr } },
 		{ "win.view-text", { "F3", nullptr, nullptr } },

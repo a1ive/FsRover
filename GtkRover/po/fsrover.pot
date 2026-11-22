@@ -1220,3 +1220,22 @@ msgstr ""
 #: window.cpp:2222
 msgid "Cancel"
 msgstr ""
+
+#: window.cpp:335
+#, c-format
+msgid "%u of %u item"
+msgid_plural "%u of %u items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: window.cpp:1739
+msgid "Filter the names in this folder"
+msgstr ""
+
+#: window.cpp:2395
+msgid "Filter"
+msgstr ""
+
+#: window.cpp:2398
+msgid "Filter the names in this folder (Ctrl+F)"
+msgstr ""
