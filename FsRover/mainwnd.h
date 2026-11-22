@@ -18,7 +18,8 @@
 
 /*
  * Private surface shared by the main window's source files: main.cpp
- * (the window itself and result dispatch), mainlist.cpp (file list),
+ * (the window itself and result dispatch), mainlist.cpp (file list and
+ * its name filter),
  * maintree.cpp (device tree), mainnav.cpp (navigation and history),
  * mainjob.cpp (extract/export job) and mainmenu.cpp (menu bar, mounts,
  * file drop).  Everything here runs on the GUI thread.  The dialogs
@@ -62,6 +63,7 @@ constexpr int IDM_FILE_RUNAS = 205;
 #endif
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
+constexpr int IDM_FILTER_FOCUS = 212;	/* Ctrl+F; accelerator only */
 constexpr int IDM_HELP_SUPPORT = 220;
 constexpr int IDM_HELP_ABOUT = 221;
 #if FSROVER_EMBED_DOKAN
@@ -100,6 +102,7 @@ constexpr int IDM_LOST_SCAN = 18;
 
 /* Child controls, created by main.cpp.  */
 extern HWND g_address;
+extern HWND g_filter_box;
 extern HWND g_btn_extract;
 extern HWND g_btn_up;
 extern HWND g_btn_back;
@@ -135,6 +138,10 @@ void list_drop_sizes (void);
 void fill_list (backend_result *res);
 void fill_list_sizes (backend_result *res);
 std::vector<std::string> selected_paths (void);
+std::vector<std::string> default_extract_paths (void);	/* nothing selected */
+void filter_init (void);	/* once the filter box exists */
+void filter_focus (void);
+void filter_changed (void);	/* EN_CHANGE */
 
 /* maintree.cpp */
 void tree_apply_dpi (int icon_size);

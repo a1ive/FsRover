@@ -61,6 +61,7 @@ namespace mainwnd
 {
 
 HWND g_address;
+HWND g_filter_box;
 HWND g_btn_extract;
 HWND g_btn_up;
 HWND g_btn_back;
@@ -93,6 +94,9 @@ constexpr int SPLIT_W = 5;	/* draggable gap between the two panes */
 constexpr int MARGIN = 2;
 constexpr int BTN_W = 90;
 constexpr int NAV_W = 30;	/* Back/Forward/Up: glyph only, no label */
+constexpr int FILTER_W = 200;	/* filter box, rightmost in the top row */
+constexpr int FILTER_MIN_W = 80;	/* it gives way first when narrow... */
+constexpr int ADDR_MIN_W = 160;	/* ...until the address bar has this */
 constexpr int PROGRESS_W = 260;
 constexpr int DEF_W = 1000;	/* default window size */
 constexpr int DEF_H = 700;
@@ -133,7 +137,7 @@ apply_dpi_resources (void)
 
 	/* Shared message font.  */
 	HFONT font = create_message_font (g_main_dpi);
-	for (HWND ctl : { g_address, g_btn_extract, g_btn_up, g_btn_back, g_btn_fwd, g_tree, g_list })
+	for (HWND ctl : { g_address, g_filter_box, g_btn_extract, g_btn_up, g_btn_back, g_btn_fwd, g_tree, g_list })
 		SendMessageW (ctl, WM_SETFONT, (WPARAM) font, TRUE);
 	if (g_font)
 		DeleteObject (g_font);
@@ -281,6 +285,9 @@ create_children (HWND wnd)
 	g_address = CreateWindowExW (WS_EX_CLIENTEDGE, L"EDIT", L"",
 		child | ES_AUTOHSCROLL, 0, 0, 0, 0, wnd, nullptr, nullptr, nullptr);
 	set_ltr_layout (g_address);
+	/* Names typed here follow the UI direction, unlike the path.  */
+	g_filter_box = CreateWindowExW (WS_EX_CLIENTEDGE, L"EDIT", L"",
+		child | ES_AUTOHSCROLL, 0, 0, 0, 0, wnd, nullptr, nullptr, nullptr);
 	g_btn_extract = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_EXTRACT).c_str (),
 		child | BS_PUSHBUTTON, 0, 0, 0, 0, wnd, (HMENU) (INT_PTR) IDC_EXTRACT, nullptr, nullptr);
 	g_btn_up = CreateWindowExW (0, L"BUTTON", res_str (IDS_BTN_UP).c_str (),
@@ -312,6 +319,7 @@ create_children (HWND wnd)
 	   monitor DPI (rebuilt on WM_DPICHANGED).  */
 	apply_dpi_resources ();
 	nav_init ();
+	filter_init ();
 
 	LVCOLUMNW col = {};
 	std::wstring col_name = res_str (IDS_COL_NAME);
@@ -411,8 +419,21 @@ layout (HWND wnd)
 	x += nav_w + margin;
 	MoveWindow (g_btn_up, x, margin, nav_w, btn_h, TRUE);
 	x += nav_w + margin;
-	MoveWindow (g_address, x, margin, rc.right - x - btn_w - 2 * margin, btn_h, TRUE);
-	MoveWindow (g_btn_extract, rc.right - btn_w - margin, margin, btn_w, btn_h, TRUE);
+	/* [address][Extract][filter]: a narrow window takes width from
+	   the filter box before the address bar drops below its minimum.  */
+	int filter_w = main_scale (FILTER_W);
+	int addr_w = rc.right - x - btn_w - filter_w - 3 * margin;
+	int give = main_scale (ADDR_MIN_W) - addr_w;
+	if (give > filter_w - main_scale (FILTER_MIN_W))
+		give = filter_w - main_scale (FILTER_MIN_W);
+	if (give > 0)
+	{
+		filter_w -= give;
+		addr_w += give;
+	}
+	MoveWindow (g_address, x, margin, addr_w, btn_h, TRUE);
+	MoveWindow (g_btn_extract, x + addr_w + margin, margin, btn_w, btn_h, TRUE);
+	MoveWindow (g_filter_box, rc.right - filter_w - margin, margin, filter_w, btn_h, TRUE);
 	MoveWindow (g_tree, 0, body_top, tree_w, body_h, TRUE);
 	MoveWindow (g_list, tree_w + split_w, body_top, rc.right - tree_w - split_w, body_h, TRUE);
 }
@@ -521,6 +542,13 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 		g_split_drag = false;
 		return 0;
 	case WM_COMMAND:
+		/* The filter box has no id; its notifications are not commands.  */
+		if (lp && (HWND) lp == g_filter_box)
+		{
+			if (HIWORD (wp) == EN_CHANGE)
+				filter_changed ();
+			return 0;
+		}
 		on_command (LOWORD (wp));
 		return 0;
 	case WM_INITMENUPOPUP:
@@ -651,7 +679,7 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 	ShowWindow (wnd, g_cmdline.minimize ? SW_HIDE : show);
 	UpdateWindow (wnd);
 
-	/* Explorer's navigation bindings plus Ctrl+A.  Built here rather than
+	/* Explorer's navigation bindings plus Ctrl+A/F.  Built here rather than
 	   loaded from an ACCELERATORS resource because the command ids live in
 	   mainwnd.h, not resource.h, and the table needs no translation.  */
 	ACCEL accels[] =
@@ -660,16 +688,18 @@ wWinMain (HINSTANCE instance, HINSTANCE, PWSTR, int show)
 		{ FVIRTKEY | FALT, VK_RIGHT, IDC_FWD },
 		{ FVIRTKEY | FALT, VK_UP, IDC_UP },
 		{ FVIRTKEY | FCONTROL, 'A', IDM_SEL_ALL },
+		{ FVIRTKEY | FCONTROL, 'F', IDM_FILTER_FOCUS },
 	};
 	HACCEL accel = CreateAcceleratorTableW (accels, ARRAYSIZE (accels));
 
 	MSG msg;
 	while (GetMessageW (&msg, nullptr, 0, 0) > 0)
 	{
-		/* Editing the address bar keeps its own keys, Ctrl+A included.
-		   Every other window is a modal dialog running its own loop, so
-		   nothing else reaches this one.  */
-		if (GetFocus () != g_address && TranslateAcceleratorW (wnd, accel, &msg))
+		/* The address bar and the filter box keep their own editing keys,
+		   Ctrl+A included.  Every other window is a modal dialog running
+		   its own loop, so nothing else reaches this one.  */
+		HWND focus = GetFocus ();
+		if (focus != g_address && focus != g_filter_box && TranslateAcceleratorW (wnd, accel, &msg))
 			continue;
 		TranslateMessage (&msg);
 		DispatchMessageW (&msg);

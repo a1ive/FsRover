@@ -1653,13 +1653,23 @@ hexadecimal.
 | <kbd>Alt</kbd>+<kbd>→</kbd> | Forward |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> | Up one level |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> | Select all |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Filter the names in this folder |
 | <kbd>Enter</kbd> | Go to the path typed in the address bar |
 
 These are the navigation bindings Explorer uses. The same list is available in
 the program under **Help ▸ Keyboard Shortcuts**.
 
-While the address bar has focus it keeps its own editing keys — including
-<kbd>Ctrl</kbd>+<kbd>A</kbd>, which selects the text rather than the file list.
+The filter box at the right end of the toolbar narrows the file list to the
+current folder's entries whose names contain the typed text, ignoring case;
+with `*` or `?` in it the whole name must match the pattern instead
+(`*.txt`). Subfolders are not searched. **Extract** with nothing selected
+takes exactly the entries shown. In the box, <kbd>Esc</kbd> clears it and
+<kbd>Enter</kbd> or <kbd>↓</kbd> moves to the list; opening another folder
+clears it.
+
+While the address bar or the filter box has focus it keeps its own editing
+keys — including <kbd>Ctrl</kbd>+<kbd>A</kbd>, which selects the text rather
+than the file list.
 Standard Windows conventions apply everywhere else: <kbd>F10</kbd> or
 <kbd>Alt</kbd> opens the menu bar, the mnemonics shown in the menus
 (<kbd>Alt</kbd>+<kbd>F</kbd> for **File**, and so on) work as usual, the

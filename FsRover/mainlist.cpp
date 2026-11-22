@@ -18,7 +18,8 @@
 
 /*
  * The file list: a virtual ListView over the last successful listing,
- * sizes filled in lazily around the visible rows, and its context menu.
+ * sizes filled in lazily around the visible rows, its context menu, and
+ * the filter box that narrows it to matching names in this directory.
  */
 
 #include <windows.h>
@@ -56,16 +57,104 @@ struct list_row
 };
 
 std::vector<backend_dirent> g_entries;
-std::vector<list_row> g_rows;	/* display strings for the virtual list */
+std::vector<list_row> g_rows;	/* display strings, parallel to g_entries */
 std::map<std::wstring, int> g_icon_cache;	/* list_icon() memo, by key */
 UINT g_view_seq;	/* list_dir seq currently represented by g_entries */
+
+/* The filter.  ListView item numbers are positions in g_view, never
+   g_entries indexes: every lookup from an item goes through it.  */
+std::vector<size_t> g_view;	/* item -> g_entries index, listing order */
+std::vector<int> g_item_of;	/* g_entries index -> item, -1 = filtered out */
+std::wstring g_filter_text;	/* applied filter, empty = everything */
+bool g_filter_wild;	/* has '*' or '?': whole-name wildcard match */
 
 constexpr size_t LIST_SIZE_BATCH = 64;
 constexpr int LIST_SIZE_WINDOW = 192;
 std::vector<bool> g_size_pending;	/* parallel to g_entries */
-std::vector<size_t> g_size_rows;	/* rows owned by g_seq_sizes */
-int g_size_want_first;
+std::vector<size_t> g_size_ents;	/* g_entries indexes owned by g_seq_sizes */
+int g_size_want_first;	/* items, not entries */
 int g_size_want_last = -1;
+
+/* g_entries index for a ListView item, -1 if there is no such item.  */
+int
+item_entry (int item)
+{
+	if (item < 0 || (size_t) item >= g_view.size ())
+		return -1;
+	return (int) g_view[(size_t) item];
+}
+
+/* Case-insensitive wildcard match of a whole name: '*' is any run,
+   '?' any one UTF-16 unit.  Backtracks only to the last '*'.  */
+bool
+wild_match (const wchar_t *name, const wchar_t *pat)
+{
+	const wchar_t *star = nullptr;
+	const wchar_t *resume = nullptr;
+
+	while (*name)
+	{
+		if (*pat == L'*')
+		{
+			star = ++pat;
+			resume = name;
+		}
+		else if (*pat == L'?' || (*pat && CompareStringOrdinal (name, 1, pat, 1, TRUE) == CSTR_EQUAL))
+		{
+			name++;
+			pat++;
+		}
+		else if (star)
+		{
+			pat = star;
+			name = ++resume;
+		}
+		else
+			return false;
+	}
+	while (*pat == L'*')
+		pat++;
+	return !*pat;
+}
+
+/* Explorer's rule: a plain word matches anywhere in the name, a
+   pattern with wildcards must match the whole name.  Neither looks
+   at case -- names on case-sensitive filesystems included.  */
+bool
+filter_match (const std::wstring &name)
+{
+	if (g_filter_wild)
+		return wild_match (name.c_str (), g_filter_text.c_str ());
+	return FindStringOrdinal (FIND_FROMSTART, name.c_str (), (int) name.size (),
+		g_filter_text.c_str (), (int) g_filter_text.size (), TRUE) >= 0;
+}
+
+void
+build_view (void)
+{
+	g_view.clear ();
+	g_item_of.assign (g_rows.size (), -1);
+	for (size_t i = 0; i < g_rows.size (); i++)
+	{
+		if (!g_filter_text.empty () && !filter_match (g_rows[i].name))
+			continue;
+		g_item_of[i] = (int) g_view.size ();
+		g_view.push_back (i);
+	}
+}
+
+void
+show_count (void)
+{
+	wchar_t text[128];
+
+	if (g_filter_text.empty ())
+		swprintf (text, ARRAYSIZE (text), res_str (IDS_FMT_ITEMS).c_str (), (int) g_view.size ());
+	else
+		swprintf (text, ARRAYSIZE (text), res_str (IDS_FMT_ITEMS_FILTERED).c_str (),
+			(int) g_view.size (), (int) g_entries.size ());
+	set_status (text);
+}
 
 /* The file list uses per-extension shell icons copied into a DPI-sized
    image list; indexes come from list_icon() below, not a fixed order.  */
@@ -136,18 +225,20 @@ list_icon (const std::string &name, bool is_dir)
 	return idx;
 }
 
-/* Index of the selected entry if the selection is exactly one file
-   (not a directory), else -1.  Mounting only makes sense for files.  */
+/* g_entries index of the selected entry if the selection is exactly
+   one file (not a directory), else -1.  Mounting only makes sense for
+   files.  */
 int
 selected_single_file (void)
 {
 	int i = ListView_GetNextItem (g_list, -1, LVNI_SELECTED);
+	int e = item_entry (i);
 
-	if (i < 0 || (size_t) i >= g_entries.size ())
+	if (e < 0)
 		return -1;
 	if (ListView_GetNextItem (g_list, i, LVNI_SELECTED) != -1)
 		return -1;
-	return g_entries[(size_t) i].is_dir ? -1 : i;
+	return g_entries[(size_t) e].is_dir ? -1 : e;
 }
 
 void
@@ -155,7 +246,7 @@ on_list_rclick (NMITEMACTIVATE *ia)
 {
 	int hit = ia->iItem;
 
-	if (hit < 0 || (size_t) hit >= g_entries.size ())
+	if (item_entry (hit) < 0)
 		return;
 	/* The menu acts on the item under the cursor: a right click
 	   outside the current selection replaces it, so a stale
@@ -239,15 +330,17 @@ on_list_rclick (NMITEMACTIVATE *ia)
 	}
 }
 
+/* first/last are ListView items.  The batch itself is by entry, so a
+   filter change while it is out does not misplace its sizes.  */
 void
 queue_list_sizes (int first, int last)
 {
-	if (g_view_seq != g_seq_list || g_entries.empty ())
+	if (g_view_seq != g_seq_list || g_view.empty ())
 		return;
 	if (first < 0)
 		first = 0;
-	if (last >= (int) g_entries.size ())
-		last = (int) g_entries.size () - 1;
+	if (last >= (int) g_view.size ())
+		last = (int) g_view.size () - 1;
 	if (first > last)
 		return;
 
@@ -260,31 +353,32 @@ queue_list_sizes (int first, int last)
 		return;
 
 	list_sizes_task task;
-	std::vector<size_t> rows;
+	std::vector<size_t> ents;
 	task.path = g_path;
 	task.owner_seq = g_view_seq;
 	task.paths.reserve (LIST_SIZE_BATCH);
-	rows.reserve (LIST_SIZE_BATCH);
-	for (int i = first; i <= last && rows.size () < LIST_SIZE_BATCH; i++)
+	ents.reserve (LIST_SIZE_BATCH);
+	for (int i = first; i <= last && ents.size () < LIST_SIZE_BATCH; i++)
 	{
-		const backend_dirent &e = g_entries[(size_t) i];
-		if (e.is_dir || e.is_symlink || e.size_set || g_size_pending[(size_t) i])
+		size_t idx = g_view[(size_t) i];
+		const backend_dirent &e = g_entries[idx];
+		if (e.is_dir || e.is_symlink || e.size_set || g_size_pending[idx])
 			continue;
-		g_size_pending[(size_t) i] = true;
+		g_size_pending[idx] = true;
 		task.paths.push_back (e.name);
-		rows.push_back ((size_t) i);
+		ents.push_back (idx);
 	}
-	if (rows.empty ())
+	if (ents.empty ())
 		return;
 
-	g_size_rows = std::move (rows);
+	g_size_ents = std::move (ents);
 	g_seq_sizes = backend_post (std::move (task));
 }
 
 void
 hint_list_sizes (int from, int to)
 {
-	if (from < 0 || to < from || g_entries.empty ())
+	if (from < 0 || to < from || g_view.empty ())
 		return;
 	int page = ListView_GetCountPerPage (g_list);
 	if (page < 1)
@@ -308,10 +402,10 @@ hint_list_sizes (int from, int to)
 		last -= first;
 		first = 0;
 	}
-	if (last >= (int) g_entries.size ())
+	if (last >= (int) g_view.size ())
 	{
-		int over = last - (int) g_entries.size () + 1;
-		last = (int) g_entries.size () - 1;
+		int over = last - (int) g_view.size () + 1;
+		last = (int) g_view.size () - 1;
 		first = first > over ? first - over : 0;
 	}
 	queue_list_sizes (first, last);
@@ -320,17 +414,17 @@ hint_list_sizes (int from, int to)
 void
 on_list_getdispinfo (NMLVDISPINFOW *di)
 {
-	int item = di->item.iItem;
+	int e = item_entry (di->item.iItem);
 
-	if (item < 0 || item >= (int) g_rows.size ())
+	if (e < 0)
 		return;
 
+	const list_row &row = g_rows[(size_t) e];
 	if (di->item.mask & LVIF_IMAGE)
-		di->item.iImage = g_rows[(size_t) item].image;
+		di->item.iImage = row.image;
 	if (!(di->item.mask & LVIF_TEXT))
 		return;
 
-	const list_row &row = g_rows[(size_t) item];
 	const std::wstring *text = &row.name;
 	if (di->item.iSubItem == 1)
 		text = &row.size;
@@ -351,10 +445,10 @@ on_list_finditem (NMLVFINDITEMW *find)
 	const LVFINDINFOW &fi = find->lvfi;
 	if ((fi.flags & (LVFI_PARAM | LVFI_NEARESTXY))
 		|| !(fi.flags & (LVFI_STRING | LVFI_PARTIAL | LVFI_SUBSTRING | LVFI_WRAP))
-		|| !fi.psz || !*fi.psz || g_rows.empty ())
+		|| !fi.psz || !*fi.psz || g_view.empty ())
 		return -1;
 
-	const int count = (int) g_rows.size ();
+	const int count = (int) g_view.size ();
 	const bool wrap = (fi.flags & LVFI_WRAP) != 0;
 	const bool partial = (fi.flags & (LVFI_PARTIAL | LVFI_SUBSTRING)) != 0;
 	const int length = lstrlenW (fi.psz);
@@ -369,7 +463,7 @@ on_list_finditem (NMLVFINDITEMW *find)
 	const int limit = wrap ? count : count - item;
 	for (int n = 0; n < limit; n++)
 	{
-		const std::wstring &name = g_rows[(size_t) item].name;
+		const std::wstring &name = g_rows[g_view[(size_t) item]].name;
 		if (name.size () >= (size_t) length
 			&& (partial || name.size () == (size_t) length)
 			&& CompareStringOrdinal (name.c_str (), length, fi.psz, length, TRUE) == CSTR_EQUAL)
@@ -383,11 +477,65 @@ on_list_finditem (NMLVFINDITEMW *find)
 void
 on_list_dblclk (int item)
 {
-	if (item < 0 || item >= (int) g_entries.size ())
+	int idx = item_entry (item);
+
+	if (idx < 0)
 		return;
-	const backend_dirent &e = g_entries[(size_t) item];
+	const backend_dirent &e = g_entries[(size_t) idx];
 	if (e.is_dir)
 		navigate (join_path (g_path, e.name));
+}
+
+/* Hand the keyboard to the list, with something focused in it, the way
+   Enter or Down leaves Explorer's search box.  */
+void
+focus_list_from_filter (void)
+{
+	if (!g_view.empty () && ListView_GetNextItem (g_list, -1, LVNI_FOCUSED) < 0)
+	{
+		int item = ListView_GetNextItem (g_list, -1, LVNI_SELECTED);
+		if (item < 0)
+		{
+			item = 0;
+			ListView_SetItemState (g_list, 0, LVIS_SELECTED, LVIS_SELECTED);
+		}
+		ListView_SetItemState (g_list, item, LVIS_FOCUSED, LVIS_FOCUSED);
+		ListView_EnsureVisible (g_list, item, FALSE);
+	}
+	SetFocus (g_list);
+}
+
+/* Esc clears the filter, and on an empty box returns to the list.  */
+LRESULT CALLBACK
+filter_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR, DWORD_PTR)
+{
+	switch (msg)
+	{
+	case WM_KEYDOWN:
+		if (wp == VK_ESCAPE)
+		{
+			if (GetWindowTextLengthW (wnd) > 0)
+				SetWindowTextW (wnd, L"");
+			else
+				SetFocus (g_list);
+			return 0;
+		}
+		if (wp == VK_RETURN || wp == VK_DOWN)
+		{
+			focus_list_from_filter ();
+			return 0;
+		}
+		break;
+	case WM_CHAR:
+		/* A single-line edit beeps at these.  */
+		if (wp == L'\r' || wp == 0x1b)
+			return 0;
+		break;
+	case WM_NCDESTROY:
+		RemoveWindowSubclass (wnd, filter_proc, 0);
+		break;
+	}
+	return DefSubclassProc (wnd, msg, wp, lp);
 }
 
 } // namespace
@@ -454,6 +602,8 @@ list_clear (void)
 	g_view_seq = 0;
 	g_entries.clear ();
 	g_rows.clear ();
+	g_view.clear ();
+	g_item_of.clear ();
 	ListView_SetItemCountEx (g_list, 0, 0);
 }
 
@@ -464,7 +614,7 @@ list_drop_sizes (void)
 {
 	g_seq_sizes = 0;
 	g_size_pending.clear ();
-	g_size_rows.clear ();
+	g_size_ents.clear ();
 	g_size_want_last = -1;
 }
 
@@ -475,37 +625,128 @@ selected_paths (void)
 	int i = -1;
 
 	while ((i = ListView_GetNextItem (g_list, i, LVNI_SELECTED)) != -1)
-		if ((size_t) i < g_entries.size ())
-			out.push_back (join_path (g_path, g_entries[(size_t) i].name));
+	{
+		int e = item_entry (i);
+		if (e >= 0)
+			out.push_back (join_path (g_path, g_entries[(size_t) e].name));
+	}
 	return out;
+}
+
+/* What the Extract button takes when nothing is selected: the whole
+   directory, or with a filter up, exactly the entries it shows.  */
+std::vector<std::string>
+default_extract_paths (void)
+{
+	std::vector<std::string> out;
+
+	if (g_path.empty ())
+		return out;
+	if (g_filter_text.empty ())
+	{
+		out.push_back (g_path);
+		return out;
+	}
+	out.reserve (g_view.size ());
+	for (size_t e : g_view)
+		out.push_back (join_path (g_path, g_entries[e].name));
+	return out;
+}
+
+void
+filter_init (void)
+{
+	SetWindowSubclass (g_filter_box, filter_proc, 0, 0);
+	SendMessageW (g_filter_box, EM_SETCUEBANNER, TRUE, (LPARAM) res_str (IDS_FILTER_CUE).c_str ());
+}
+
+/* Ctrl+F.  */
+void
+filter_focus (void)
+{
+	SetFocus (g_filter_box);
+	SendMessageW (g_filter_box, EM_SETSEL, 0, -1);
+}
+
+/* EN_CHANGE from the filter box.  Rebuilding is a pass over names
+   already in memory, so it runs on every keystroke with no backend
+   involved.  An owner-data list keeps its selection by item number,
+   which the new view gives to other entries: carry it over by entry,
+   or Extract would act on files the user never picked.  */
+void
+filter_changed (void)
+{
+	std::wstring text = window_text (g_filter_box);
+
+	if (text == g_filter_text)
+		return;
+
+	std::vector<size_t> sel;
+	for (int i = -1; (i = ListView_GetNextItem (g_list, i, LVNI_SELECTED)) != -1;)
+	{
+		int e = item_entry (i);
+		if (e >= 0)
+			sel.push_back ((size_t) e);
+	}
+	int focus = item_entry (ListView_GetNextItem (g_list, -1, LVNI_FOCUSED));
+
+	SendMessageW (g_list, WM_SETREDRAW, FALSE, 0);
+	ListView_SetItemState (g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+	g_filter_text = std::move (text);
+	g_filter_wild = g_filter_text.find_first_of (L"*?") != std::wstring::npos;
+	build_view ();
+	ListView_SetItemCountEx (g_list, (int) g_view.size (), 0);
+	for (size_t e : sel)
+		if (g_item_of[e] >= 0)
+			ListView_SetItemState (g_list, g_item_of[e], LVIS_SELECTED, LVIS_SELECTED);
+	int keep = focus >= 0 ? g_item_of[(size_t) focus] : -1;
+	if (keep >= 0)
+		ListView_SetItemState (g_list, keep, LVIS_FOCUSED, LVIS_FOCUSED);
+	SendMessageW (g_list, WM_SETREDRAW, TRUE, 0);
+	InvalidateRect (g_list, nullptr, TRUE);
+	if (!g_view.empty ())
+		ListView_EnsureVisible (g_list, keep >= 0 ? keep : 0, FALSE);
+
+	/* The wanted size range was in old item numbers.  */
+	g_size_want_last = -1;
+	int top = ListView_GetTopIndex (g_list);
+	int per_page = ListView_GetCountPerPage (g_list);
+	hint_list_sizes (top, top + (per_page > 0 ? per_page : 1) - 1);
+	/* A running job owns the status line, and with no listing there is
+	   nothing to count.  */
+	if (!g_extracting && !g_path.empty ())
+		show_count ();
 }
 
 void
 fill_list_sizes (backend_result *res)
 {
-	int redraw_first = (int) g_entries.size ();
+	int redraw_first = (int) g_view.size ();
 	int redraw_last = -1;
-	size_t got = res->sizes.size () < g_size_rows.size ()
-		? res->sizes.size () : g_size_rows.size ();
+	size_t got = res->sizes.size () < g_size_ents.size ()
+		? res->sizes.size () : g_size_ents.size ();
 
-	for (size_t row : g_size_rows)
-		if (row < g_size_pending.size ())
-			g_size_pending[row] = false;
+	for (size_t e : g_size_ents)
+		if (e < g_size_pending.size ())
+			g_size_pending[e] = false;
 	for (size_t i = 0; i < got; i++)
 	{
-		size_t row = g_size_rows[i];
-		if (row >= g_entries.size () || row >= g_rows.size ())
+		size_t e = g_size_ents[i];
+		if (e >= g_entries.size () || e >= g_rows.size ())
 			continue;
-		g_entries[row].size = res->sizes[i];
-		g_entries[row].size_set = true;
-		g_rows[row].size = format_size (res->sizes[i]);
-		if ((int) row < redraw_first)
-			redraw_first = (int) row;
-		if ((int) row > redraw_last)
-			redraw_last = (int) row;
+		g_entries[e].size = res->sizes[i];
+		g_entries[e].size_set = true;
+		g_rows[e].size = format_size (res->sizes[i]);
+		int item = g_item_of[e];
+		if (item < 0)
+			continue;
+		if (item < redraw_first)
+			redraw_first = item;
+		if (item > redraw_last)
+			redraw_last = item;
 	}
 
-	g_size_rows.clear ();
+	g_size_ents.clear ();
 	g_seq_sizes = 0;
 	if (redraw_last >= redraw_first)
 		ListView_RedrawItems (g_list, redraw_first, redraw_last);
@@ -516,12 +757,29 @@ fill_list_sizes (backend_result *res)
 void
 fill_list (backend_result *res)
 {
+	/* A filter is for the directory it was typed in; a refresh of that
+	   directory keeps it.  Cleared before the box is, so the EN_CHANGE
+	   this sends finds nothing to do.  */
+	if (res->path != g_path)
+	{
+		if (!g_filter_text.empty ())
+		{
+			g_filter_text.clear ();
+			g_filter_wild = false;
+			SetWindowTextW (g_filter_box, L"");
+		}
+		/* Selection is by item number and survives a new item count:
+		   the row double-clicked to get here would come up selected in
+		   the new directory, and Extract would take that entry alone.  */
+		ListView_SetItemState (g_list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+	}
+
 	g_path = res->path;
 	g_entries = std::move (res->entries);
 	g_view_seq = res->seq;
 	g_seq_sizes = 0;
 	g_size_pending.assign (g_entries.size (), false);
-	g_size_rows.clear ();
+	g_size_ents.clear ();
 	g_size_want_first = 0;
 	g_size_want_last = -1;
 
@@ -539,16 +797,14 @@ fill_list (backend_result *res)
 		row.image = list_icon (e.name, e.is_dir);
 		g_rows.push_back (std::move (row));
 	}
+	build_view ();
 
-	ListView_SetItemCountEx (g_list, (int) g_rows.size (), 0);
+	ListView_SetItemCountEx (g_list, (int) g_view.size (), 0);
 	int top = ListView_GetTopIndex (g_list);
 	int per_page = ListView_GetCountPerPage (g_list);
 	hint_list_sizes (top, top + (per_page > 0 ? per_page : 1) - 1);
 	SetWindowTextW (g_address, widen (g_path).c_str ());
-
-	wchar_t text[64];
-	swprintf (text, 64, res_str (IDS_FMT_ITEMS).c_str (), (int) g_rows.size ());
-	set_status (text);
+	show_count ();
 }
 
 } // namespace mainwnd

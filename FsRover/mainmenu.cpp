@@ -380,6 +380,9 @@ on_command (int id)
 		for (int i = 0, n = ListView_GetItemCount (g_list); i < n; i++)
 			ListView_SetItemState (g_list, i, ListView_GetItemState (g_list, i, LVIS_SELECTED) ^ LVIS_SELECTED, LVIS_SELECTED);
 		break;
+	case IDM_FILTER_FOCUS:
+		filter_focus ();
+		break;
 	case IDM_HELP_DOC:
 		show_help_doc ();
 		break;

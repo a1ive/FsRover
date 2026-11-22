@@ -158,8 +158,8 @@ on_extract_button (void)
 		return;
 	}
 	std::vector<std::string> paths = selected_paths ();
-	if (paths.empty () && !g_path.empty ())
-		paths.push_back (g_path);
+	if (paths.empty ())
+		paths = default_extract_paths ();
 	if (paths.empty ())
 	{
 		set_status (IDS_STATUS_NOTHING);
