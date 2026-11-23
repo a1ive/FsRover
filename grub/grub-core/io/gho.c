@@ -60,6 +60,7 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define GHO_MAX_SPANS		1024
 #define GHO_HEADER_SCAN_MAX	(16u << 20)
 #define GHO_SCAN_BUF		(256u << 10)
+#define GHO_NTFS_STREAM_MAX	((grub_uint64_t) GHO_MAX_BLOCKS * GRUB_GHOST_BLOCK_MAX)
 #define GHO_NTFS_FRAGMENT	(32u << 10)
 #define GHO_NTFS_RECORD_MAX	(64u << 10)
 
@@ -80,6 +81,16 @@ struct gho_ntfs_block
 	grub_uint64_t phys;
 	grub_uint64_t logical;
 	grub_uint32_t len;
+};
+
+/* Sequential input window used only while reconstructing an NTFS volume. */
+struct gho_ntfs_scan
+{
+	grub_uint8_t *buf;
+	grub_uint64_t pos;
+	grub_uint64_t buf_at;
+	grub_size_t buf_len;
+	grub_uint32_t capacity;
 };
 
 struct gho_ntfs_extent
@@ -108,7 +119,8 @@ struct gho_image
 	grub_uint64_t total_bytes;
 	struct gho_ntfs_block *ntfs_blocks;
 	grub_uint32_t nntfs_blocks;
-	grub_uint64_t ntfs_stream_size;
+	grub_uint64_t ntfs_stream_size;	/* indexed logical bytes */
+	struct gho_ntfs_scan *ntfs_scan;	/* live only during open */
 	struct gho_ntfs_extent *extents;
 	grub_uint32_t nextents;
 	grub_uint32_t cluster_size;
@@ -245,15 +257,28 @@ gho_load_ntfs_block (struct gho_image *image, grub_uint32_t nr)
 	return GRUB_ERR_NONE;
 }
 
+static grub_err_t gho_ntfs_index_to (struct gho_image *image, grub_uint64_t end);
+
 static grub_err_t
 gho_ntfs_pread (struct gho_image *image, grub_uint64_t off, void *buf,
 		grub_size_t len)
 {
 	grub_uint8_t *out = buf;
 	grub_uint32_t lo = 0;
-	grub_uint32_t hi = image->nntfs_blocks;
+	grub_uint32_t hi;
+	grub_uint64_t end;
 
-	if (off > image->ntfs_stream_size || len > image->ntfs_stream_size - off)
+	if (grub_add (off, (grub_uint64_t) len, &end))
+		return grub_error (GRUB_ERR_BAD_DEVICE, "Ghost NTFS stream overflow");
+	if (image->ntfs_scan && end > image->ntfs_stream_size)
+	{
+		grub_err_t err = gho_ntfs_index_to (image, end);
+
+		if (err)
+			return err;
+	}
+	hi = image->nntfs_blocks;
+	if (end > image->ntfs_stream_size)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "Ghost NTFS stream truncated");
 	while (lo < hi)
 	{
@@ -654,19 +679,18 @@ gho_add_ntfs_block (struct gho_image *image, grub_uint32_t *capacity,
 	return GRUB_ERR_NONE;
 }
 
+/* Grow the block index up to END, or stop at the physical end of the
+   chain. The last decoded block stays available to the packet reader. */
 static grub_err_t
-gho_build_ntfs_block_index (struct gho_image *image, grub_uint8_t *scan)
+gho_ntfs_index_to (struct gho_image *image, grub_uint64_t end)
 {
-	grub_uint64_t pos = image->data_start;
-	grub_uint64_t buf_at = pos;
-	grub_size_t buf_len = 0;
-	grub_uint64_t logical = 0;
-	grub_uint32_t capacity = 0;
+	struct gho_ntfs_scan *scan = image->ntfs_scan;
 
-	while (pos + 2 <= image->stream_size)
+	while (image->ntfs_stream_size < end && image->stream_size - scan->pos >= 2)
 	{
+		grub_uint64_t pos = scan->pos;
 		const grub_uint8_t *p;
-		grub_size_t left = buf_len - (grub_size_t) (pos - buf_at);
+		grub_size_t left = scan->buf_len - (grub_size_t) (pos - scan->buf_at);
 		grub_uint32_t stored;
 		grub_size_t outlen;
 		grub_err_t err;
@@ -680,34 +704,34 @@ gho_build_ntfs_block_index (struct gho_image *image, grub_uint8_t *scan)
 
 			if (more > image->stream_size - pos - left)
 				more = (grub_size_t) (image->stream_size - pos - left);
-			grub_memmove (scan, scan + (pos - buf_at), left);
-			err = gho_pread (image, pos + left, scan + left, more);
+			grub_memmove (scan->buf, scan->buf + (pos - scan->buf_at), left);
+			err = gho_pread (image, pos + left, scan->buf + left, more);
 			if (err)
 				return err;
-			buf_at = pos;
-			buf_len = left + more;
+			scan->buf_at = pos;
+			scan->buf_len = left + more;
 		}
-		p = scan + (pos - buf_at);
+		p = scan->buf + (pos - scan->buf_at);
 		stored = grub_ghost_get16 (p);
 		if (stored < GRUB_GHOST_STORED_MIN || stored > image->stream_size - pos)
+		{
+			scan->pos = image->stream_size;
 			break;
+		}
+		image->cached_nr = GHO_CACHE_NONE;
 		err = grub_ghost_decode (image->comp, image->hash_tbl, p + 2, stored - 2,
 					image->blk_buf, GRUB_GHOST_BLOCK_MAX, &outlen);
 		if (err)
 			return err;
-		if (outlen == 0 || outlen > GRUB_GHOST_BLOCK_MAX
-			|| logical > ~((grub_uint64_t) 0) - outlen)
+		if (outlen == 0 || outlen > GRUB_GHOST_BLOCK_MAX)
 			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS block");
-		err = gho_add_ntfs_block (image, &capacity, pos, logical, (grub_uint32_t) outlen);
+		err = gho_add_ntfs_block (image, &scan->capacity, pos, image->ntfs_stream_size, (grub_uint32_t) outlen);
 		if (err)
 			return err;
-		logical += outlen;
-		pos += stored;
+		image->ntfs_stream_size += outlen;
+		image->cached_nr = image->nntfs_blocks - 1;
+		scan->pos = pos + stored;
 	}
-	if (image->nntfs_blocks == 0)
-		return grub_error (GRUB_ERR_BAD_SIGNATURE, "empty Ghost NTFS stream");
-	image->ntfs_stream_size = logical;
-	image->cached_nr = GHO_CACHE_NONE;
 	return GRUB_ERR_NONE;
 }
 
@@ -752,7 +776,12 @@ gho_ntfs_skip_crc (struct gho_image *image, grub_uint64_t *pos)
 	grub_uint8_t packet[10];
 	grub_err_t err;
 
-	if (*pos >= image->ntfs_stream_size)
+	err = gho_ntfs_index_to (image, *pos + sizeof (packet));
+	if (err)
+		return err;
+	if (*pos > image->ntfs_stream_size)
+		return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated Ghost NTFS run");
+	if (*pos == image->ntfs_stream_size)
 		return GRUB_ERR_NONE;
 	err = gho_ntfs_pread (image, *pos, packet, 1);
 	if (err)
@@ -802,10 +831,15 @@ gho_ntfs_infer_cluster_size (struct gho_image *image, grub_uint64_t pos, grub_ui
 	for (candidate = 512; candidate <= 65536; candidate <<= 1)
 	{
 		grub_uint64_t bytes;
+		grub_err_t err;
 
-		if (clusters > (~((grub_uint64_t) 0) / candidate))
+		if (grub_mul (clusters, (grub_uint64_t) candidate, &bytes)
+		    || bytes > GHO_NTFS_STREAM_MAX - pos)
 			continue;
-		bytes = clusters * candidate;
+		/* The boundary probe reads an optional checksum and a 16-byte ID. */
+		err = gho_ntfs_index_to (image, pos + bytes + 10 + 16);
+		if (err)
+			return err;
 		if (bytes <= image->ntfs_stream_size - pos && gho_ntfs_boundary (image, pos + bytes))
 		{
 			if (found != 0)
@@ -997,7 +1031,7 @@ gho_ntfs_map_attribute (struct gho_image *image, grub_uint8_t *record,
 		if (clusters > ~((grub_uint64_t) 0) / image->cluster_size)
 			return grub_error (GRUB_ERR_OUT_OF_RANGE, "Ghost NTFS run too large");
 		bytes = clusters * image->cluster_size;
-		if (bytes > image->ntfs_stream_size - *pos
+		if (bytes > GHO_NTFS_STREAM_MAX - *pos
 			|| (grub_uint64_t) lcn > ~((grub_uint64_t) 0) / image->cluster_size)
 			return grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "truncated Ghost NTFS run");
 		disk_base = (grub_uint64_t) lcn * image->cluster_size;
@@ -1115,7 +1149,7 @@ gho_build_ntfs_extents (struct gho_image *image)
 	record = grub_malloc (GHO_NTFS_RECORD_MAX);
 	if (!record)
 		return grub_errno;
-	while (image->ntfs_stream_size - pos >= 16)
+	while (1)
 	{
 		grub_uint8_t packet[16];
 		grub_uint16_t id;
@@ -1124,6 +1158,11 @@ gho_build_ntfs_extents (struct gho_image *image)
 		grub_uint32_t attr;
 		grub_uint32_t used;
 
+		err = gho_ntfs_index_to (image, pos + sizeof (packet));
+		if (err)
+			goto fail;
+		if (image->ntfs_stream_size - pos < sizeof (packet))
+			break;
 		err = gho_ntfs_pread (image, pos, packet, sizeof (packet));
 		if (err)
 			goto fail;
@@ -1139,8 +1178,7 @@ gho_build_ntfs_extents (struct gho_image *image)
 		err = gho_ntfs_read_data_packet (image, &pos, &record_size);
 		if (err)
 			goto fail;
-		if (record_size < 0x30 || record_size > GHO_NTFS_RECORD_MAX
-			|| record_size > image->ntfs_stream_size - pos)
+		if (record_size < 0x30 || record_size > GHO_NTFS_RECORD_MAX)
 		{
 			err = grub_error (GRUB_ERR_BAD_COMPRESSED_DATA, "bad Ghost NTFS record size");
 			goto fail;
@@ -1361,16 +1399,23 @@ gho_open_image (struct gho_image *image, grub_file_t io, const char *name)
 	   selects only the block decoder (NTFS also occurs with Fast LZ).  */
 	if (subtype == GRUB_GHOST_PART_NTFS)
 	{
+		struct gho_ntfs_scan ntfs_scan = { 0 };
+
 		err = gho_alloc_buffers (image);
 		if (err)
 			goto fail;
 		err = gho_find_ntfs_data_start (image, scan);
 		if (err)
 			goto fail;
-		err = gho_build_ntfs_block_index (image, scan);
-		if (err)
-			goto fail;
+		ntfs_scan.buf = scan;
+		ntfs_scan.pos = ntfs_scan.buf_at = image->data_start;
+		image->ntfs_scan = &ntfs_scan;
 		err = gho_build_ntfs_extents (image);
+		/* A packet terminator may precede the end of the block chain.
+		   Validate and index the remaining compressed blocks as well. */
+		if (!err)
+			err = gho_ntfs_index_to (image, ~(grub_uint64_t) 0);
+		image->ntfs_scan = NULL;
 		if (err)
 			goto fail;
 		image->ntfs = 1;
