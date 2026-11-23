@@ -154,6 +154,9 @@
     <ClCompile Include="..\common\optparse.c">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\rover_game.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="build_config.h">
@@ -256,6 +259,9 @@
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="..\common\optparse.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\rover_game.h">
       <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>

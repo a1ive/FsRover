@@ -166,6 +166,10 @@ void show_markdown_file (const std::string &path);
 void show_help ();
 void show_file_map (const std::string &path);
 
+/* ---- game.cpp ------------------------------------------------------ */
+/* Mars Runner, opened by clicking the About dialog's logo.  */
+void show_rover_game (GtkWindow *parent);
+
 /* ---- lostdlg.cpp --------------------------------------------------- */
 void show_lost_scan (const std::string &device);
 

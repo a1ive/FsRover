@@ -177,6 +177,7 @@
     <ClCompile Include="..\common\fusefs.cpp" />
     <ClCompile Include="..\common\natural_sort.cpp" />
     <ClCompile Include="..\common\optparse.c" />
+    <ClCompile Include="..\common\rover_game.cpp" />
     <ClCompile Include="backend.cpp" />
     <ClCompile Include="blake2\blake2s-ref.c" />
     <ClCompile Include="blake2\blake2sp-ref.c">
@@ -223,6 +224,7 @@
     <ClInclude Include="..\common\fs_encoding.h" />
     <ClInclude Include="..\common\natural_sort.h" />
     <ClInclude Include="..\common\optparse.h" />
+    <ClInclude Include="..\common\rover_game.h" />
     <ClInclude Include="backend.h" />
     <ClInclude Include="blake2\blake2-impl.h" />
     <ClInclude Include="blake2\blake2.h" />

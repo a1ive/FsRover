@@ -202,9 +202,11 @@ if(ROVER_GTK)
 			GtkRover/lostdlg.cpp
 			GtkRover/mount.cpp
 			GtkRover/hostdisk.cpp
+			GtkRover/game.cpp
 			common/extract_core.cpp
 			common/fusefs.cpp
 			common/natural_sort.cpp
+			common/rover_game.cpp
 			"${GTKROVER_RESOURCES}")
 		target_include_directories(GtkRover PRIVATE
 			"${CMAKE_CURRENT_SOURCE_DIR}/common"

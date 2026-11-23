@@ -1759,17 +1759,62 @@ act_shortcuts (GSimpleAction *, GVariant *, gpointer)
 	g_object_unref (builder);
 }
 
+constexpr const char *ABOUT_LOGO = "drive-harddisk";
+
+/* GtkAboutDialog's logo is a GtkImage somewhere in its template.  */
+GtkWidget *
+find_about_logo (GtkWidget *widget)
+{
+	if (GTK_IS_IMAGE (widget)
+	    && g_strcmp0 (gtk_image_get_icon_name (GTK_IMAGE (widget)), ABOUT_LOGO) == 0)
+		return widget;
+	for (GtkWidget *child = gtk_widget_get_first_child (widget); child;
+	     child = gtk_widget_get_next_sibling (child))
+	{
+		GtkWidget *found = find_about_logo (child);
+		if (found)
+			return found;
+	}
+	return nullptr;
+}
+
+/* The second release of a double click would open a second game.  */
+void
+on_about_logo (GtkGestureClick *click, int n_press, double, double, gpointer)
+{
+	GtkWidget *logo = gtk_event_controller_get_widget (GTK_EVENT_CONTROLLER (click));
+
+	if (n_press == 1)
+		show_rover_game (GTK_WINDOW (gtk_widget_get_root (logo)));
+}
+
 void
 act_about (GSimpleAction *, GVariant *, gpointer)
 {
-	gtk_show_about_dialog (S.window,
+	GtkWidget *about = gtk_about_dialog_new ();
+
+	g_object_set (about,
 		"program-name", "FsRover",
 		"comments", _("Read-only filesystem browser built on GRUB drivers."),
 		"license-type", GTK_LICENSE_GPL_3_0,
-		"logo-icon-name", "drive-harddisk",
+		"logo-icon-name", ABOUT_LOGO,
 		"copyright", "Copyright © 2026 A1ive",
 		"translator-credits", _("translator-credits"),
 		nullptr);
+	gtk_window_set_transient_for (GTK_WINDOW (about), S.window);
+	gtk_window_set_modal (GTK_WINDOW (about), TRUE);
+	gtk_window_set_destroy_with_parent (GTK_WINDOW (about), TRUE);
+
+	/* The easter egg, as in FsRover's About box: click the logo.  Should
+	   a future GTK lay the dialog out differently, there is no game.  */
+	GtkWidget *logo = find_about_logo (about);
+	if (logo)
+	{
+		GtkGesture *click = gtk_gesture_click_new ();
+		g_signal_connect (click, "released", G_CALLBACK (on_about_logo), nullptr);
+		gtk_widget_add_controller (logo, GTK_EVENT_CONTROLLER (click));
+	}
+	gtk_window_present (GTK_WINDOW (about));
 }
 
 const GActionEntry window_actions[] =
