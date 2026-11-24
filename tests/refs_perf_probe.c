@@ -48,6 +48,52 @@ name_key(unsigned char *key, const char *name)
 }
 
 static void
+metadata_node_cases(void)
+{
+	static const unsigned chunks[] = { 4, 2, 1, 1, 1 };
+	const grub_uint64_t physical[] = { 8, 9, 17, 18 };
+	const grub_uint64_t reference[] = { 8, 9, 0, 18 };
+	struct grub_disk disk = {0};
+	struct grub_refs_data d = {0};
+	unsigned char output[65536];
+	unsigned bytes, i, shift;
+
+	fixture(3, 14, 1, 2);
+	d.disk = &disk;
+	d.linear_limit = 128;
+	disk.read_hook = count_hook;
+	disk.read_hook_data = &bytes;
+	for (shift = 12; shift <= 16; shift++)
+	{
+		block_size = d.cluster_size = 1U << shift;
+		d.cluster_shift = shift;
+		d.chunk_count = chunks[shift - 12];
+		d.block_size = d.cluster_size * d.chunk_count;
+		for (i = 0; i < d.chunk_count; i++)
+			memset(media + (8 + i) * block_size, (int) (8 + i), block_size);
+		node(8, "SUPB", 0, 0);
+		bytes = 0;
+		CHECK(grub_refs_read_fixed_node(&d, 8, "SUPB", output) == GRUB_ERR_NONE);
+		CHECK(bytes == d.block_size && !memcmp(output, media + 8 * block_size, bytes));
+	}
+
+	/* Two contiguous pairs separated by a gap. The header supplies cluster 17. */
+	block_size = d.cluster_size = 4096;
+	d.cluster_shift = 12;
+	d.chunk_count = 4;
+	d.block_size = 16384;
+	for (i = 0; i < 4; i++)
+		memset(media + physical[i] * block_size, (int) physical[i], block_size);
+	node(8, "MSB+", 0, 0);
+	put64(media + 8 * block_size + REFS_NODE_SELF_BLOCKS + 2 * 8, physical[2]);
+	bytes = 0;
+	CHECK(grub_refs_read_node(&d, reference, 0, "MSB+", output) == GRUB_ERR_NONE);
+	CHECK(bytes == d.block_size);
+	for (i = 0; i < 4; i++)
+		CHECK(!memcmp(output + i * block_size, media + physical[i] * block_size, block_size));
+}
+
+static void
 lookup_cases(void)
 {
 	struct grub_refs_data d = {0}; struct grub_disk disk = {0};
@@ -265,6 +311,7 @@ sort_cases(void)
 int main(void)
 {
 	int old=refs_review_main();
+	metadata_node_cases();
 	lookup_cases(); extent_cases(); compression_cases(); map_growth_case(); sort_cases();
 	printf("%s %u ReFS checks (%u new failures)\n", old || failures ? "FAIL":"PASS",checks,failures);
 	return old || failures ? 1 : 0;

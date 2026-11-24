@@ -184,8 +184,10 @@ object/name lookup, empty terminal keys, alternate separator order, Unicode
 and case-insensitive lookup, missing files, I/O/OOM propagation and tree loops.
 It compares sequential and random sparse reads with an independent byte array,
 checks cached-hole boundaries, container-table growth/reset, and sorted
-compression ranges with gaps, overlap and missing bitmaps. The combined probe
-currently runs 172,677 checks, including sorting lengths 0 through 130 with
+compression ranges with gaps, overlap and missing bitmaps. Metadata-node cases
+check fixed reads for 4 through 64 KiB clusters and two discontiguous pairs of
+4 KiB clusters with a continuation supplied by the node header. The combined
+probe runs 172,693 checks, including sorting lengths 0 through 130 with
 ordered, reversed, duplicate and 64-bit extreme keys. An insertion-sort oracle
 checks the order, and record tags check that sorting preserves every payload.
 

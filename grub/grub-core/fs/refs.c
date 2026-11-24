@@ -668,23 +668,19 @@ static grub_err_t
 grub_refs_read_node(struct grub_refs_data *data, const grub_uint64_t *blocks,
 	int identity, const char *sig, grub_uint8_t *buf)
 {
-	grub_uint64_t b[4];
 	grub_uint32_t i;
 
-	b[0] = blocks[0];
-	b[1] = blocks[1];
-	b[2] = blocks[2];
-	b[3] = blocks[3];
-	if (!b[0])
+	if (!blocks[0])
 		return grub_error(GRUB_ERR_BAD_FS, "refs: null node reference");
 
 	for (i = 0; i < data->chunk_count; i++)
 	{
+		grub_uint64_t block = blocks[i];
 		grub_uint64_t phys;
 
-		if (i && !b[i])
-			b[i] = refs_get64(buf + REFS_NODE_SELF_BLOCKS + 8 * i);
-		phys = identity ? b[i] : grub_refs_map_block(data, b[i]);
+		if (i && !block)
+			block = refs_get64(buf + REFS_NODE_SELF_BLOCKS + 8 * i);
+		phys = identity ? block : grub_refs_map_block(data, block);
 		if (!phys)
 			return grub_error(GRUB_ERR_BAD_FS, "refs: unmapped metadata block");
 		if (grub_disk_read(data->disk, 0,
@@ -698,6 +694,19 @@ grub_refs_read_node(struct grub_refs_data *data, const grub_uint64_t *blocks,
 		: (grub_memcmp(buf, sig, 4) != 0 || refs_get64(buf + REFS_NODE_SELF_BLOCKS) != blocks[0]))
 		return grub_error(GRUB_ERR_BAD_FS, "refs: bad metadata node");
 	return GRUB_ERR_NONE;
+}
+
+/* Superblocks and checkpoints occupy consecutive physical clusters. */
+static grub_err_t
+grub_refs_read_fixed_node(struct grub_refs_data *data, grub_uint64_t first,
+	const char *sig, grub_uint8_t *buf)
+{
+	grub_uint64_t blocks[4];
+	grub_uint32_t i;
+
+	for (i = 0; i < data->chunk_count; i++)
+		blocks[i] = first + i;
+	return grub_refs_read_node(data, blocks, 1, sig, buf);
 }
 
 /*
@@ -1311,7 +1320,6 @@ grub_refs_mount(grub_disk_t disk)
 	grub_uint32_t bps, spc;
 	grub_uint64_t cs64;
 	grub_uint32_t cs;
-	grub_uint64_t sb_blocks[4];
 	grub_uint64_t l1[2];
 	grub_uint64_t chkp_seq[2];
 	int chkp_ok[2];
@@ -1386,9 +1394,7 @@ grub_refs_mount(grub_disk_t disk)
 		goto fail;
 
 	/* superblock at block 30 */
-	for (i = 0; i < 4; i++)
-		sb_blocks[i] = REFS_SUPERBLOCK_BLOCK + i;
-	if (grub_refs_read_node(data, sb_blocks, 1, "SUPB", node))
+	if (grub_refs_read_fixed_node(data, REFS_SUPERBLOCK_BLOCK, "SUPB", node))
 		goto fail;
 	/* the checkpoint list trails the volume guid and two reserved
 	   fields at the start of the superblock body */
@@ -1412,16 +1418,11 @@ grub_refs_mount(grub_disk_t disk)
 	 */
 	for (i = 0; i < 2; i++)
 	{
-		grub_uint64_t cb[4];
-		grub_uint32_t j;
-
 		chkp_ok[i] = 0;
 		chkp_seq[i] = 0;
 		if (!l1[i])
 			continue;
-		for (j = 0; j < 4; j++)
-			cb[j] = l1[i] + j;
-		if (grub_refs_read_node(data, cb, 1, "CHKP", node) != GRUB_ERR_NONE)
+		if (grub_refs_read_fixed_node(data, l1[i], "CHKP", node) != GRUB_ERR_NONE)
 		{
 			if (grub_errno == GRUB_ERR_OUT_OF_MEMORY)
 				goto fail;
@@ -1444,14 +1445,10 @@ grub_refs_mount(grub_disk_t disk)
 	for (i = 0; i < 2 && !have_chkp; i++)
 	{
 		grub_uint32_t c = order[i];
-		grub_uint64_t cb[4];
-		grub_uint32_t j;
 
 		if (!chkp_ok[c])
 			continue;
-		for (j = 0; j < 4; j++)
-			cb[j] = l1[c] + j;
-		if (grub_refs_read_node(data, cb, 1, "CHKP", node) == GRUB_ERR_NONE
+		if (grub_refs_read_fixed_node(data, l1[c], "CHKP", node) == GRUB_ERR_NONE
 			&& grub_refs_load_checkpoint(data, node, v312) == GRUB_ERR_NONE)
 		{
 			grub_dprintf("refs", "using checkpoint %u (number %"
