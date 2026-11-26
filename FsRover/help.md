@@ -778,6 +778,35 @@ interior pages and overflow payload chains are supported. The driver reads the
 main database file only; uncheckpointed changes that exist solely in a
 separate WAL file are not visible.
 
+#### FMOD sound bank — `fmod`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: none · Symlinks: none
+
+FMOD Studio banks (`.bank`, RIFF `FEV `) and bare FSB5 sound banks (`.fsb`).
+Every subsound appears at the root under its FSB name (or its index when the
+bank has no name table):
+
+| Codec | Presented as |
+|---|---|
+| PCM 8/16/24/32-bit, float | `.wav` — a RIFF header in front of the stored samples |
+| Vorbis | `.ogg` — remuxed losslessly into a standard Ogg Vorbis stream |
+| MPEG | `.mp3` for single-stream mono/stereo Layer III, with FSB padding removed. Other MPEG layouts are exported raw as `.fsb-mpeg`. |
+| ADPCM, XMA, AT9, Opus, … | the raw stream, named after the codec (`.ima`, `.xma`, `.at9`, `.opus`, …) |
+
+FSB5 Vorbis stores only a checksum of its setup header; the header itself comes
+from a built-in table of the setups FMOD's encoder uses (from vgmstream). A
+stream whose setup is not in that table, or whose packet chain is damaged, is
+shown raw as `.vorbis` instead. Sizing the `.ogg` files reads every packet
+header once when the bank is opened. The `.mp3` size and seek index are also built
+from frame headers when the bank is opened.
+
+Names that match ignoring ASCII case get a `_N` suffix. Long names are shortened
+at a UTF-8 character boundary so the suffix and extension fit within 255 bytes.
+Studio metadata — events, buses, string tables — is not interpreted, so banks
+without audio (such as `Master.strings.bank`) show an empty root.
+
+**Not supported:** encrypted banks, big-endian PCM16 (shown raw).
+
 ---
 
 ### 1.7 Firmware and pseudo-filesystems

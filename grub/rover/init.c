@@ -126,6 +126,7 @@
 	mod (fat)	\
 	mod (fatx)	\
 	mod (fbfs)	\
+	mod (fmod)	\
 	mod (ghofs)	\
 	mod (hfs)	\
 	mod (hfsplus)	\

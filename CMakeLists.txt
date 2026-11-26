@@ -273,4 +273,7 @@ if(BUILD_TESTING)
 			--cli $<TARGET_FILE:LinuxRover> --probe $<TARGET_FILE:product_probe>
 			--output "${CMAKE_CURRENT_BINARY_DIR}/product-tests")
 	set_tests_properties(product-regression PROPERTIES TIMEOUT 300)
+	add_test(NAME fmod-regression
+		COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/fmod.py"
+			--cli $<TARGET_FILE:LinuxRover>)
 endif()

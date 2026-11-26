@@ -741,6 +741,12 @@
     <ClCompile Include="grub-core\fs\fbfs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\fmod.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
+    <ClInclude Include="grub-core\fs\fmod_vorbis.h">
+      <Filter>grub-core\fs</Filter>
+    </ClInclude>
     <ClCompile Include="grub-core\fs\sqlitefs.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>
