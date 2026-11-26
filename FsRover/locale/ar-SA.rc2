@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"تشغيل كمسؤول(&R)"
 	IDS_ELEVATE_FAILED	"تعذّرت إعادة التشغيل كمسؤول."
 #endif
+	IDS_MENU_EFIVARS	"متغيرات &UEFI (efivars)"
+	IDS_EFIVARS_WARN	"يؤدي سرد متغيرات UEFI إلى تشغيل خدمات المتغيرات الخاصة بالبرنامج الثابت داخل نواة Windows. من المعروف أن بعض البرامج الثابتة المعيبة قد تتسبب هنا في تجميد النظام أو انهياره، ولا يستطيع FsRover منع ذلك.\n\nتتم قراءة المتغيرات فقط ولا تتم الكتابة عليها أبدًا. يسري هذا الإعداد على هذه الجلسة فقط."
+	IDS_EFIVARS_ASK	"هل تريد عرض متغيرات UEFI الآن؟"
+	IDS_EFIVARS_ASK_RESTART	"تتطلب قراءتها صلاحيات المسؤول. هل تريد إعادة تشغيل FsRover كمسؤول وعرضها؟"
+	IDS_FMT_EFIVARS_FAILED	"تعذّر عرض متغيرات UEFI: %s"
 	IDS_BACKEND_START_FAILED	"تعذّر بدء العامل الخلفي."
 	IDS_BACKEND_STOP_FAILED	"لم يتوقف العامل الخلفي بشكل سليم."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"معاينة Markdown"
 	IDS_MD_ASK_LINK		"هل تريد فتح هذا الارتباط في المستعرض؟"
 	IDS_FMT_MD_TRUNC	"يُعرض فقط أول %s من %s."
-	IDS_CMDLINE_USAGE	"الاستخدام: FsRover.exe [خيارات]\n\n  -m, --minimize\t\tالبدء مصغّرًا.\n  -f, --file=FILE\t\tتركيب FILE كقرص ظاهري.\n  -d, --file-dec=FILE\t\tكذلك، مع فك ضغط الصورة أثناء القراءة.\n  -n, --no-times\t\tعدم الاحتفاظ بالطوابع الزمنية.\n  -c, --fs-encoding=ENC\tترميز أسماء الملفات: UTF-8 أو GBK أو Big5 أو Shift-JIS أو EUC-KR.\n  -h, --help\t\tعرض هذه الرسالة."
+	IDS_CMDLINE_USAGE	"الاستخدام: FsRover.exe [خيارات]\n\n  -m, --minimize\t\tالبدء مصغّرًا.\n  -f, --file=FILE\t\tتركيب FILE كقرص ظاهري.\n  -d, --file-dec=FILE\t\tكذلك، مع فك ضغط الصورة أثناء القراءة.\n  -n, --no-times\t\tعدم الاحتفاظ بالطوابع الزمنية.\n  -c, --fs-encoding=ENC\tترميز أسماء الملفات: UTF-8 أو GBK أو Big5 أو Shift-JIS أو EUC-KR.\n      --efivars\t\tعرض متغيرات UEFI كـ (efivars) (للمسؤول فقط).\n  -h, --help\t\tعرض هذه الرسالة."
 	IDS_FMT_CMDLINE_ARG	"وسيطة غير متوقعة -- '%s'"
 	IDS_MENU_HELPDOC	"مستند التعليمات(&H)"
 	IDS_MENU_VERACRYPT	"إلغاء القفل كـ VeraCrypt"

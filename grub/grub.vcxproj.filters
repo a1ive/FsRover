@@ -1188,6 +1188,9 @@
     <ClCompile Include="grub-core\lib\pbkdf2.c">
       <Filter>grub-core\lib</Filter>
     </ClCompile>
+    <ClCompile Include="grub-core\fs\efivarfs.c">
+      <Filter>grub-core\fs</Filter>
+    </ClCompile>
     <ClCompile Include="grub-core\fs\proc.c">
       <Filter>grub-core\fs</Filter>
     </ClCompile>

@@ -94,6 +94,9 @@ struct cmdline_options
 	   process cannot read, and a session about someone's own image
 	   file has no use for them.  */
 	bool no_windisk = false;
+	/* --efivars: show the UEFI variables as (efivars) from the start.
+	   Off unless asked for, every time; see mainmenu.cpp.  */
+	bool efivars = false;
 	struct mount
 	{
 		std::wstring file;

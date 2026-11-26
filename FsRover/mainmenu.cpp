@@ -52,6 +52,10 @@ HMENU g_menu_file;	/* File popup: Refresh grays while extracting */
 HMENU g_menu_settings;	/* Settings popup: toggles refreshed on open */
 HMENU g_menu_encoding;	/* File name encoding radio submenu */
 HMENU g_menu_dokan;	/* Dokan popup, rebuilt on every open */
+/* (efivars) is registered.  Deliberately never saved: should listing
+   the variables hang a broken firmware, the next start must not walk
+   straight back into it.  */
+bool g_efivars;
 
 void
 open_host_image (bool decompress)
@@ -66,9 +70,10 @@ open_host_image (bool decompress)
 #if FSROVER_ENABLE_ADMIN_FEATURES
 /* Restart elevated (File menu, shown only while this process is not).
    A running process cannot gain privileges, so this instance hands
-   over as soon as the elevated one has been started.  */
+   over as soon as the elevated one has been started.  PARAMS is the
+   new instance's command line, or nullptr for none.  */
 void
-run_as_admin (void)
+run_as_admin (const wchar_t *params)
 {
 	wchar_t exe[MAX_PATH];
 	SHELLEXECUTEINFOW info = { sizeof (info) };
@@ -82,6 +87,7 @@ run_as_admin (void)
 	info.hwnd = g_main;
 	info.lpVerb = L"runas";
 	info.lpFile = exe;
+	info.lpParameters = params;
 	info.nShow = SW_SHOWNORMAL;
 	if (!ShellExecuteExW (&info))
 	{
@@ -94,7 +100,78 @@ run_as_admin (void)
 }
 #endif
 
+/* A drive letter still serving (efivars) would lose its device.  */
+bool
+efivars_mounted (void)
+{
+	for (size_t i = 0; i < dokanfs_count (); i++)
+		if (dokanfs_device (dokanfs_get (i)) == "efivars")
+			return true;
+	return false;
+}
+
+/* Register or drop (efivars) on the backend; a refusal (no elevated
+   token, no UEFI) is reported here.  */
+bool
+efivars_set (bool on)
+{
+	std::string error = backend_set_efivars (on);
+	wchar_t text[512];
+
+	if (error.empty ())
+	{
+		g_efivars = on;
+		return true;
+	}
+	// Could not show UEFI variables: %s
+	_snwprintf_s (text, ARRAYSIZE (text), _TRUNCATE,
+		res_str (IDS_FMT_EFIVARS_FAILED).c_str (), widen (error).c_str ());
+	msg_box (g_main, text, res_str (IDS_APP_TITLE).c_str (), MB_ICONERROR | MB_OK);
+	return false;
+}
+
+/* File menu toggle.  Turning it on asks first, every time: the user
+   should know the firmware is what runs, and that it may not come
+   back.  Unelevated, the yes restarts elevated with --efivars, which
+   then needs no second question.  */
+void
+toggle_efivars (void)
+{
+	bool restart = !is_elevated ();
+	std::wstring text;
+
+	if (g_efivars)
+	{
+		if (efivars_set (false))
+			refresh ();
+		return;
+	}
+	text = res_str (IDS_EFIVARS_WARN) + L"\n\n"
+		+ res_str (restart ? IDS_EFIVARS_ASK_RESTART : IDS_EFIVARS_ASK);
+	if (msg_box (g_main, text.c_str (), res_str (IDS_APP_TITLE).c_str (),
+		MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES)
+		return;
+#if FSROVER_ENABLE_ADMIN_FEATURES
+	if (restart)
+	{
+		run_as_admin (L"--efivars");
+		return;
+	}
+#endif
+	if (efivars_set (true))
+		refresh ();
+}
+
 } // namespace
+
+/* --efivars: the switch itself is the explicit request, so no question.
+   Runs before the first enumeration, which then lists the variables.  */
+void
+efivars_from_cmdline (void)
+{
+	if (g_cmdline.efivars)
+		efivars_set (true);
+}
 
 /* Take dropped files.  The main window is the only drop target, which
    is enough for the panes as well: a drop lands on the first ancestor
@@ -171,6 +248,8 @@ create_menu_bar (HWND wnd)
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_OPEN_IMAGE_DECOMP, res_str (IDS_MENU_OPEN_IMAGE_DECOMP).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_REFRESH, res_str (IDS_BTN_REFRESH).c_str ());
+	/* Check mark and graying set by on_menu_popup.  */
+	AppendMenuW (g_menu_file, MF_STRING, IDM_FILE_EFIVARS, res_str (IDS_MENU_EFIVARS).c_str ());
 	AppendMenuW (g_menu_file, MF_SEPARATOR, 0, nullptr);
 #if FSROVER_ENABLE_ADMIN_FEATURES
 	/* Elevation cannot change while the process runs, so the re-launch
@@ -229,6 +308,16 @@ on_menu_popup (HMENU menu)
 		EnableMenuItem (menu, IDM_FILE_REFRESH, g_extracting ? MF_GRAYED : MF_ENABLED);
 		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE, g_extracting ? MF_GRAYED : MF_ENABLED);
 		EnableMenuItem (menu, IDM_FILE_OPEN_IMAGE_DECOMP, g_extracting ? MF_GRAYED : MF_ENABLED);
+		/* Off: unelevated it can only be had through a restart, which
+		   --file sessions do not offer (see create_menu_bar).  On: a
+		   drive letter on (efivars) keeps it.  */
+		bool efivars_ok = !g_extracting;
+		if (g_efivars)
+			efivars_ok = efivars_ok && !efivars_mounted ();
+		else if (!is_elevated ())
+			efivars_ok = efivars_ok && FSROVER_ENABLE_ADMIN_FEATURES && !g_cmdline.no_windisk;
+		EnableMenuItem (menu, IDM_FILE_EFIVARS, efivars_ok ? MF_ENABLED : MF_GRAYED);
+		CheckMenuItem (menu, IDM_FILE_EFIVARS, g_efivars ? MF_CHECKED : MF_UNCHECKED);
 		return;
 	}
 	if (menu == g_menu_settings)
@@ -366,9 +455,13 @@ on_command (int id)
 		break;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 	case IDM_FILE_RUNAS:
-		run_as_admin ();
+		run_as_admin (nullptr);
 		break;
 #endif
+	case IDM_FILE_EFIVARS:
+		if (!g_extracting)
+			toggle_efivars ();
+		break;
 
 	case IDM_FILE_EXIT:
 		SendMessageW (g_main, WM_CLOSE, 0, 0);

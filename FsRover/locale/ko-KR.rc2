@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"관리자 권한으로 실행(&R)"
 	IDS_ELEVATE_FAILED	"관리자 권한으로 다시 시작할 수 없습니다."
 #endif
+	IDS_MENU_EFIVARS	"UEFI 변수(efivars)(&U)"
+	IDS_EFIVARS_WARN	"UEFI 변수를 나열하면 Windows 커널 안에서 펌웨어 자체의 변수 서비스가 실행됩니다. 결함이 있는 일부 펌웨어는 이 과정에서 시스템을 멈추게 하거나 충돌시키는 것으로 알려져 있으며, FsRover는 이를 막을 수 없습니다.\n\n변수는 읽기만 하고 쓰지 않습니다. 이 설정은 이번 세션에만 적용됩니다."
+	IDS_EFIVARS_ASK	"지금 UEFI 변수를 표시하시겠습니까?"
+	IDS_EFIVARS_ASK_RESTART	"변수를 읽으려면 관리자 권한이 필요합니다. FsRover를 관리자 권한으로 다시 시작하여 표시하시겠습니까?"
+	IDS_FMT_EFIVARS_FAILED	"UEFI 변수를 표시할 수 없습니다: %s"
 	IDS_BACKEND_START_FAILED	"백엔드 작업 스레드를 시작할 수 없습니다."
 	IDS_BACKEND_STOP_FAILED	"백엔드 작업 스레드가 정상적으로 종료되지 않았습니다."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Markdown 미리 보기"
 	IDS_MD_ASK_LINK		"이 링크를 브라우저에서 여시겠습니까?"
 	IDS_FMT_MD_TRUNC	"앞부분 %s만 표시합니다 (전체 %s)."
-	IDS_CMDLINE_USAGE	"사용법: FsRover.exe [옵션]\n\n  -m, --minimize\t\t최소화 상태로 시작합니다.\n  -f, --file=FILE\t\tFILE을 가상 디스크로 연결합니다.\n  -d, --file-dec=FILE\t\t압축을 풀면서 FILE을 가상 디스크로 연결합니다.\n  -n, --no-times\t\t타임스탬프를 유지하지 않습니다.\n  -c, --fs-encoding=ENC\t파일 이름 인코딩: UTF-8, GBK, Big5, Shift-JIS, EUC-KR.\n  -h, --help\t\t이 도움말을 표시합니다."
+	IDS_CMDLINE_USAGE	"사용법: FsRover.exe [옵션]\n\n  -m, --minimize\t\t최소화 상태로 시작합니다.\n  -f, --file=FILE\t\tFILE을 가상 디스크로 연결합니다.\n  -d, --file-dec=FILE\t\t압축을 풀면서 FILE을 가상 디스크로 연결합니다.\n  -n, --no-times\t\t타임스탬프를 유지하지 않습니다.\n  -c, --fs-encoding=ENC\t파일 이름 인코딩: UTF-8, GBK, Big5, Shift-JIS, EUC-KR.\n      --efivars\t\tUEFI 변수를 (efivars)로 표시합니다(관리자 전용).\n  -h, --help\t\t이 도움말을 표시합니다."
 	IDS_FMT_CMDLINE_ARG	"예상하지 못한 인수: '%s'"
 	IDS_MENU_HELPDOC	"도움말 문서(&H)"
 	IDS_MENU_VERACRYPT	"VeraCrypt로 잠금 해제"

@@ -32,11 +32,13 @@
 #define ROVER_HOSTDISK_DECLARE	ROVER_MOD_DECLARE (windisk)
 #define ROVER_HOSTDISK_INIT(flags)	do { if (!((flags) & ROVER_INIT_NO_HOSTDISK)) grub_windisk_init (); } while (0)
 #define ROVER_HOSTDISK_FINI()	grub_windisk_fini ()
+#define ROVER_EFIVARS_FINI()	rover_efivars_disable ()
 #else
 #define ROVER_HOSTFILE_MODULE(mod)	mod (posixfile)
 #define ROVER_HOSTDISK_DECLARE	ROVER_MOD_DECLARE (posixdisk)
 #define ROVER_HOSTDISK_INIT(flags)	do { if (!((flags) & ROVER_INIT_NO_HOSTDISK)) grub_posixdisk_init (); } while (0)
 #define ROVER_HOSTDISK_FINI()	grub_posixdisk_fini ()
+#define ROVER_EFIVARS_FINI()	do { } while (0)
 #endif
 
 #define ROVER_MODULE_LIST(mod)	\
@@ -244,6 +246,7 @@ rover_init (int flags)
 void
 rover_fini (void)
 {
+	ROVER_EFIVARS_FINI ();
 	rover_proc_fini ();
 	ROVER_HOSTDISK_FINI ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)

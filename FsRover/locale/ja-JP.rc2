@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"管理者として実行(&R)"
 	IDS_ELEVATE_FAILED	"管理者として再起動できませんでした。"
 #endif
+	IDS_MENU_EFIVARS	"UEFI 変数 (efivars)(&U)"
+	IDS_EFIVARS_WARN	"UEFI 変数を一覧表示すると、Windows カーネル内でファームウェア自身の変数サービスが実行されます。不具合のある一部のファームウェアでは、ここでシステムが応答しなくなったりクラッシュしたりすることが知られており、FsRover では防げません。\n\n変数は読み取るだけで、書き込みは行いません。この設定は今回のセッションのみ有効です。"
+	IDS_EFIVARS_ASK	"UEFI 変数を今すぐ表示しますか?"
+	IDS_EFIVARS_ASK_RESTART	"変数の読み取りには管理者権限が必要です。FsRover を管理者として再起動して表示しますか?"
+	IDS_FMT_EFIVARS_FAILED	"UEFI 変数を表示できませんでした: %s"
 	IDS_BACKEND_START_FAILED	"バックエンドワーカーを起動できませんでした。"
 	IDS_BACKEND_STOP_FAILED	"バックエンドワーカーを正常に停止できませんでした。"
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Markdown プレビュー"
 	IDS_MD_ASK_LINK		"このリンクをブラウザーで開きますか？"
 	IDS_FMT_MD_TRUNC	"先頭 %s のみ表示しています (全体 %s)。"
-	IDS_CMDLINE_USAGE	"使い方: FsRover.exe [オプション]\n\n  -m, --minimize\t\t最小化した状態で起動します。\n  -f, --file=ファイル\t\t指定したファイルを仮想ディスクとしてマウントします。\n  -d, --file-dec=ファイル\t\t同上。イメージを透過的に展開します。\n  -n, --no-times\t\t抽出した項目のタイムスタンプを保持しません。\n  -c, --fs-encoding=ENC\tファイル名のエンコード: UTF-8、GBK、Big5、Shift-JIS、EUC-KR。\n  -h, --help\t\tこのメッセージを表示します。"
+	IDS_CMDLINE_USAGE	"使い方: FsRover.exe [オプション]\n\n  -m, --minimize\t\t最小化した状態で起動します。\n  -f, --file=ファイル\t\t指定したファイルを仮想ディスクとしてマウントします。\n  -d, --file-dec=ファイル\t\t同上。イメージを透過的に展開します。\n  -n, --no-times\t\t抽出した項目のタイムスタンプを保持しません。\n  -c, --fs-encoding=ENC\tファイル名のエンコード: UTF-8、GBK、Big5、Shift-JIS、EUC-KR。\n      --efivars\t\tUEFI 変数を (efivars) として表示します (管理者のみ)。\n  -h, --help\t\tこのメッセージを表示します。"
 	IDS_FMT_CMDLINE_ARG	"不明な引数です -- 「%s」"
 	IDS_MENU_HELPDOC	"ヘルプ ドキュメント(&H)"
 	IDS_MENU_VERACRYPT	"VeraCrypt ボリュームとしてロック解除"

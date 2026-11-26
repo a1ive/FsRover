@@ -1286,6 +1286,29 @@ backend_set_fs_char_encoding (UINT encoding)
 	});
 }
 
+std::string
+backend_set_efivars (bool on)
+{
+	std::string error;
+
+	if (!backend_call ([on, &error] ()
+	{
+		const char *message;
+
+		if (!on)
+		{
+			rover_efivars_disable ();
+			return;
+		}
+		if (!rover_efivars_enable ())
+			return;
+		message = rover_last_error ();
+		error = message && *message ? message : "unknown error";
+	}))
+		error = "backend not running";
+	return error;
+}
+
 bool
 backend_start (HWND notify, bool no_windisk)
 {

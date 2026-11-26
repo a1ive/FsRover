@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"&Run as Administrator"
 	IDS_ELEVATE_FAILED	"Could not restart as administrator."
 #endif
+	IDS_MENU_EFIVARS	"&UEFI Variables (efivars)"
+	IDS_EFIVARS_WARN	"Listing UEFI variables runs the firmware's own variable services inside the Windows kernel. Some faulty firmware is known to hang or crash the system there, and FsRover cannot guard against that.\n\nThe variables are only read, never written. The setting lasts for this session only."
+	IDS_EFIVARS_ASK	"Show the UEFI variables now?"
+	IDS_EFIVARS_ASK_RESTART	"Reading them needs administrator rights. Restart FsRover as administrator and show them?"
+	IDS_FMT_EFIVARS_FAILED	"Could not show UEFI variables: %s"
 	IDS_BACKEND_START_FAILED	"Could not start the backend worker."
 	IDS_BACKEND_STOP_FAILED	"The backend worker did not stop cleanly."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Markdown preview"
 	IDS_MD_ASK_LINK		"Open this link in your browser?"
 	IDS_FMT_MD_TRUNC	"Only the first %s of %s is shown."
-	IDS_CMDLINE_USAGE	"Usage: FsRover.exe [options]\n\n  -m, --minimize\t\tStart minimized.\n  -f, --file=FILE\t\tMount FILE as a virtual disk.\n  -d, --file-dec=FILE\t\tThe same, decompressing the image on the fly.\n  -n, --no-times\t\tDo not preserve timestamps.\n  -c, --fs-encoding=ENC\tFile name encoding: UTF-8, GBK, Big5, Shift-JIS, or EUC-KR.\n  -h, --help\t\tShow this message."
+	IDS_CMDLINE_USAGE	"Usage: FsRover.exe [options]\n\n  -m, --minimize\t\tStart minimized.\n  -f, --file=FILE\t\tMount FILE as a virtual disk.\n  -d, --file-dec=FILE\t\tThe same, decompressing the image on the fly.\n  -n, --no-times\t\tDo not preserve timestamps.\n  -c, --fs-encoding=ENC\tFile name encoding: UTF-8, GBK, Big5, Shift-JIS, or EUC-KR.\n      --efivars\t\tShow UEFI variables as (efivars) (administrator only).\n  -h, --help\t\tShow this message."
 	IDS_FMT_CMDLINE_ARG	"Unexpected argument -- '%s'"
 	IDS_MENU_HELPDOC	"&Help Document"
 	IDS_MENU_VERACRYPT	"Unlock as VeraCrypt"

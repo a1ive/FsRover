@@ -417,6 +417,12 @@ backend_support backend_get_support (void);
 /* Change byte-oriented filesystem name decoding on the backend thread. */
 void backend_set_fs_char_encoding (UINT encoding);
 
+/* Register (ON) or drop the (efivars) pseudo-device on the backend
+   thread.  Returns why enabling failed (grub's message, English), or
+   an empty string.  Only registers: the variables are read by the
+   next enumeration, which the caller starts.  */
+std::string backend_set_efivars (bool on);
+
 /* Start the backend thread; results are posted to NOTIFY.  Returns
    false if the worker could not be created.  With
    NO_WINDISK the physical drives are left unregistered, so nothing in

@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"以系統管理員身分執行(&R)"
 	IDS_ELEVATE_FAILED	"無法以系統管理員身分重新啟動。"
 #endif
+	IDS_MENU_EFIVARS	"UEFI 變數 (efivars)(&U)"
+	IDS_EFIVARS_WARN	"列出 UEFI 變數會在 Windows 核心中執行韌體本身的變數服務。已知少數有缺陷的韌體會在此造成系統當機或藍白畫面，FsRover 無法防範。\n\n變數只讀不寫。此設定僅對本次執行有效。"
+	IDS_EFIVARS_ASK	"現在顯示 UEFI 變數嗎？"
+	IDS_EFIVARS_ASK_RESTART	"讀取變數需要系統管理員權限。以系統管理員身分重新啟動 FsRover 並顯示變數嗎？"
+	IDS_FMT_EFIVARS_FAILED	"無法顯示 UEFI 變數：%s"
 	IDS_BACKEND_START_FAILED	"無法啟動後端工作執行緒。"
 	IDS_BACKEND_STOP_FAILED	"後端工作執行緒未能正常停止。"
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Markdown 預覽"
 	IDS_MD_ASK_LINK		"是否在瀏覽器中開啟此連結？"
 	IDS_FMT_MD_TRUNC	"僅顯示前 %s，共 %s。"
-	IDS_CMDLINE_USAGE	"用法：FsRover.exe [選項]\n\n  -m, --minimize\t\t最小化啟動。\n  -f, --file=檔案\t\t將「檔案」掛載為虛擬磁碟。\n  -d, --file-dec=檔案\t\t同上，並在讀取時透明解壓縮。\n  -n, --no-times\t\t不保留解壓項目的時間戳記。\n  -c, --fs-encoding=編碼\t檔案名稱編碼：UTF-8、GBK、Big5、Shift-JIS 或 EUC-KR。\n  -h, --help\t\t顯示本說明。"
+	IDS_CMDLINE_USAGE	"用法：FsRover.exe [選項]\n\n  -m, --minimize\t\t最小化啟動。\n  -f, --file=檔案\t\t將「檔案」掛載為虛擬磁碟。\n  -d, --file-dec=檔案\t\t同上，並在讀取時透明解壓縮。\n  -n, --no-times\t\t不保留解壓項目的時間戳記。\n  -c, --fs-encoding=編碼\t檔案名稱編碼：UTF-8、GBK、Big5、Shift-JIS 或 EUC-KR。\n      --efivars\t\t將 UEFI 變數顯示為 (efivars)（需要系統管理員權限）。\n  -h, --help\t\t顯示本說明。"
 	IDS_FMT_CMDLINE_ARG	"多餘的參數 -- 「%s」"
 	IDS_MENU_HELPDOC	"說明文件(&H)"
 	IDS_MENU_VERACRYPT	"以 VeraCrypt 磁碟區解鎖"

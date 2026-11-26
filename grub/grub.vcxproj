@@ -531,6 +531,7 @@
     <ClCompile Include="grub-core\disk\veracrypt.c" />
     <ClCompile Include="grub-core\disk\plainmount.c" />
     <ClCompile Include="grub-core\disk\geli.c" />
+    <ClCompile Include="grub-core\fs\efivarfs.c" />
     <ClCompile Include="grub-core\fs\proc.c" />
     <ClCompile Include="grub-core\lib\datetime.c" />
     <ClCompile Include="grub-core\lib\dgcomp.c">

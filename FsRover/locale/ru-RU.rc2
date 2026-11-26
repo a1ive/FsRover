@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"&Запустить от имени администратора"
 	IDS_ELEVATE_FAILED	"Не удалось перезапуститься от имени администратора."
 #endif
+	IDS_MENU_EFIVARS	"Переменные &UEFI (efivars)"
+	IDS_EFIVARS_WARN	"Для получения списка переменных UEFI в ядре Windows выполняются службы переменных самой прошивки. Известно, что некоторые прошивки с ошибками при этом вешают или роняют систему, и FsRover не может этому помешать.\n\nПеременные только читаются и никогда не записываются. Настройка действует только в текущем сеансе."
+	IDS_EFIVARS_ASK	"Показать переменные UEFI сейчас?"
+	IDS_EFIVARS_ASK_RESTART	"Для их чтения нужны права администратора. Перезапустить FsRover от имени администратора и показать их?"
+	IDS_FMT_EFIVARS_FAILED	"Не удалось показать переменные UEFI: %s"
 	IDS_BACKEND_START_FAILED	"Не удалось запустить рабочий поток ядра."
 	IDS_BACKEND_STOP_FAILED	"Рабочий поток ядра не завершился корректно."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Просмотр Markdown"
 	IDS_MD_ASK_LINK		"Открыть эту ссылку в браузере?"
 	IDS_FMT_MD_TRUNC	"Показаны только первые %s из %s."
-	IDS_CMDLINE_USAGE	"Использование: FsRover.exe [параметры]\n\n  -m, --minimize\t\tЗапуск в свёрнутом виде.\n  -f, --file=FILE\t\tПодключить FILE как виртуальный диск.\n  -d, --file-dec=FILE\t\tТо же, с распаковкой образа на лету.\n  -n, --no-times\t\tНе сохранять метки времени.\n  -c, --fs-encoding=ENC\tКодировка имён файлов: UTF-8, GBK, Big5, Shift-JIS или EUC-KR.\n  -h, --help\t\tПоказать эту справку."
+	IDS_CMDLINE_USAGE	"Использование: FsRover.exe [параметры]\n\n  -m, --minimize\t\tЗапуск в свёрнутом виде.\n  -f, --file=FILE\t\tПодключить FILE как виртуальный диск.\n  -d, --file-dec=FILE\t\tТо же, с распаковкой образа на лету.\n  -n, --no-times\t\tНе сохранять метки времени.\n  -c, --fs-encoding=ENC\tКодировка имён файлов: UTF-8, GBK, Big5, Shift-JIS или EUC-KR.\n      --efivars\t\tПоказать переменные UEFI как (efivars) (только администратор).\n  -h, --help\t\tПоказать эту справку."
 	IDS_FMT_CMDLINE_ARG	"Неожиданный аргумент -- '%s'"
 	IDS_MENU_HELPDOC	"Справочный &документ"
 	IDS_MENU_VERACRYPT	"Разблокировать как VeraCrypt"

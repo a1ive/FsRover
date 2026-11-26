@@ -61,6 +61,7 @@ constexpr int IDM_FILE_OPEN_IMAGE_DECOMP = 204;
 #if FSROVER_ENABLE_ADMIN_FEATURES
 constexpr int IDM_FILE_RUNAS = 205;
 #endif
+constexpr int IDM_FILE_EFIVARS = 206;
 constexpr int IDM_SEL_ALL = 210;
 constexpr int IDM_SEL_INVERT = 211;
 constexpr int IDM_FILTER_FOCUS = 212;	/* Ctrl+F; accelerator only */
@@ -164,6 +165,7 @@ void job_on_progress (backend_progress *p);
 void create_menu_bar (HWND wnd);
 void on_menu_popup (HMENU menu);
 void on_command (int id);
+void efivars_from_cmdline (void);	/* --efivars, once the backend is up */
 void enable_file_drop (HWND wnd);
 void on_drop_files (HDROP drop);
 void do_dokan_mount (const backend_diskent &disk);

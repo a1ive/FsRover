@@ -562,6 +562,7 @@ main_wnd_proc (HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 	case WM_APP_BACKEND_READY:
 		/* Apply command-line settings before any startup mount or enumeration. */
 		backend_set_fs_char_encoding (g_fs_encoding);
+		efivars_from_cmdline ();
 		/* --file/--file-dec stand in for the first refresh: each mount
 		   ends in one of its own (on_task_done), and doing both would
 		   leave two enumerations racing for the tree.  */

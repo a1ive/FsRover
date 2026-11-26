@@ -41,6 +41,7 @@ enum
 	OPT_FILE_DEC,
 	OPT_NO_TIMES,
 	OPT_FS_ENCODING,
+	OPT_EFIVARS,
 	OPT_HELP,
 };
 
@@ -51,6 +52,9 @@ const struct optparse_option OPTS[] =
 	{ L"file-dec", L'd', OPTPARSE_REQUIRED },
 	{ L"no-times", L'n', OPTPARSE_NONE },
 	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
+	/* Long form only: a one-letter switch is too easy to pass by
+	   accident for something that runs firmware code.  */
+	{ L"efivars", 0, OPTPARSE_NONE },
 	{ L"help", L'h', OPTPARSE_NONE },
 	{ nullptr, 0, OPTPARSE_NONE },
 };
@@ -146,6 +150,9 @@ cmdline_parse (void)
 			g_cmdline.fs_encoding = encoding->code_page;
 			break;
 		}
+		case OPT_EFIVARS:
+			g_cmdline.efivars = true;
+			break;
 		case OPT_HELP:
 			show_usage (nullptr);
 			ok = false;

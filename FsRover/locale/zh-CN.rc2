@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"以管理员身份运行(&R)"
 	IDS_ELEVATE_FAILED	"无法以管理员身份重新启动。"
 #endif
+	IDS_MENU_EFIVARS	"UEFI 变量 (efivars)(&U)"
+	IDS_EFIVARS_WARN	"列出 UEFI 变量会在 Windows 内核中运行固件自身的变量服务。已知少数有缺陷的固件会在此导致系统卡死或蓝屏，FsRover 无法防范。\n\n变量只读不写。此设置仅对本次运行有效。"
+	IDS_EFIVARS_ASK	"现在显示 UEFI 变量吗？"
+	IDS_EFIVARS_ASK_RESTART	"读取变量需要管理员权限。以管理员身份重新启动 FsRover 并显示变量吗？"
+	IDS_FMT_EFIVARS_FAILED	"无法显示 UEFI 变量：%s"
 	IDS_BACKEND_START_FAILED	"无法启动后端工作线程。"
 	IDS_BACKEND_STOP_FAILED	"后端工作线程未能正常停止。"
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Markdown 预览"
 	IDS_MD_ASK_LINK		"是否在浏览器中打开此链接？"
 	IDS_FMT_MD_TRUNC	"仅显示前 %s，共 %s。"
-	IDS_CMDLINE_USAGE	"用法：FsRover.exe [选项]\n\n  -m, --minimize\t\t最小化启动。\n  -f, --file=文件\t\t将“文件”挂载为虚拟磁盘。\n  -d, --file-dec=文件\t\t同上，并在读取时透明解压。\n  -n, --no-times\t\t不保留提取项目的时间戳。\n  -c, --fs-encoding=编码\t文件名编码：UTF-8、GBK、Big5、Shift-JIS 或 EUC-KR。\n  -h, --help\t\t显示本说明。"
+	IDS_CMDLINE_USAGE	"用法：FsRover.exe [选项]\n\n  -m, --minimize\t\t最小化启动。\n  -f, --file=文件\t\t将“文件”挂载为虚拟磁盘。\n  -d, --file-dec=文件\t\t同上，并在读取时透明解压。\n  -n, --no-times\t\t不保留提取项目的时间戳。\n  -c, --fs-encoding=编码\t文件名编码：UTF-8、GBK、Big5、Shift-JIS 或 EUC-KR。\n      --efivars\t\t将 UEFI 变量显示为 (efivars)（需要管理员权限）。\n  -h, --help\t\t显示本说明。"
 	IDS_FMT_CMDLINE_ARG	"多余的参数 -- “%s”"
 	IDS_MENU_HELPDOC	"帮助文档(&H)"
 	IDS_MENU_VERACRYPT	"作为 VeraCrypt 卷解锁"

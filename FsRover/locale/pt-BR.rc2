@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"Executar como ad&ministrador"
 	IDS_ELEVATE_FAILED	"Não foi possível reiniciar como administrador."
 #endif
+	IDS_MENU_EFIVARS	"Variáveis &UEFI (efivars)"
+	IDS_EFIVARS_WARN	"Listar as variáveis UEFI executa os serviços de variáveis do próprio firmware dentro do kernel do Windows. Sabe-se que alguns firmwares com defeito travam ou derrubam o sistema nesse ponto, e o FsRover não tem como evitar isso.\n\nAs variáveis são apenas lidas, nunca gravadas. Esta configuração vale só para esta sessão."
+	IDS_EFIVARS_ASK	"Mostrar as variáveis UEFI agora?"
+	IDS_EFIVARS_ASK_RESTART	"Lê-las exige privilégios de administrador. Reiniciar o FsRover como administrador e mostrá-las?"
+	IDS_FMT_EFIVARS_FAILED	"Não foi possível mostrar as variáveis UEFI: %s"
 	IDS_BACKEND_START_FAILED	"Não foi possível iniciar o processo de trabalho do mecanismo."
 	IDS_BACKEND_STOP_FAILED	"O processo de trabalho do mecanismo não parou corretamente."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Visualização de Markdown"
 	IDS_MD_ASK_LINK		"Abrir este link no navegador?"
 	IDS_FMT_MD_TRUNC	"Somente os primeiros %s de %s são exibidos."
-	IDS_CMDLINE_USAGE	"Uso: FsRover.exe [opções]\n\n  -m, --minimize\t\tIniciar minimizado.\n  -f, --file=FILE\t\tMontar FILE como disco virtual.\n  -d, --file-dec=FILE\t\tO mesmo, descompactando a imagem em tempo real.\n  -n, --no-times\t\tNão preservar carimbos de data/hora.\n  -c, --fs-encoding=ENC\tCodificação de nomes de arquivo: UTF-8, GBK, Big5, Shift-JIS ou EUC-KR.\n  -h, --help\t\tMostrar esta mensagem."
+	IDS_CMDLINE_USAGE	"Uso: FsRover.exe [opções]\n\n  -m, --minimize\t\tIniciar minimizado.\n  -f, --file=FILE\t\tMontar FILE como disco virtual.\n  -d, --file-dec=FILE\t\tO mesmo, descompactando a imagem em tempo real.\n  -n, --no-times\t\tNão preservar carimbos de data/hora.\n  -c, --fs-encoding=ENC\tCodificação de nomes de arquivo: UTF-8, GBK, Big5, Shift-JIS ou EUC-KR.\n      --efivars\t\tMostrar as variáveis UEFI como (efivars) (somente administrador).\n  -h, --help\t\tMostrar esta mensagem."
 	IDS_FMT_CMDLINE_ARG	"Argumento inesperado -- '%s'"
 	IDS_MENU_HELPDOC	"&Documento de ajuda"
 	IDS_MENU_VERACRYPT	"Desbloquear como VeraCrypt"

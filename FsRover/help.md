@@ -855,6 +855,38 @@ It exposes:
 - `diskstats` — per-device logical read calls, successfully read bytes, cache hits/misses and backend I/O errors;
 - `errors` — the last 32 GRUB errors reported to a GUI or CLI caller, oldest first.
 
+#### UEFI variables — `efivarfs`
+
+> Origin: FsRover · Label: no · UUID: no · Timestamps: none · Symlinks: none
+
+The UEFI variables of the machine FsRover runs on, shown as the read-only
+pseudo-device `(efivars)` once **File ▸ UEFI Variables (efivars)** is checked or
+the program was started with `--efivars`. The layout follows Linux efivarfs:
+one flat directory with one file per variable, named
+`Name-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` after the variable and its vendor
+GUID (`BootOrder-8be4df61-93ca-11d2-aa0d-00e098032b8c`). Each file holds the
+4-byte little-endian attribute mask followed by the value, so extracted files
+can be compared with, or fed to, Linux tools such as `efivar`.
+
+**Off by default, and never remembered.** Listing the variables makes the
+Windows kernel run the firmware's own variable services, and a faulty firmware
+can hang or crash the system there; nothing in user mode can prevent that. So
+the device exists only after an explicit request, the menu item asks for
+confirmation every time, and the choice lasts for the current session only: if
+a firmware does hang, the next start does not walk back into it.
+
+**Requirements:** a UEFI boot and an elevated token (the variables are read
+with `SeSystemEnvironmentPrivilege`). Unelevated, checking the menu item offers
+to restart as administrator with `--efivars`.
+
+**Snapshot.** All variables are read in one call when the device is first
+listed after a refresh; listings, sizes and file contents come from that
+snapshot until the next **Refresh**. Only variables the firmware exposes at
+runtime are visible (boot-service-only variables are not, as on Linux).
+Variables whose names contain `/` cannot be file names and are not shown.
+
+**Never written.** There is no write path at all.
+
 ---
 
 ## 2. Partition tables
@@ -1720,6 +1752,7 @@ FsRover.exe [options]
 | `-d`, `--file-dec=FILE` | path | The same, but run the compression filters over the image first (a `.img.gz`, `.iso.xz`, …). |
 | `-n`, `--no-times` | — | Start with **Settings → Preserve Timestamps** turned off. |
 | `-c`, `--fs-encoding=ENCODING` | name | Select the byte-oriented file name encoding: `UTF-8`, `GBK`, `Big5`, `Shift-JIS`, or `EUC-KR`. |
+| `--efivars` | — | Show the [UEFI variables](#uefi-variables--efivarfs) as `(efivars)` from the start, without the confirmation the menu item asks for. Needs an elevated token. Long form only. |
 | `-h`, `--help` | — | Show the usage box and exit. |
 
 ### Syntax

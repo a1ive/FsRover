@@ -204,6 +204,11 @@ BEGIN
 	IDS_MENU_RUNAS		"&Exécuter en tant qu'administrateur"
 	IDS_ELEVATE_FAILED	"Impossible de redémarrer en tant qu'administrateur."
 #endif
+	IDS_MENU_EFIVARS	"Variables &UEFI (efivars)"
+	IDS_EFIVARS_WARN	"Lister les variables UEFI exécute les services de variables du micrologiciel lui-même dans le noyau Windows. Certains micrologiciels défectueux sont connus pour y bloquer ou planter le système, et FsRover ne peut pas l'empêcher.\n\nLes variables sont uniquement lues, jamais écrites. Ce réglage ne vaut que pour cette session."
+	IDS_EFIVARS_ASK	"Afficher les variables UEFI maintenant ?"
+	IDS_EFIVARS_ASK_RESTART	"Leur lecture nécessite les droits d'administrateur. Redémarrer FsRover en tant qu'administrateur et les afficher ?"
+	IDS_FMT_EFIVARS_FAILED	"Impossible d'afficher les variables UEFI : %s"
 	IDS_BACKEND_START_FAILED	"Impossible de démarrer le processus du moteur."
 	IDS_BACKEND_STOP_FAILED	"Le processus du moteur ne s'est pas arrêté correctement."
 #if FSROVER_EMBED_DOKAN
@@ -216,7 +221,7 @@ BEGIN
 	IDS_MD_TITLE		"Aperçu Markdown"
 	IDS_MD_ASK_LINK		"Ouvrir ce lien dans votre navigateur ?"
 	IDS_FMT_MD_TRUNC	"Seuls les premiers %s sur %s sont affichés."
-	IDS_CMDLINE_USAGE	"Utilisation : FsRover.exe [options]\n\n  -m, --minimize\t\tDémarrer réduit.\n  -f, --file=FILE\t\tMonter FILE comme disque virtuel.\n  -d, --file-dec=FILE\t\tIdem, en décompressant l'image à la volée.\n  -n, --no-times\t\tNe pas conserver les horodatages.\n  -c, --fs-encoding=ENC\tEncodage des noms de fichiers : UTF-8, GBK, Big5, Shift-JIS ou EUC-KR.\n  -h, --help\t\tAfficher ce message."
+	IDS_CMDLINE_USAGE	"Utilisation : FsRover.exe [options]\n\n  -m, --minimize\t\tDémarrer réduit.\n  -f, --file=FILE\t\tMonter FILE comme disque virtuel.\n  -d, --file-dec=FILE\t\tIdem, en décompressant l'image à la volée.\n  -n, --no-times\t\tNe pas conserver les horodatages.\n  -c, --fs-encoding=ENC\tEncodage des noms de fichiers : UTF-8, GBK, Big5, Shift-JIS ou EUC-KR.\n      --efivars\t\tAfficher les variables UEFI comme (efivars) (administrateur uniquement).\n  -h, --help\t\tAfficher ce message."
 	IDS_FMT_CMDLINE_ARG	"Argument inattendu -- '%s'"
 	IDS_MENU_HELPDOC	"&Documentation"
 	IDS_MENU_VERACRYPT	"Déverrouiller en tant que VeraCrypt"

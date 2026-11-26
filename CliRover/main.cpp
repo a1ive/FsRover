@@ -63,6 +63,7 @@ struct command_options
 	unsigned int scan_lost_flags = 0;
 	bool preserve_times = true;
 	unsigned int fs_encoding = ROVER_FS_ENCODING_UTF8;
+	bool efivars = false;
 	std::wstring list_path;
 	std::vector<std::wstring> extracts;
 	std::wstring output;
@@ -90,6 +91,7 @@ enum
 	OPT_SCAN_DEEP,
 	OPT_NO_TIMES,
 	OPT_FS_ENCODING,
+	OPT_EFIVARS,
 	OPT_HELP,
 };
 
@@ -109,6 +111,8 @@ const struct optparse_option OPTIONS[] =
 	{ L"scan-deep", 0, OPTPARSE_NONE },
 	{ L"no-times", L'n', OPTPARSE_NONE },
 	{ L"fs-encoding", L'c', OPTPARSE_REQUIRED },
+	/* Long form only: it runs firmware code, see rover_efivars_enable. */
+	{ L"efivars", 0, OPTPARSE_NONE },
 	{ L"help", L'h', OPTPARSE_NONE },
 	{ nullptr, 0, OPTPARSE_NONE },
 };
@@ -135,6 +139,10 @@ const char USAGE[] =
 	"  -n, --no-times        Do not preserve extracted timestamps.\r\n"
 	"  -c, --fs-encoding=X   File name encoding: UTF-8, GBK, Big5,\r\n"
 	"                         Shift-JIS, or EUC-KR.\r\n"
+	"      --efivars         Expose UEFI variables as (efivars), laid out\r\n"
+	"                         like Linux efivarfs (administrator only).\r\n"
+	"                         Reading them runs firmware code in the\r\n"
+	"                         kernel, which can hang faulty systems.\r\n"
 	"  -h, --help            Show this help.\r\n"
 	"\r\n"
 	"Mount options may be repeated and are processed in command-line order.\r\n";
@@ -336,6 +344,9 @@ parse_options (int argc, wchar_t **argv, command_options *options,
 			options->fs_encoding = encoding->code_page;
 			break;
 		}
+		case OPT_EFIVARS:
+			options->efivars = true;
+			break;
 		case OPT_HELP:
 			*show_help = true;
 			return true;
@@ -671,6 +682,14 @@ wmain (int argc, wchar_t **argv)
 	{
 		const char *message = rover_last_error ();
 		result = report_error (message ? message : "cannot set file name encoding");
+		rover_fini ();
+		return result;
+	}
+	if (options.efivars && rover_efivars_enable ())
+	{
+		const char *message = rover_last_error ();
+		result = report_error (std::string ("cannot enable (efivars): ")
+			+ (message ? message : "unknown error"));
 		rover_fini ();
 		return result;
 	}

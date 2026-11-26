@@ -315,6 +315,23 @@ int rover_winfile_add (const char *devname, const char *path, int decompress);
 int rover_winfile_del (const char *devname);
 const char *rover_winfile_get_path (const char *devname);
 
+/*
+ * Windows: the running machine's UEFI variables as the read-only
+ * pseudo-device "(efivars)" (filesystem "efivarfs"), one file per
+ * variable laid out like Linux efivarfs: "Name-<vendor guid>", holding
+ * the 4-byte attribute mask and then the value.  Off until enabled: the
+ * listing runs the firmware's variable services in the kernel, which a
+ * broken firmware can hang, so only an explicit user request should
+ * turn it on, and only for the session.  Enabling needs an elevated
+ * token (SeSystemEnvironmentPrivilege) and a UEFI boot; it returns
+ * nonzero with rover_last_error() set otherwise.  The variables are
+ * read when the device is first listed and again after every disk
+ * enumeration.  rover_fini() disables it.
+ */
+int rover_efivars_enable (void);
+void rover_efivars_disable (void);
+int rover_efivars_enabled (void);
+
 /* Linux host-image counterpart of winfile.  PATH is a native UTF-8 POSIX
    path.  These entry points are available in Linux builds. */
 int rover_posixfile_add (const char *devname, const char *path, int decompress);
