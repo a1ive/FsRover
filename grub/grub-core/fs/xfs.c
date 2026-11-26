@@ -707,6 +707,14 @@ grub_xfs_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
         break;
       else if (fileblock < offset + size)
         {
+          /* Unwritten (fallocate) extent: XFS guarantees reads as zero.
+             Report it as a hole (block 0) so readers zero-fill; fsb 0 is the
+             superblock and can never back file data.  */
+          if (grub_be_to_cpu32 (exts[ex].raw[0]) & (1U << 31))
+            {
+              ret = 0;
+              break;
+            }
           ret = (fileblock - offset + start);
           break;
         }
