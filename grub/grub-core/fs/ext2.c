@@ -542,8 +542,11 @@ grub_ext2_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 
       if (--i >= 0)
         {
+          grub_uint16_t length = grub_le_to_cpu16 (ext[i].len);
           fileblock -= grub_le_to_cpu32 (ext[i].block);
-          if (fileblock >= grub_le_to_cpu16 (ext[i].len))
+          /* Preallocated unwritten extents are logical zeroes. The special
+             length 32768 is a written extent, matching grub_ext_map_tree. */
+          if (length > 32768 || fileblock >= length)
 	    ret = 0;
           else
             {
