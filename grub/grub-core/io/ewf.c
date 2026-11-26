@@ -51,6 +51,8 @@ GRUB_MOD_LICENSE ("GPLv3+");
 #define EWF_MAX_SECTIONS	(1u << 20)
 #define EWF_MAX_CHUNK_SIZE	(64u << 20)
 #define EWF_CACHE_NONE		0xffffffffu
+#define EWF_CACHE_SLOTS		8u
+#define EWF_CACHE_BYTES		(128u << 20)
 
 #define EWF_COMPRESSED		0x80000000u
 #define EWF_OFFSET_MASK		0x7fffffffu
@@ -134,6 +136,12 @@ struct ewf2_metadata
 	int case_seen;
 };
 
+struct ewf_cached_chunk
+{
+	grub_uint32_t number;
+	grub_uint8_t *data;
+};
+
 struct ewf_image
 {
 	struct ewf_segment *segments;
@@ -152,9 +160,10 @@ struct ewf_image
 	int version2;
 	grub_uint16_t compression_method;
 
-	grub_uint32_t cached_chunk;
 	grub_uint32_t cached_group;
-	grub_uint8_t *chunk_buf;
+	struct ewf_cached_chunk chunk_cache[EWF_CACHE_SLOTS];
+	grub_uint32_t chunk_cache_count;
+	grub_uint32_t chunk_cache_limit;
 	grub_uint8_t *comp_buf;
 	grub_size_t comp_capacity;
 };
@@ -260,7 +269,8 @@ ewf_free_image (struct ewf_image *image)
 	}
 	grub_free (image->segments);
 	grub_free (image->groups);
-	grub_free (image->chunk_buf);
+	for (i = 0; i < image->chunk_cache_count; i++)
+		grub_free (image->chunk_cache[i].data);
 	grub_free (image->comp_buf);
 	grub_free (image);
 }
@@ -1521,7 +1531,10 @@ ewf_scan_segment (struct ewf_image *image, grub_uint32_t segment, int *has_next)
 			|| next <= off || next > file_size)
 			return grub_error (GRUB_ERR_BAD_DEVICE, "invalid EWF section layout");
 
-		if (ewf_type_is (desc, "volume"))
+		/* Legacy EnCase writers name the volume section "disk"; smart
+		   volumes use "smart".  Both carry the same EWF-V layout.  */
+		if (ewf_type_is (desc, "volume") || ewf_type_is (desc, "disk")
+			|| ewf_type_is (desc, "smart"))
 		{
 			if (segment != 0)
 				return grub_error (GRUB_ERR_BAD_DEVICE, "EWF volume in later segment");
@@ -1580,12 +1593,18 @@ ewf_open_image (struct ewf_image *image, grub_file_t first)
 		return grub_error (GRUB_ERR_OUT_OF_RANGE, "too many EWF segment files");
 	if (!image->volume_seen || image->indexed_chunks != image->nchunks)
 		return grub_error (GRUB_ERR_BAD_DEVICE, "incomplete EWF chunk index");
-	image->chunk_buf = grub_malloc (image->chunk_size);
+	image->chunk_cache[0].data = grub_malloc (image->chunk_size);
+	if (!image->chunk_cache[0].data)
+		return grub_errno;
+	image->chunk_cache[0].number = EWF_CACHE_NONE;
+	image->chunk_cache_count = 1;
+	image->chunk_cache_limit = EWF_CACHE_BYTES / image->chunk_size;
+	if (image->chunk_cache_limit > EWF_CACHE_SLOTS)
+		image->chunk_cache_limit = EWF_CACHE_SLOTS;
 	if (image->comp_capacity)
 		image->comp_buf = grub_malloc (image->comp_capacity);
-	if (!image->chunk_buf || (image->comp_capacity && !image->comp_buf))
+	if (image->comp_capacity && !image->comp_buf)
 		return grub_errno;
-	image->cached_chunk = EWF_CACHE_NONE;
 	image->cached_group = EWF_CACHE_NONE;
 	return GRUB_ERR_NONE;
 }
@@ -1699,10 +1718,34 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 	int checksummed;
 	int pattern_fill;
 	grub_err_t err;
+	struct ewf_cached_chunk cached;
+	grub_uint8_t *chunk_buf;
+	grub_uint32_t slot;
 
-	if (image->cached_chunk == chunk)
-		return GRUB_ERR_NONE;
-	image->cached_chunk = EWF_CACHE_NONE;
+	for (slot = 0; slot < image->chunk_cache_count; slot++)
+		if (image->chunk_cache[slot].number == chunk)
+			goto promote;
+
+	/* Small filesystem reads can alternate between large EWF chunks. Keep
+	   recently used decoded chunks, bounded per image and allocated on demand. */
+	slot = image->chunk_cache_count - 1;
+	if (image->chunk_cache[slot].number != EWF_CACHE_NONE
+		&& image->chunk_cache_count < image->chunk_cache_limit)
+	{
+		chunk_buf = grub_malloc (image->chunk_size);
+		if (chunk_buf)
+		{
+			slot = image->chunk_cache_count++;
+			image->chunk_cache[slot].data = chunk_buf;
+		}
+		else
+		{
+			grub_errno = GRUB_ERR_NONE;
+			image->chunk_cache_limit = image->chunk_cache_count;
+		}
+	}
+	image->chunk_cache[slot].number = EWF_CACHE_NONE;
+	chunk_buf = image->chunk_cache[slot].data;
 	err = ewf_chunk_location (image, chunk, &file, &off, &stored_size,
 				  &compressed, &checksummed, &pattern_fill,
 				  &pattern);
@@ -1716,7 +1759,7 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 	if (pattern_fill)
 	{
 		for (i = 0; i < image->chunk_size; i++)
-			image->chunk_buf[i] = (grub_uint8_t)
+			chunk_buf[i] = (grub_uint8_t)
 				(pattern >> ((i & 7) * 8));
 	}
 	else if (compressed)
@@ -1728,7 +1771,7 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 		{
 			out_size = grub_zlib_decompress ((char *) image->comp_buf,
 						 stored_size, 0,
-						 (char *) image->chunk_buf,
+							 (char *) chunk_buf,
 						 image->chunk_size);
 			if (out_size < 0 || (grub_uint32_t) out_size < expected
 				|| (grub_uint32_t) out_size > image->chunk_size)
@@ -1739,7 +1782,7 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 		{
 			bzip2_size = image->chunk_size;
 			bzip2_result = BZ2_bzBuffToBuffDecompress (
-				(char *) image->chunk_buf, &bzip2_size,
+				(char *) chunk_buf, &bzip2_size,
 				(char *) image->comp_buf, stored_size, 0, 0);
 			if (bzip2_result != BZ_OK || bzip2_size < expected
 				|| bzip2_size > image->chunk_size)
@@ -1754,16 +1797,22 @@ ewf_load_chunk (struct ewf_image *image, grub_uint32_t chunk)
 		plain_size = stored_size - 4;
 		if (plain_size < expected || plain_size > image->chunk_size)
 			return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF data chunk size");
-		err = ewf_pread (file, off, image->chunk_buf, plain_size);
+		err = ewf_pread (file, off, chunk_buf, plain_size);
 		if (err)
 			return err;
 		err = ewf_pread (file, off + plain_size, checksum, sizeof (checksum));
 		if (err)
 			return err;
-		if (ewf_get32 (checksum) != ewf_adler32 (image->chunk_buf, plain_size))
+		if (ewf_get32 (checksum) != ewf_adler32 (chunk_buf, plain_size))
 			return grub_error (GRUB_ERR_BAD_DEVICE, "bad EWF chunk checksum");
 	}
-	image->cached_chunk = chunk;
+	image->chunk_cache[slot].number = chunk;
+
+promote:
+	cached = image->chunk_cache[slot];
+	for (; slot > 0; slot--)
+		image->chunk_cache[slot] = image->chunk_cache[slot - 1];
+	image->chunk_cache[0] = cached;
 	return GRUB_ERR_NONE;
 }
 
@@ -1789,7 +1838,7 @@ ewf_read (struct ewf_image *image, grub_uint64_t off, void *buf,
 	err = ewf_load_chunk (image, chunk);
 	if (err)
 		return err;
-	grub_memcpy (buf, image->chunk_buf + in_chunk, n);
+	grub_memcpy (buf, image->chunk_cache[0].data + in_chunk, n);
 	*actually_read = n;
 	return GRUB_ERR_NONE;
 }
