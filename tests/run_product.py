@@ -61,9 +61,10 @@ def check_tree(path, files, dirs=()):
 
 
 class Suite:
-    def __init__(self, cli, probe, root, filemap_fixtures=None):
+    def __init__(self, cli, probe, root, filemap_fixtures=None, ntfs_links=None):
         self.cli, self.probe, self.root = cli, probe, root
         self.filemap_fixtures = filemap_fixtures
+        self.ntfs_links = ntfs_links
         self.fixtures = root / "fixtures"
         self.results, self.commands = [], []
 
@@ -363,6 +364,9 @@ class Suite:
         self.case("mapping CLI errors", lambda: mapping_errors(self))
         if self.filemap_fixtures is not None:
             self.case("external mapping matrix", lambda: external_mapping(self, self.filemap_fixtures))
+        if self.ntfs_links is not None:
+            self.case("NTFS junction and symlink targets", lambda: self.command(
+                [self.probe, "--readlink", self.fixtures, self.ntfs_links]))
         self.case("OS signal cancellation", self.signal_cancellation)
         self.case("same-process recovery and cancellation", lambda: self.command(
             [self.probe, self.fixtures, self.root / "probe"]))
@@ -394,13 +398,17 @@ def main():
                         help="Parent for a unique run directory; existing files are never deleted")
     parser.add_argument("--filemap-fixtures", type=pathlib.Path,
                         help="Optional existing full mapping fixture matrix; missing images fail")
+    parser.add_argument("--ntfs-links", type=pathlib.Path,
+                        help="Optional NTFS image made by tests/ntfs_links.sh (junction, symlinks)")
     args = parser.parse_args()
     cli, probe = args.cli.resolve(), args.probe.resolve()
     require(cli.is_file() and probe.is_file(), "build both the CLI and product probe first")
     args.output.mkdir(parents=True, exist_ok=True)
     root = pathlib.Path(tempfile.mkdtemp(prefix="run-", dir=args.output.resolve()))
     print(f"Results and generated fixtures: {root}", flush=True)
-    return Suite(cli, probe, root, args.filemap_fixtures).run()
+    ntfs_links = args.ntfs_links.resolve() if args.ntfs_links else None
+    require(ntfs_links is None or ntfs_links.is_file(), "--ntfs-links image not found")
+    return Suite(cli, probe, root, args.filemap_fixtures, ntfs_links).run()
 
 
 if __name__ == "__main__":

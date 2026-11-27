@@ -499,3 +499,21 @@ metadata cancellation and cancellation during extent coalescing. Generated ext2
 corruption must fail both blocklist and normal reading. `cancel:4` in the STOP
 argument polls cancellation independently of extent output and checks both the
 native and public Rover APIs, then verifies a normal read after cancellation.
+
+## Optional NTFS reparse-point fixture
+
+`rover_readlink` on NTFS junctions and symbolic links needs a real NTFS image,
+which the Python fixtures cannot synthesize. Build it on Linux or WSL (needs
+`mkntfs` and `ntfs-3g`, and root to mount) and pass it to the product run:
+
+```sh
+sudo python3 tests/ntfs_links.py /tmp/links.ntfs
+```
+
+```powershell
+python tests/run_product.py --cli build/x64/CliRover.exe --probe build/x64/product_probe.exe --output build/product-tests --ntfs-links C:/path/to/links.ntfs
+```
+
+The case reads a junction (0xA0000003), absolute and relative symbolic links
+(0xA000000C) repeatedly, expects EIO for an unknown reparse tag, and reads a file
+through each link. This optional case is not covered by default CI.

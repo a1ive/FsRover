@@ -1319,6 +1319,7 @@ grub_ntfs_read_symlink (grub_fshelp_node_t node)
     goto fail;
 
   grub_free (mft->buf);
+  mft->buf = NULL;
   grub_free (buf16);
 
   for (end = buf; *end; end++)
@@ -1336,6 +1337,7 @@ grub_ntfs_read_symlink (grub_fshelp_node_t node)
 
  fail:
   grub_free (mft->buf);
+  mft->buf = NULL;
   grub_free (buf16);
   return NULL;
 }

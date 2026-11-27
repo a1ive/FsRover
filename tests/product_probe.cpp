@@ -14,7 +14,8 @@ extern "C" int product_filemap_probe (int argc, const char **argv);
 extern "C" int product_image_read_probe (int argc, const char **argv);
 extern "C" int product_file_hook_probe (int argc, const char **argv);
 int product_fusefs_probe (const std::filesystem::path &fixtures);
-int product_readlink_probe (const std::filesystem::path &fixtures);
+int product_readlink_probe (const std::filesystem::path &fixtures,
+	const std::filesystem::path &ntfs);
 
 static void require (bool value, const char *message)
 {
@@ -128,8 +129,9 @@ int main (int argc, char **argv)
 {
 	if (argc == 3 && std::filesystem::path (argv[1]) == "--fusefs")
 		return product_fusefs_probe (std::filesystem::path (argv[2]));
-	if (argc == 3 && std::filesystem::path (argv[1]) == "--readlink")
-		return product_readlink_probe (std::filesystem::path (argv[2]));
+	if ((argc == 3 || argc == 4) && std::filesystem::path (argv[1]) == "--readlink")
+		return product_readlink_probe (std::filesystem::path (argv[2]),
+			argc == 4 ? std::filesystem::path (argv[3]) : std::filesystem::path ());
 	if (argc >= 2 && std::filesystem::path (argv[1]) == "--strtol")
 		return product_strtol_probe ();
 	if (argc >= 2 && std::filesystem::path (argv[1]) == "--printf")

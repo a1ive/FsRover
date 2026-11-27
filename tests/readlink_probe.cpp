@@ -101,9 +101,34 @@ void run ()
 	printf ("PASS readlink unsupported filesystem\n");
 }
 
+/* NTFS reparse points (tests/ntfs_links.sh): read_symlink used to free the
+   node's MFT buffer and leave it for free_file to free again, so repeat each
+   lookup until a double free would have corrupted the heap. */
+void run_ntfs ()
+{
+	for (int i = 0; i < 64; i++)
+	{
+		target ("(ntfs)/Documents and Settings", "/Users");
+		target ("(ntfs)/abs", "/Users/Public");
+		target ("(ntfs)/rel.lnk", "Users/Public/hello.txt");
+		fails ("(ntfs)/odd", EIO);
+	}
+	fails ("(ntfs)/Users", EINVAL);
+	fails ("(ntfs)/Documents and Settings/Public", EINVAL);
+	fails ("(ntfs)/missing", ENOENT);
+	const std::string data = content ("(ntfs)/Users/Public/hello.txt");
+	require (data == "hello from public\n", "NTFS fixture content");
+	require (content ("(ntfs)/Documents and Settings/Public/hello.txt") == data,
+		"open through junction");
+	require (content ("(ntfs)/abs/hello.txt") == data, "open through absolute link");
+	require (content ("(ntfs)/rel.lnk") == data, "open through relative link");
+	printf ("PASS readlink ntfs\n");
+}
+
 } // namespace
 
-int product_readlink_probe (const std::filesystem::path &fixtures)
+int product_readlink_probe (const std::filesystem::path &fixtures,
+	const std::filesystem::path &ntfs)
 {
 	rover_init (ROVER_INIT_NO_HOSTDISK);
 	int status = 0;
@@ -114,6 +139,11 @@ int product_readlink_probe (const std::filesystem::path &fixtures)
 		attach ("dir", fixtures / "dirlinks.tar");
 		attach ("fat", fixtures / "basic.img");
 		run ();
+		if (!ntfs.empty ())
+		{
+			attach ("ntfs", ntfs);
+			run_ntfs ();
+		}
 	}
 	catch (const std::exception &error)
 	{
