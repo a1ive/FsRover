@@ -614,14 +614,19 @@ grub_xfs_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 	recoffset = (grub_xfs_inode_size(node->data)
 		     - ((char *) keys - (char *) &node->inode))
 				/ (2 * sizeof (grub_uint64_t));
+      /* The root keys live in the inode node's own allocation, so the bound
+         is the end of this node. Upstream used the end of node->data, which
+         only coincides for the root directory inode embedded in struct
+         grub_xfs_data; every other node is a separate allocation, so the
+         comparison depended on heap layout and failed at random. */
+      grub_addr_t data_end = (grub_addr_t) node + grub_xfs_fshelp_size (node->data);
       do
         {
           grub_uint64_t i;
-	  grub_addr_t keys_end, data_end;
+	  grub_addr_t keys_end;
 
 	  if (grub_mul (sizeof (grub_uint64_t), nrec, &keys_end) ||
 	      grub_add ((grub_addr_t) keys, keys_end, &keys_end) ||
-	      grub_add ((grub_addr_t) node->data, node->data->data_size, &data_end) ||
 	      keys_end > data_end)
 	    {
 	      grub_error (GRUB_ERR_BAD_FS, "invalid number of XFS root keys");
@@ -665,6 +670,7 @@ grub_xfs_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
 	  recoffset = ((node->data->bsize - ((char *) keys
 					     - (char *) leaf))
 		       / (2 * sizeof (grub_uint64_t)));
+		       data_end = (grub_addr_t) leaf + node->data->bsize;
 	}
       while (leaf->level);
       exts = (struct grub_xfs_extent *) keys;
@@ -677,9 +683,10 @@ grub_xfs_read_block (grub_fshelp_node_t node, grub_disk_addr_t fileblock)
       nrec = grub_xfs_get_inode_nextents (&node->inode);
       exts = (struct grub_xfs_extent *) grub_xfs_inode_data(&node->inode);
 
+      /* Inline extents live in the inode node's own allocation (see above). */
       if (grub_mul (sizeof (struct grub_xfs_extent), nrec, &exts_end) ||
-	  grub_add ((grub_addr_t) node->data, exts_end, &exts_end) ||
-	  grub_add ((grub_addr_t) node->data, node->data->data_size, &data_end) ||
+	  grub_add ((grub_addr_t) exts, exts_end, &exts_end) ||
+	  grub_add ((grub_addr_t) node, grub_xfs_fshelp_size (node->data), &data_end) ||
 	  exts_end > data_end)
 	{
 	  grub_error (GRUB_ERR_BAD_FS, "invalid number of XFS extents");
