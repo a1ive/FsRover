@@ -52,6 +52,7 @@
 #include <windows.h>
 
 #include "rover.h"
+#include "guard.h"
 
 #pragma comment (lib, "advapi32.lib")
 
@@ -550,6 +551,7 @@ rover_efivars_enable (void)
 	efivars_fwtype_fn fwtype;
 	DWORD type;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	if (efivars_registered)
 		return 0;
@@ -578,6 +580,7 @@ rover_efivars_enable (void)
 void
 rover_efivars_disable (void)
 {
+	rover_guard_task (__func__);
 	if (!efivars_registered)
 		return;
 	grub_fs_unregister (&efivarfs_fs);
@@ -591,5 +594,6 @@ rover_efivars_disable (void)
 int
 rover_efivars_enabled (void)
 {
+	rover_guard_check (__func__);
 	return efivars_registered;
 }

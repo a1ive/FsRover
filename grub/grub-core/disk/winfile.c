@@ -29,6 +29,7 @@
 #include <windows.h>
 
 #include "rover.h"
+#include "guard.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -231,6 +232,7 @@ rover_winfile_add (const char *devname, const char *path, int decompress)
 	grub_file_t file = NULL;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 
 	for (dev = winfile_list; dev; dev = dev->next)
@@ -275,6 +277,7 @@ rover_winfile_del (const char *devname)
 	struct winfile **prev;
 	struct winfile *dev;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 
 	for (prev = &winfile_list; (dev = *prev); prev = &dev->next)
@@ -299,6 +302,7 @@ rover_winfile_get_path (const char *devname)
 {
 	struct winfile *dev;
 
+	rover_guard_check (__func__);
 	for (dev = winfile_list; dev; dev = dev->next)
 		if (grub_strcmp (dev->devname, devname) == 0)
 			return dev->path;

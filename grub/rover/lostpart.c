@@ -52,6 +52,7 @@
 #include "rover.h"
 #include "lost.h"
 #include "lostint.h"
+#include "guard.h"
 
 int
 lost_read (struct rover_lost_scan *scan, grub_uint64_t offset, grub_size_t len, void *buf)
@@ -367,7 +368,9 @@ lost_report (struct rover_lost_scan *scan, const struct lost_hit *found_hit,
 		&& (lost_add_end_hints (scan, end) || lost_jump (scan, end)))
 		goto fail;
 
+	rover_guard_hook_begin ();
 	ret = cb (&part, data) ? 1 : 0;
+	rover_guard_hook_end ();
 	grub_free (label);
 	grub_free (uuid);
 	return ret;
@@ -613,6 +616,7 @@ rover_lost_scan_begin (const char *device, unsigned int flags)
 		32, 63, 16 * 63, 17 * 63, 240 * 63, 241 * 63, 255 * 63, 256 * 63, 34,
 	};
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	grub_memset (&ctx, 0, sizeof (ctx));
 
@@ -701,6 +705,7 @@ rover_lost_scan_step (rover_lost_scan *scan, unsigned long long budget,
 	grub_uint64_t stop = scan->pos + budget;
 	struct lost_hit hits[3];
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	if (budget == 0 || stop < scan->pos)
 		stop = ~0ULL;
@@ -813,6 +818,7 @@ void
 rover_lost_scan_progress (const rover_lost_scan *scan,
 	unsigned long long *done, unsigned long long *total)
 {
+	rover_guard_check (__func__);
 	*done = scan->done || scan->rescanning ? scan->size : scan->pos;
 	*total = scan->size;
 }
@@ -820,6 +826,7 @@ rover_lost_scan_progress (const rover_lost_scan *scan,
 void
 rover_lost_scan_end (rover_lost_scan *scan)
 {
+	rover_guard_task (__func__);
 	if (!scan)
 		return;
 	if (scan->disk)

@@ -38,6 +38,7 @@
 
 #include "rover.h"
 #include "lost.h"
+#include "guard.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -106,6 +107,7 @@ int
 rover_lost_add (const char *devname, const char *parent,
 	unsigned long long offset, unsigned long long size)
 {
+	rover_guard_task (__func__);
 	return rover_lost_add_ex (devname, parent, offset, size, NULL, 0);
 }
 
@@ -120,6 +122,7 @@ rover_lost_add_ex (const char *devname, const char *parent,
 	unsigned int sector_size;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 
 	if (grub_strcmp (devname, LOSTDISK_PROBE_NAME) == 0 || lostdisk_find (devname))
@@ -186,6 +189,7 @@ rover_lost_del (const char *devname)
 	struct lostdisk **prev;
 	struct lostdisk *dev;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 
 	for (prev = &lostdisk_list; (dev = *prev); prev = &dev->next)
@@ -205,8 +209,10 @@ rover_lost_del (const char *devname)
 const char *
 rover_lost_get_parent (const char *devname)
 {
-	struct lostdisk *dev = lostdisk_find (devname);
+	struct lostdisk *dev;
 
+	rover_guard_check (__func__);
+	dev = lostdisk_find (devname);
 	return dev ? dev->parent_name : NULL;
 }
 

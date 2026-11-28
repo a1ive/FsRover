@@ -126,6 +126,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="rover\guard.c">
+      <Filter>rover</Filter>
+    </ClCompile>
     <ClCompile Include="rover\init.c">
       <Filter>rover</Filter>
     </ClCompile>
@@ -805,6 +808,9 @@
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="rover\fscharset.h">
+      <Filter>rover</Filter>
+    </ClInclude>
+    <ClInclude Include="rover\guard.h">
       <Filter>rover</Filter>
     </ClInclude>
     <ClInclude Include="rover\lost.h">

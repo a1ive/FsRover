@@ -26,6 +26,7 @@
 
 #include "proc.h"
 #include "rover.h"
+#include "guard.h"
 
 #if defined(_WIN32)
 #define ROVER_HOSTFILE_MODULE(mod)	mod (winfile)
@@ -238,6 +239,7 @@ ROVER_HOSTDISK_DECLARE
 void
 rover_init (int flags)
 {
+	rover_guard_bind (__func__);
 	ROVER_HOSTDISK_INIT (flags);
 	ROVER_MODULE_LIST (ROVER_MOD_INIT)
 	rover_proc_init ();
@@ -246,8 +248,10 @@ rover_init (int flags)
 void
 rover_fini (void)
 {
+	rover_guard_task (__func__);
 	ROVER_EFIVARS_FINI ();
 	rover_proc_fini ();
 	ROVER_HOSTDISK_FINI ();
 	ROVER_MODULE_LIST (ROVER_MOD_FINI)
+	rover_guard_unbind ();
 }

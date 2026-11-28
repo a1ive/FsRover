@@ -34,6 +34,7 @@
 #include <grub/types.h>
 
 #include "rover.h"
+#include "guard.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -45,6 +46,7 @@ static void *host_open_data;
 void
 rover_set_host_open_hook (rover_host_open_hook cb, void *data)
 {
+	rover_guard_check (__func__);
 	host_open_hook = cb;
 	host_open_data = data;
 }
@@ -210,7 +212,9 @@ posixdisk_open (const char *name, grub_disk_t disk)
 	{
 		int saved = errno;
 
+		rover_guard_hook_begin ();
 		fd = host_open_hook (dev->path, host_open_data);
+		rover_guard_hook_end ();
 		if (fd < 0)
 			errno = saved;
 	}

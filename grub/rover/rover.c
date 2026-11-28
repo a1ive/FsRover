@@ -43,10 +43,12 @@
 #include "fscharset.h"
 #include "lost.h"
 #include "rover.h"
+#include "guard.h"
 
 int
 rover_last_errno (void)
 {
+	rover_guard_check (__func__);
 	switch (grub_errno)
 	{
 	case GRUB_ERR_NONE: return 0;
@@ -72,6 +74,7 @@ rover_last_errno (void)
 int
 rover_set_fs_char_encoding (unsigned int encoding)
 {
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	switch (encoding)
 	{
@@ -289,6 +292,7 @@ rover_last_error (void)
 {
 	const char *message;
 
+	rover_guard_check (__func__);
 	if (grub_errno == GRUB_ERR_NONE)
 		return NULL;
 	message = rover_strip_location (grub_errmsg);
@@ -464,7 +468,9 @@ enum_disk_shim (const char *name, void *data)
 	}
 	grub_errno = GRUB_ERR_NONE;
 
+	rover_guard_hook_begin ();
 	ret = ctx->cb (&info, ctx->data);
+	rover_guard_hook_end ();
 
 	grub_free (label);
 	grub_free (uuid);
@@ -480,6 +486,7 @@ rover_enum_disks (rover_disk_hook cb, void *data)
 	struct enum_ctx ctx = { cb, data };
 	int ret;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	ret = grub_device_iterate (enum_disk_shim, &ctx);
 	grub_errno = GRUB_ERR_NONE;
@@ -499,6 +506,7 @@ dir_hook_shim (const char *filename, const struct grub_dirhook_info *info, void 
 {
 	struct dir_ctx *ctx = data;
 	struct rover_dirent ent;
+	int ret;
 
 	if (grub_strcmp (filename, ".") == 0
 		|| grub_strcmp (filename, "..") == 0)
@@ -513,7 +521,10 @@ dir_hook_shim (const char *filename, const struct grub_dirhook_info *info, void 
 	ent.size = info->sizeset ? info->size : 0;
 	ent.inode_set = info->inodeset ? 1 : 0;
 	ent.inode = info->inodeset ? info->inode : 0;
-	return ctx->cb (&ent, ctx->data);
+	rover_guard_hook_begin ();
+	ret = ctx->cb (&ent, ctx->data);
+	rover_guard_hook_end ();
+	return ret;
 }
 
 int
@@ -526,6 +537,7 @@ rover_dir_list (const char *path, rover_dir_hook cb, void *data)
 	const char *fs_path;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	if (path[0] != '(')
 		return grub_error (GRUB_ERR_BAD_FILENAME, "no device in path `%s'", path);
@@ -577,6 +589,7 @@ rover_file_open (const char *path)
 	rover_file *f;
 	grub_file_t file;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	file = grub_file_open (path, GRUB_FILE_TYPE_CAT | GRUB_FILE_TYPE_NO_DECOMPRESS);
 	if (!file)
@@ -599,6 +612,7 @@ rover_file_read (rover_file *f, void *buf, unsigned long long len)
 {
 	unsigned long long max = (grub_size_t) -1;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	if (len > max)
 		len = max;
@@ -608,6 +622,7 @@ rover_file_read (rover_file *f, void *buf, unsigned long long len)
 int
 rover_file_seek (rover_file *f, unsigned long long offset)
 {
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	grub_file_seek (f->file, offset);
 	return grub_errno;
@@ -616,12 +631,14 @@ rover_file_seek (rover_file *f, unsigned long long offset)
 unsigned long long
 rover_file_size (rover_file *f)
 {
+	rover_guard_check (__func__);
 	return grub_file_size (f->file);
 }
 
 void
 rover_file_close (rover_file *f)
 {
+	rover_guard_task (__func__);
 	grub_file_close (f->file);
 	grub_free (f);
 	grub_errno = GRUB_ERR_NONE;
@@ -642,13 +659,16 @@ progress_shim (grub_disk_addr_t sector, unsigned offset, unsigned length, char *
 	(void) buf;
 	/* DATA is the file being read and progress_offset accumulates across nested reads.  */
 	file->progress_offset += length;
+	rover_guard_hook_begin ();
 	progress_cb (file->progress_offset, file->size, progress_data);
+	rover_guard_hook_end ();
 	return GRUB_ERR_NONE;
 }
 
 void
 rover_set_progress (rover_progress_hook cb, void *data)
 {
+	rover_guard_check (__func__);
 	progress_cb = cb;
 	progress_data = data;
 	grub_file_progress_hook = cb ? progress_shim : NULL;
@@ -700,6 +720,7 @@ rover_stat (const char *path, rover_stat_t *st)
 	char *p;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_memset (st, 0, sizeof (*st));
 	grub_errno = GRUB_ERR_NONE;
 
@@ -802,6 +823,7 @@ rover_readlink (const char *path, char *buf, unsigned long long size,
 	grub_size_t n;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	if (path[0] != '(')
 		return grub_error (GRUB_ERR_BAD_FILENAME, "no device in path `%s'", path);
@@ -870,6 +892,7 @@ rover_fs_name (const char *device)
 	grub_device_t dev;
 	grub_fs_t fs;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	dev = grub_device_open (device);
 	if (!dev)
@@ -881,16 +904,28 @@ rover_fs_name (const char *device)
 	return fs ? fs->name : NULL;
 }
 
+static int
+support_shim (rover_support_hook cb, const char *name, void *data)
+{
+	int ret;
+
+	rover_guard_hook_begin ();
+	ret = cb (name, data);
+	rover_guard_hook_end ();
+	return ret;
+}
+
 int
 rover_enum_support (int category, rover_support_hook cb, void *data)
 {
+	rover_guard_check (__func__);
 	switch (category)
 	{
 	case ROVER_SUPPORT_FS:
 	{
 		grub_fs_t fs;
 		FOR_FILESYSTEMS (fs)
-			if (cb (fs->name, data))
+			if (support_shim (cb, fs->name, data))
 				return 1;
 		break;
 	}
@@ -898,7 +933,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 	{
 		grub_partition_map_t partmap;
 		FOR_PARTITION_MAPS (partmap)
-			if (cb (partmap->name, data))
+			if (support_shim (cb, partmap->name, data))
 				return 1;
 		break;
 	}
@@ -906,7 +941,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 	{
 		grub_diskfilter_t df;
 		FOR_LIST_ELEMENTS (df, grub_diskfilter_list)
-			if (cb (df->name, data))
+			if (support_shim (cb, df->name, data))
 				return 1;
 		break;
 	}
@@ -914,7 +949,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 	{
 		grub_cryptodisk_dev_t cd;
 		FOR_CRYPTODISK_DEVS (cd)
-			if (cb (cd->name, data))
+			if (support_shim (cb, cd->name, data))
 				return 1;
 		break;
 	}
@@ -933,7 +968,7 @@ rover_enum_support (int category, rover_support_hook cb, void *data)
 		COMPILE_TIME_ASSERT (ARRAY_SIZE (names)
 			== GRUB_FILE_FILTER_VDISK_LAST - GRUB_FILE_FILTER_COMPRESSION_FIRST + 1);
 		for (id = GRUB_FILE_FILTER_COMPRESSION_FIRST; id <= GRUB_FILE_FILTER_VDISK_LAST; id++)
-			if (grub_file_filters[id] && cb (names[id - GRUB_FILE_FILTER_COMPRESSION_FIRST], data))
+			if (grub_file_filters[id] && support_shim (cb, names[id - GRUB_FILE_FILTER_COMPRESSION_FIRST], data))
 				return 1;
 		break;
 	}
@@ -950,6 +985,7 @@ rover_crypto_unlock (const char *device, const void *key,
 {
 	grub_err_t err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	err = grub_cryptodisk_mount_by_name (device, key, (grub_size_t) key_len, out_dev, (grub_size_t) out_size);
 	if (err == GRUB_ERR_NONE)
@@ -970,6 +1006,7 @@ rover_veracrypt_unlock (const char *device, const void *pass,
 	COMPILE_TIME_ASSERT (ROVER_VC_HIDDEN == GRUB_VERACRYPT_HIDDEN);
 	COMPILE_TIME_ASSERT (ROVER_VC_BACKUP == GRUB_VERACRYPT_BACKUP);
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	err = grub_veracrypt_mount (device, pass, (grub_size_t) pass_len,
 				    (grub_uint32_t) pim, prf,
@@ -993,6 +1030,7 @@ rover_plainmount_unlock (const char *device, const char *cipher,
 
 	COMPILE_TIME_ASSERT (ROVER_PM_KEYFILE == GRUB_PLAINMOUNT_KEYFILE);
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	err = grub_plainmount_mount (device, cipher, hash,
 				     (grub_size_t) key_bits,
@@ -1015,12 +1053,17 @@ crypto_progress_shim (unsigned int done, unsigned int total, void *data)
 {
 	(void) data;
 	if (crypto_progress_cb)
+	{
+		rover_guard_hook_begin ();
 		crypto_progress_cb (done, total, crypto_progress_data);
+		rover_guard_hook_end ();
+	}
 }
 
 void
 rover_set_crypto_progress (rover_progress_hook cb, void *data)
 {
+	rover_guard_check (__func__);
 	crypto_progress_cb = cb;
 	crypto_progress_data = data;
 	grub_cryptodisk_kdf_progress = cb ? crypto_progress_shim : 0;
@@ -1058,6 +1101,7 @@ rover_map_callback (const struct grub_file_map_extent *input, void *data)
 	struct rover_map_storage *storage = &single;
 	struct rover_map_extent extent = { 0 };
 	unsigned int i;
+	int ret;
 
 	if (input->storage_count > 1)
 	{
@@ -1092,7 +1136,10 @@ rover_map_callback (const struct grub_file_map_extent *input, void *data)
 	extent.encoding = input->encoding;
 	extent.storage = input->storage_count ? storage : NULL;
 	extent.storage_count = input->storage_count;
-	return ctx->hook (&extent, ctx->data);
+	rover_guard_hook_begin ();
+	ret = ctx->hook (&extent, ctx->data);
+	rover_guard_hook_end ();
+	return ret;
 
 fail:
 	ctx->error = grub_errno;
@@ -1103,7 +1150,12 @@ static int
 rover_map_cancelled (void *data)
 {
 	struct rover_map_context *ctx = data;
-	return ctx->cancelled (ctx->cancel_data);
+	int ret;
+
+	rover_guard_hook_begin ();
+	ret = ctx->cancelled (ctx->cancel_data);
+	rover_guard_hook_end ();
+	return ret;
 }
 
 int
@@ -1113,6 +1165,8 @@ rover_file_map_range_ex (rover_file *f, unsigned long long offset,
 {
 	struct rover_map_context ctx = { 0 };
 	grub_err_t err;
+
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	ctx.hook = hook;
 	ctx.data = data;
@@ -1134,5 +1188,6 @@ int
 rover_file_map_range (rover_file *f, unsigned long long offset,
 	unsigned long long length, rover_map_hook hook, void *data, int *stopped)
 {
+	rover_guard_task (__func__);
 	return rover_file_map_range_ex (f, offset, length, hook, data, NULL, NULL, stopped);
 }

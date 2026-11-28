@@ -54,10 +54,20 @@ extern "C" {
 #define ROVER_FS_ENCODING_EUC_KR	51949U
 
 /* Register all built-in grub modules.  Call once before anything else.
-   FLAGS is a combination of the ROVER_INIT_* bits above, or 0.  */
+   FLAGS is a combination of the ROVER_INIT_* bits above, or 0.
+
+   Threading: the calling thread becomes the owner.  Until rover_fini()
+   every rover_* function must be called on that thread, and functions
+   that do I/O or add/remove devices must not be called from inside a
+   callback Rover is running (dir/disk/map/lost/progress/support hooks,
+   the host open hook).  Lookups such as rover_last_error() and the
+   *_get_path() functions are allowed there.  A violation is a program
+   bug and aborts the process with a diagnostic.  Hook setters may be
+   called from any thread before rover_init().  */
 void rover_init (int flags);
 
-/* Unregister all modules and release grub state.  */
+/* Unregister all modules and release grub state, then release the
+   owner thread.  */
 void rover_fini (void);
 
 /* Set the source encoding used for byte-oriented filesystem names.  Call on

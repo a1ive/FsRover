@@ -33,6 +33,7 @@
 #include <grub/types.h>
 
 #include "rover.h"
+#include "guard.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -198,6 +199,7 @@ rover_posixfile_add (const char *devname, const char *path, int decompress)
 	grub_file_t file = NULL;
 	int err;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	for (dev = posixfile_list; dev; dev = dev->next)
 		if (grub_strcmp (dev->devname, devname) == 0)
@@ -239,6 +241,7 @@ rover_posixfile_del (const char *devname)
 	struct posixfile **prev;
 	struct posixfile *dev;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 	for (prev = &posixfile_list; (dev = *prev); prev = &dev->next)
 		if (grub_strcmp (dev->devname, devname) == 0)
@@ -262,6 +265,7 @@ rover_posixfile_get_path (const char *devname)
 {
 	struct posixfile *dev;
 
+	rover_guard_check (__func__);
 	for (dev = posixfile_list; dev; dev = dev->next)
 		if (grub_strcmp (dev->devname, devname) == 0)
 			return dev->path;

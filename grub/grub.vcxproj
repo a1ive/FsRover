@@ -162,6 +162,7 @@
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_cast5.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\gcry_des.c" />
     <ClCompile Include="grub-core\lib\libgcrypt\hash-common.c" />
+    <ClCompile Include="rover\guard.c" />
     <ClCompile Include="rover\init.c" />
     <ClCompile Include="rover\lostexam.c" />
     <ClCompile Include="rover\lostfs.c" />
@@ -685,6 +686,7 @@
     <ClInclude Include="include\grub\ghost.h" />
     <ClInclude Include="rover\config.h" />
     <ClInclude Include="rover\fscharset.h" />
+    <ClInclude Include="rover\guard.h" />
     <ClInclude Include="rover\lost.h" />
     <ClInclude Include="rover\lostint.h" />
     <ClInclude Include="rover\proc.h" />

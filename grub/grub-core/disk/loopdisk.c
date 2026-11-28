@@ -32,6 +32,7 @@
 #include <grub/types.h>
 
 #include "rover.h"
+#include "guard.h"
 
 GRUB_MOD_LICENSE ("GPLv3+");
 
@@ -55,6 +56,8 @@ rover_loopback_add (const char *devname, const char *path, int decompress)
 	enum grub_file_type type = GRUB_FILE_TYPE_LOOPBACK
 				   | GRUB_FILE_TYPE_FILTER_VDISK;
 	int err;
+
+	rover_guard_task (__func__);
 
 	grub_errno = GRUB_ERR_NONE;
 
@@ -103,6 +106,7 @@ rover_loopback_del (const char *devname)
 	struct loopdisk **prev;
 	struct loopdisk *dev;
 
+	rover_guard_task (__func__);
 	grub_errno = GRUB_ERR_NONE;
 
 	for (prev = &loopdisk_list; (dev = *prev); prev = &dev->next)
@@ -126,6 +130,7 @@ rover_loopback_get_file (const char *devname)
 {
 	struct loopdisk *dev;
 
+	rover_guard_check (__func__);
 	for (dev = loopdisk_list; dev; dev = dev->next)
 		if (grub_strcmp (dev->devname, devname) == 0)
 			return dev->file ? dev->file->name : NULL;
