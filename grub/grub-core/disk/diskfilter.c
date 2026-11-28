@@ -654,10 +654,10 @@ validate_segment (struct grub_diskfilter_segment *seg,
 	grub_uint8_t near, far;
 	near = seg->layout & 0xFF;
 	far = (seg->layout >> 8) & 0xFF;
-	if ((seg->layout >> 16) == 0 && far == 0)
-	  return grub_error(GRUB_ERR_BAD_FS, "invalid segment");
-	if (near > seg->node_count)
-	  return grub_error(GRUB_ERR_BAD_FS, "invalid segment");
+	if (near == 0 || far == 0)
+	  return grub_error (GRUB_ERR_BAD_FS, "invalid segment");
+	if (near > seg->node_count || far > seg->node_count)
+	  return grub_error (GRUB_ERR_BAD_FS, "invalid segment");
 	break;
       }
 
@@ -1228,7 +1228,13 @@ grub_diskfilter_make_raid (grub_size_t uuidlen, char *uuid, int nmemb,
 	    return NULL;
 	  }
 
-	totsize = grub_divmod64 (nmemb * disk_size, n, 0);
+	if (grub_mul ((grub_uint64_t) nmemb, disk_size, &totsize))
+	  {
+	    grub_free (uuid);
+	    return NULL;
+	  }
+
+	totsize = grub_divmod64 (totsize, n, 0);
       }
       break;
 
